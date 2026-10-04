@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#1a6b4a">
+
+    <title>@yield('title', 'Kanlungan')</title>
+
+    <link rel="stylesheet" href="{{ asset('css/base.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/components.css') }}">
+    @yield('head')
+</head>
+<body>
+    <div class="page">
+        <main class="guest-page">
+            <div class="container">
+                @yield('content')
+            </div>
+        </main>
+    </div>
+
+    @yield('scripts')
+</body>
+</html>
