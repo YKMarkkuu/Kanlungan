@@ -60,7 +60,7 @@
         </form>
 
         <p class="auth-footer">
-            No account yet? <a href="{{ url('/register') }}">Register</a>
+            No account yet? <a href="{{ route('register') }}">Register</a>
         </p>
 
         <p class="auth-disclaimer">

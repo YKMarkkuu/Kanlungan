@@ -229,3 +229,142 @@
     line-height: 1.5;
     color: var(--text-muted);
 }
+
+/* ---------- Register screen ---------- */
+
+.steps {
+    display: flex;
+    gap: 6px;
+}
+
+.steps__item {
+    flex: 1;
+    height: 4px;
+    border-radius: 2px;
+    background-color: var(--border-default);
+    transition: background-color 0.15s ease;
+}
+
+.steps__item.is-done,
+.steps__item.is-active {
+    background-color: var(--accent);
+}
+
+.steps__item.is-done {
+    opacity: 0.45;
+}
+
+.field__success {
+    font-size: 13px;
+    color: var(--accent);
+}
+
+.input-wrap {
+    position: relative;
+}
+
+.input-wrap__icon {
+    position: absolute;
+    top: 50%;
+    right: 12px;
+    width: 18px;
+    height: 18px;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    pointer-events: none;
+}
+
+.input--locked {
+    padding-right: 40px;
+    background-color: var(--surface-hover);
+    color: var(--text-muted);
+    cursor: not-allowed;
+}
+
+.input--locked:hover {
+    border-color: var(--border-default);
+}
+
+.code-inputs {
+    display: flex;
+    gap: 8px;
+}
+
+.code-input {
+    flex: 1;
+    min-width: 0;
+    min-height: 52px;
+    padding-left: 0;
+    padding-right: 0;
+    text-align: center;
+    font-size: 22px;
+    font-weight: 600;
+}
+
+.code-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.link-btn {
+    min-height: 44px;
+    padding: 8px 0;
+    border: 0;
+    background: none;
+    color: var(--accent);
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: underline;
+}
+
+.link-btn:hover {
+    color: var(--accent-dark);
+}
+
+.link-btn:disabled {
+    color: var(--text-muted);
+    text-decoration: none;
+    cursor: not-allowed;
+}
+
+.rules-list li {
+    position: relative;
+    padding-left: 20px;
+    font-size: 15px;
+}
+
+.rules-list li + li {
+    margin-top: 12px;
+}
+
+.rules-list li::before {
+    content: "";
+    position: absolute;
+    top: 0.6em;
+    left: 0;
+    width: 6px;
+    height: 6px;
+    border-radius: 1px;
+    background-color: var(--accent);
+}
+
+.check {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    cursor: pointer;
+}
+
+.check input {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    margin: 2px 0 0;
+    accent-color: var(--accent);
+}
+
+.check span {
+    font-size: 15px;
+}
