@@ -14,8 +14,10 @@ Last updated: 2026-10-04 (end of Phase B Commit A)
 
 ## Known debt (do not forget)
 - UserFactory still sets 'password' — stale after removal from $fillable. Fix before Commit E.
-- docs/AUTH.md needs reconciliation pass against shipped code. Separate docs commit.
+- docs/AUTH.md reconciliation: locked_out semantics + MAX_ATTEMPTS are already noted; do a full pass before Commit C ships. Separate docs commit.
 - MAIL_MAILER=log needed locally for Commit B testing (not committed).
+- Expired otp_codes rows are never garbage-collected. Add a scheduled cleanup or accept the growth until there's real traffic.
+- OtpCodeMail passes 'email' to the views, but neither uses it. Keep it as a future hook for a "wrong email?" hint; note it so it doesn't look like dead code.
 
 ## Phase B commit plan (do not collapse)
 - A: migrations + models — DONE
