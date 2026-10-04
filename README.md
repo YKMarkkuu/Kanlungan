@@ -1,66 +1,165 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Kanlungan
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+> Verified, anonymous-optional, campus-only safe space for OLFU Pampanga students.
 
-## About Laravel
+Kanlungan is a web app (PWA) where enrolled OLFU Pampanga students can ask for help,
+share experiences, vent, and support each other — anonymously or not. It replaces the
+open Facebook page setup with a verified, moderated, accountable community.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+**Status:** Early development. Not deployed. Local dev only.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+---
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Table of contents
 
-## Learning Laravel
+- [What this is](#what-this-is)
+- [What this is not](#what-this-is-not)
+- [Stack](#stack)
+- [Local setup (first time)](#local-setup-first-time)
+- [Daily workflow](#daily-workflow)
+- [Project structure](#project-structure)
+- [Team rules](#team-rules)
+- [Branching and commits](#branching-and-commits)
+- [Roles and permissions](#roles-and-permissions)
+- [Environment variables](#environment-variables)
+- [Troubleshooting](#troubleshooting)
+- [Roadmap](#roadmap)
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+---
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+## What this is
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+- A **verified** space — only OLFU Pampanga students can sign up and post.
+- **Anonymous-optional** — you choose per post/comment whether to show your name.
+- **Moderated** — reports go through a human review queue, not straight to guidance.
+- **Accountable** — anonymous to peers, but the system still records the author for
+  safety and legal reasons. Unmasking requires an admin/DPO with a logged reason.
+- **Local-first** — built for the OLFU Pampanga campus community.
 
-## Laravel Sponsors
+## What this is not
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+- Not an official OLFU system (until approved).
+- Not truly anonymous — see "Accountable" above.
+- Not a replacement for emergency services or professional help.
+- Not affiliated with Facebook, Discord, or any of those platforms.
 
-### Premium Partners
+---
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
+## Stack
 
-## Contributing
+| Layer | Choice |
+|---|---|
+| Framework | Laravel 10 (PHP 8.1+) |
+| Database | MySQL (via Laragon) |
+| Frontend | Blade + vanilla CSS + vanilla JS |
+| Build step | None — no Tailwind, no React, no Vite usage |
+| Real-time | (TBD — likely Laravel Reverb if needed) |
+| Auth | Laravel Breeze (Blade), to be customized |
+| Roles | Spatie Laravel Permission |
+| Local dev | Laragon 6.0 on Windows + PowerShell |
+| PWA | `erag/laravel-pwa` (not yet installed) |
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+**Important:** This project does **not** use Tailwind. Any Tailwind classes you see
+in default Breeze scaffolding will render as nothing. Replace them with project CSS.
 
-## Code of Conduct
+---
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+## Local setup (first time)
 
-## Security Vulnerabilities
+Follow these in order. Don't skip steps.
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+### 1. Prerequisites
 
-## License
+Install these first if you don't have them:
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+- [Laragon 6.0](https://laragon.org/download/) (free version is fine)
+- Git for Windows
+- VS Code (optional but recommended)
+
+Open Laragon and click **Start All** so Apache and MySQL are running.
+
+### 2. Clone the repo
+
+Open the Laragon **Terminal** and run:
+
+```powershell
+cd C:\laragon\www
+git clone https://github.com/YKMarkkuu/Kanlungan.git
+cd Kanlungan
+
+3. Install PHP dependencies
+powershell
+
+composer install
+
+4. Set up the environment file
+
+.env is gitignored, so every clone needs its own copy.
+powershell
+
+Copy-Item .env.example .env
+php artisan key:generate
+
+5. Create the database
+
+    Open Laragon → click Database (HeidiSQL opens).
+
+    Right-click the Laragon.MySQL connection in the left tree.
+
+    Click Create new → Database.
+
+    Name: kanlungan
+
+    Charset: utf8mb4
+
+    Collation: utf8mb4_unicode_ci
+
+    Click OK.
+
+6. Point .env at your database
+
+Open .env in VS Code and confirm these values:
+text
+
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=kanlungan
+DB_USERNAME=root
+DB_PASSWORD=
+
+Laragon's default MySQL user is root with an empty password. Leave DB_PASSWORD blank.
+7. Run migrations
+powershell
+
+php artisan migrate
+
+You should see four tables created: users, password_reset_tokens,
+failed_jobs, personal_access_tokens.
+8. Serve the app
+powershell
+
+php artisan serve
+
+Open http://127.0.0.1:8000. You should see the Laravel welcome page.
+
+Done. You now have Kanlungan running locally.
+
+Daily workflow
+
+Every time you sit down to code:
+powershell
+
+cd C:\laragon\www\Kanlungan
+git pull
+php artisan serve
+
+When you're done for the day:
+powershell
+
+git status
+git add .
+git commit -m "type(scope): short description"
+git push
+
+Never commit directly to main. Always work on a branch and open a pull request. See Branching and commits.
