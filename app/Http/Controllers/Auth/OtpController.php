@@ -38,6 +38,10 @@ class OtpController extends Controller
      * Design A: verify the code and create the account in one request.
      * No transaction (one insert + one delete). If a unique-key race ever
      * fires, catch QueryException here later. Does not log the user in.
+     *
+     * display_name is optional. When blank, name falls back to the email local
+     * part and display_name stays null. On success a flash message is set for
+     * the login page, which the client redirects to.
      */
     public function register(RegisterRequest $request): JsonResponse
     {
@@ -58,16 +62,24 @@ class OtpController extends Controller
             return response()->json(['status' => 'student_id_taken'], 422);
         }
 
+        $displayName = filled($data['display_name'] ?? null) ? $data['display_name'] : null;
+
+        // TODO: name column is vestigial; replace or drop once user profiles ship.
+        $name = $displayName ?? explode('@', $email)[0];
+
         User::create([
-            'name' => $data['display_name'],
+            'name' => $name,
             'email' => $email,
-            'display_name' => $data['display_name'],
+            'display_name' => $displayName,
             'student_id' => $data['student_id'],
             'campus' => 'pampanga',
             'verified_at' => now(),
         ]);
 
         OtpService::invalidate($email);
+
+        // Shown on the login page after the client redirects to /.
+        session()->flash('status', 'Welcome to Kanlungan. Sign in to continue.');
 
         return response()->json(['status' => 'registered'], 201);
     }

@@ -19,6 +19,11 @@
             <p class="text-muted">Ask, share, and help each other</p>
         </header>
 
+        {{-- TODO: move .auth-message to components.css --}}
+        @if (session('status'))
+            <div class="card auth-message" role="status" aria-live="polite" style="border-color: var(--accent); background-color: var(--accent-soft); color: var(--accent-dark);">{{ session('status') }}</div>
+        @endif
+
         <button type="button" class="btn btn--primary btn--block">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M12 3 4 6v6c0 4.5 3.2 7.8 8 9 4.8-1.2 8-4.5 8-9V6l-8-3Z" />

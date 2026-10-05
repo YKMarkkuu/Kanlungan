@@ -29,7 +29,7 @@
 
         {{-- ================= Step 1 — Details ================= --}}
         <section data-step-panel="1" aria-label="Details">
-            {{-- Static for now. No submit route exists yet; JS handles the flow. --}}
+            {{-- Submit is handled by public/js/register.js (fetch to /auth/send-code). --}}
             <form class="stack" id="details-form" novalidate>
                 <div class="field">
                     <label class="field__label" for="student_id">Student ID</label>
@@ -45,6 +45,7 @@
                         maxlength="11"
                     >
                     <p class="field__hint">11 digits, numbers only.</p>
+                    <p class="field__error" id="student-id-error" aria-live="polite" hidden></p>
                 </div>
 
                 <div class="field">
@@ -91,6 +92,9 @@
 
         {{-- ================= Step 2 — Code ================= --}}
         <section data-step-panel="2" aria-label="Code" hidden>
+            {{-- Banner sits outside .stack so its hidden state doesn't add sibling spacing. --}}
+            <div class="field__error" id="code-banner" aria-live="polite" style="margin-bottom: 12px;" hidden></div>
+
             <div class="stack">
                 <div class="stack--sm stack">
                     <p>Enter the 6-digit code we emailed you</p>
@@ -115,6 +119,9 @@
 
         {{-- ================= Step 3 — Rules ================= --}}
         <section data-step-panel="3" aria-label="Rules" hidden>
+            {{-- Banner sits outside .stack--lg so its hidden state doesn't add sibling spacing. --}}
+            <div class="field__error" id="rules-banner" aria-live="polite" style="margin-bottom: 12px;" hidden></div>
+
             <form class="stack--lg stack" id="rules-form" novalidate>
                 <div class="stack">
                     <h2>Community rules</h2>
@@ -147,6 +154,7 @@
                         maxlength="40"
                     >
                     <p class="field__hint">If left blank, you'll appear as an anonymous alias by default.</p>
+                    <p class="field__error" id="display-name-error" aria-live="polite" hidden></p>
                 </div>
 
                 <button type="submit" class="btn btn--primary btn--block" id="create-btn" disabled>Create account</button>
