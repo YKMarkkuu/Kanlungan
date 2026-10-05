@@ -18,6 +18,9 @@ Last updated: 2026-10-05 (end of Phase B Commit B)
 - MAIL_MAILER=log is local .env only; .env.example stays at smtp.
 - Expired otp_codes rows are never garbage-collected. Add a scheduled cleanup or accept the growth until there's real traffic.
 - OtpCodeMail passes 'email' to the views, but neither uses it. Keep it as a future "wrong email?" hint; not dead code.
+- Email regex vs client hint: server requires `^[a-z]+[0-9]{4}pam@student\.fatima\.edu\.ph$`, but `register.js` only checks that the local part contains `pam`. A pam-containing email in another format passes the client hint, then gets a 422 from the server. Reconcile in Commit D (do not touch register.js before then).
+- `'auth/*'` is exempt from CSRF in `VerifyCsrfToken` (TODO in the file). Revisit in Commit D once sessions exist.
+- `register` has no transaction. If the `users.email` / `users.student_id` unique-key race ever fires, it surfaces as a 500 in the logs; add a `try/catch` on `QueryException` then.
 
 ## Phase B commit plan (do not collapse)
 - A: migrations + models - DONE (c111cc9)
