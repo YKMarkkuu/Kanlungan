@@ -12,6 +12,7 @@ class VerifyCsrfToken extends Middleware
      * @var array<int, string>
      */
     protected $except = [
-        //
+        // TODO(commit D): revisit once sessions exist — these routes have no session dependency yet, so CSRF protects nothing. Re-enable once frontend wires up.
+        'auth/*',
     ];
 }
