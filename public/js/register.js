@@ -1,3 +1,4 @@
+// Helpers are duplicated in login.js — extract to a shared module if a third auth script is added.
 (function () {
     'use strict';
 

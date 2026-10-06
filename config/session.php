@@ -31,7 +31,8 @@ return [
     |
     */
 
-    'lifetime' => env('SESSION_LIFETIME', 120),
+    // 30 days — Kanlungan is OTP-only; long sessions avoid repeated OTP friction.
+    'lifetime' => env('SESSION_LIFETIME', 60 * 24 * 30),
 
     'expire_on_close' => false,
 

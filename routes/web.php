@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\OtpController;
 use Illuminate\Support\Facades\Route;
 
@@ -14,10 +15,16 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::view('/', 'auth.login')->name('login');
-Route::redirect('/login', '/');
-Route::view('/register', 'auth.register')->name('register');
+// Guest-only pages: a logged-in user is redirected to RouteServiceProvider::HOME (/home).
+Route::view('/', 'auth.login')->middleware('guest')->name('login');
+Route::redirect('/login', '/')->middleware('guest');
+Route::view('/register', 'auth.register')->middleware('guest')->name('register');
 
 Route::post('/auth/send-code',   [OtpController::class, 'sendCode'])->middleware('throttle:otp-send')->name('auth.send-code');
 Route::post('/auth/verify-code', [OtpController::class, 'verifyCode'])->middleware('throttle:otp-verify')->name('auth.verify-code');
 Route::post('/auth/register',    [OtpController::class, 'register'])->middleware('throttle:otp-register')->name('auth.register');
+
+Route::post('/auth/login',  [LoginController::class, 'login'])->middleware('throttle:otp-verify')->name('auth.login');
+Route::post('/auth/logout', [LoginController::class, 'logout'])->middleware('auth')->name('auth.logout');
+
+Route::get('/home', fn () => view('home'))->middleware('auth')->name('home');

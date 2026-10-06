@@ -3,7 +3,7 @@
 @section('title', 'Sign in · Kanlungan')
 
 @section('content')
-    <div class="stack--lg stack">
+    <div class="stack--lg stack" id="login">
 
         <header class="auth-header">
             {{-- Placeholder logo. Swap this block for the real logo later. --}}
@@ -15,8 +15,8 @@
                 </svg>
             </div>
 
-            <h1>OLFU Pampanga Community</h1>
-            <p class="text-muted">Ask, share, and help each other</p>
+            <h1>Sign in to Kanlungan</h1>
+            <p class="text-muted">Enter your OLFU Pampanga email to receive a sign-in code.</p>
         </header>
 
         {{-- TODO: move .auth-message to components.css --}}
@@ -24,31 +24,8 @@
             <div class="card auth-message" role="status" aria-live="polite" style="border-color: var(--accent); background-color: var(--accent-soft); color: var(--accent-dark);">{{ session('status') }}</div>
         @endif
 
-        <button type="button" class="btn btn--primary btn--block">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M12 3 4 6v6c0 4.5 3.2 7.8 8 9 4.8-1.2 8-4.5 8-9V6l-8-3Z" />
-                <path d="m9 12 2.2 2.2L15.5 10" />
-            </svg>
-            Sign in with OLFU account
-        </button>
-
-        <div class="divider" role="separator">or use email code</div>
-
-        {{-- Static for now. No submit route exists yet; wire up when auth lands. --}}
-        <form class="stack" novalidate>
-            <div class="field">
-                <label class="field__label" for="student_id">Student ID</label>
-                <input
-                    class="input"
-                    type="text"
-                    id="student_id"
-                    name="student_id"
-                    placeholder="Student ID"
-                    autocomplete="username"
-                    inputmode="numeric"
-                >
-            </div>
-
+        {{-- Submit is handled by public/js/login.js (fetch to /auth/send-code, then /auth/login). --}}
+        <form class="stack" id="login-form" novalidate>
             <div class="field">
                 <label class="field__label" for="email">OLFU email</label>
                 <input
@@ -58,10 +35,34 @@
                     name="email"
                     placeholder="OLFU email"
                     autocomplete="email"
+                    aria-describedby="email-hint"
                 >
+                <p class="field__hint" id="email-hint" aria-live="polite" hidden></p>
             </div>
 
-            <button type="button" class="btn btn--outline btn--block">Send code</button>
+            {{-- Rate limit, network, and code-state errors. --}}
+            <div class="field__error" id="login-banner" aria-live="polite" hidden></div>
+
+            {{-- Revealed by login.js after the code is sent. --}}
+            <div class="stack" id="code-block" hidden>
+                <p>Enter the 6-digit code we emailed you</p>
+
+                <div class="code-inputs" role="group" aria-label="6-digit code">
+                    <input class="input code-input" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" aria-label="Digit 1 of 6">
+                    <input class="input code-input" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" aria-label="Digit 2 of 6">
+                    <input class="input code-input" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" aria-label="Digit 3 of 6">
+                    <input class="input code-input" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" aria-label="Digit 4 of 6">
+                    <input class="input code-input" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" aria-label="Digit 5 of 6">
+                    <input class="input code-input" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" aria-label="Digit 6 of 6">
+                </div>
+
+                <div class="code-actions">
+                    <button type="button" class="link-btn" id="resend-btn" disabled>Resend code</button>
+                    <button type="button" class="link-btn" id="change-email-btn">Change email</button>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn--outline btn--block" id="send-btn">Send code</button>
         </form>
 
         <p class="auth-footer">
@@ -73,4 +74,8 @@
         </p>
 
     </div>
+@endsection
+
+@section('scripts')
+    <script src="{{ asset('js/login.js') }}" defer></script>
 @endsection
