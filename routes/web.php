@@ -27,4 +27,6 @@ Route::post('/auth/register',    [OtpController::class, 'register'])->middleware
 Route::post('/auth/login',  [LoginController::class, 'login'])->middleware('throttle:otp-verify')->name('auth.login');
 Route::post('/auth/logout', [LoginController::class, 'logout'])->middleware('auth')->name('auth.logout');
 
-Route::get('/home', fn () => view('home'))->middleware('auth')->name('home');
+Route::get('/home', fn () => redirect()->route('feed'))->middleware('auth')->name('home');
+
+require __DIR__.'/community.php';

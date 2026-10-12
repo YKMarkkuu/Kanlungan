@@ -1,0 +1,111 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Comment;
+use App\Models\Post;
+use App\Models\Reaction;
+use App\Services\CommunityService;
+use App\Services\ImageService;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+
+class PostController extends Controller
+{
+    public function __construct(private CommunityService $community, private ImageService $images)
+    {
+    }
+
+    public function create()
+    {
+        return view('feed.create', [
+            'categories' => Post::CATEGORIES,
+            // Example only: the real alias is per thread, so it is only known once the post exists.
+            'alias' => 'Anonymous Falcon #4821',
+        ]);
+    }
+
+    public function store(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'category' => ['required', Rule::in(Post::CATEGORIES)],
+            'body' => ['required', 'string', 'min:3', 'max:2000'],
+            'photo' => ['nullable', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
+        ], ['photo.max' => 'The photo must be 4 MB or smaller.', 'photo.image' => 'Please choose a JPG, PNG or WebP photo.']);
+
+        // Anonymous is on by default; a missing value means "anonymous".
+        $anonymous = $request->input('anonymous', '1') === '1';
+
+        $imagePath = $request->hasFile('photo') ? $this->images->storePostPhoto($request->file('photo')) : null;
+
+        $this->community->createPost($request->user()->id, $data['category'], trim($data['body']), $anonymous, $imagePath);
+
+        return redirect()->route('feed')->with('status', 'Posted.');
+    }
+
+    public function show(Request $request, int $id)
+    {
+        $userId = $request->user()->id;
+        $post = $this->community->post($userId, $id);
+
+        abort_if($post === null, 404);
+
+        return view('feed.show', [
+            'post' => $post,
+            'comments' => $this->community->comments($userId, $id),
+            'alias' => $this->community->aliasIn($userId, $id),
+        ]);
+    }
+
+    public function comment(Request $request, int $id): RedirectResponse
+    {
+        $post = Post::findOrFail($id);
+
+        $data = $request->validate([
+            'body' => ['required', 'string', 'min:1', 'max:1000'],
+            'parent_id' => ['nullable', 'integer', Rule::exists('comments', 'id')->where('post_id', $post->id)],
+        ]);
+
+        $anonymous = $request->input('anonymous', '1') === '1';
+
+        $this->community->addComment($request->user()->id, $post, trim($data['body']), $anonymous, $data['parent_id'] ?? null);
+
+        return redirect()->route('post.show', $post->id);
+    }
+
+    public function acceptComment(Request $request, int $id, int $commentId): RedirectResponse
+    {
+        $post = Post::findOrFail($id);
+        $comment = Comment::where('post_id', $id)->findOrFail($commentId);
+
+        $this->community->toggleAccepted($request->user()->id, $post, $comment);
+
+        return back();
+    }
+
+    public function likePost(Request $request, int $id): RedirectResponse
+    {
+        $this->community->toggleReaction($request->user()->id, Post::findOrFail($id), Reaction::LIKE);
+
+        return back();
+    }
+
+    public function likeComment(Request $request, int $id, int $commentId): RedirectResponse
+    {
+        $comment = Comment::where('post_id', $id)->findOrFail($commentId);
+
+        $this->community->toggleReaction($request->user()->id, $comment, Reaction::LIKE);
+
+        return back();
+    }
+
+    public function helpfulComment(Request $request, int $id, int $commentId): RedirectResponse
+    {
+        $comment = Comment::where('post_id', $id)->findOrFail($commentId);
+
+        $this->community->toggleReaction($request->user()->id, $comment, Reaction::HELPFUL);
+
+        return back();
+    }
+}
