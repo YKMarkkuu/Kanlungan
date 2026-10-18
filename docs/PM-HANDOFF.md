@@ -79,3 +79,47 @@ Status: 31 tests passing (166 assertions). Manually verified in browser: auth in
 - D.1: register page wiring — DONE (e0a447b)
 - D.2: login page wiring + session — DONE (06c9970)
 - E: feature tests — NEXT (recommended)
+
+# PM Session Handoff
+
+Last updated: 2026-10-18 (security audit closed)
+
+## Status: Security audit complete, 42 tests passing
+
+All findings from `docs/AUDIT.md` closed on 2026-10-18. See commit history:
+- 19 commits: 75ff4e9 → 3fbc5e8
+- Test suite: 42 passing (242 assertions)
+- Prior: community merge cd6e085, auth phase B bab50c8
+
+## Next session starts with
+- **Rest from security work.** Next session should be visible/creative, not hardening.
+- Options:
+  - **Mobile responsive pass** — big pillar, not started. Fixed heights in music widgets will break at 375px.
+  - **Notifications UI** — alerts exist, but the full system (in-app + PWA push) isn't built.
+  - **PWA setup** — offline support, install prompt, manifest.
+  - **Delight/polish** — item 3 (optimistic reactions), item 4 (modal animations).
+- Do NOT start another audit unless a major merge has happened.
+
+## Known debt (still open — see full list in docs/PM-HANDOFF.md history)
+- SECURITY (pre-production): real SMTP required, no `MAIL_MAILER=log` in production. IT/DPO review needed.
+- Vote on own comment as "helpful" is recorded (only points blocked). Fix in a small follow-up.
+- Logout button appears twice (feed top-right + profile bottom). Decide canonical location when real nav ships.
+- `User.php` fillable omits points/role/banned_at **intentionally** — do NOT add. Add missing casts for points, muted_until, banned_at.
+- Guidance tab reachable by URL for moderators (Low).
+- Register duplicate-key race leaks email/ID to logs (Low).
+- Dead code: DemoCommunity.php, report-menu.blade.php, home.blade.php, home.js, layouts/app.blade.php, welcome.blade.php.
+- Doc drift: README roadmap, AUTH.md regex rule vs code, FRONTEND.md route map.
+- Hardcoded colors in community.css.
+- Email regex duplicated in 4 FormRequests + 2 JS files.
+- routes/web.php, login.js, register.js missing final newline.
+- OG `display_name` is non-unique (allows impersonation).
+- `/search` is unthrottled and uses leading-wildcard LIKE.
+- Post detail loads all comments; feed capped at 50 with no pagination.
+- sweepDue() writes on every feed GET; reports:resolve-due unscheduled.
+- No notifications yet, no PWA, no mobile responsive.
+- Guidance case files not built.
+
+## Session history
+- 2026-10-12: Community merge
+- 2026-10-16: Audit run (findings documented in docs/AUDIT.md)
+- 2026-10-18: All audit tiers closed, auth tests added
