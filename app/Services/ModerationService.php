@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ModAction;
 use App\Models\Report;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -35,7 +36,10 @@ class ModerationService
      */
     public function queue(string $tab, ?string $severity): Collection
     {
-        $query = Report::query()->with(['reportable.author:id,display_name', 'reporter:id,display_name'])->withCount([
+        $query = Report::query()->with([
+            'reportable.author:id,display_name,banned_at,muted_until',
+            'reporter:id,display_name,banned_at,muted_until',
+        ])->withCount([
             'votes',
             'votes as agree_count' => fn ($q) => $q->where('choice', 'agree'),
         ]);
@@ -96,6 +100,17 @@ class ModerationService
         $actions = $report->mod_subject === 'reporter'
             ? ['warn', 'mute', 'ban', 'dismiss']
             : ['warn', 'remove', 'mute', 'ban', 'dismiss'];
+        $subjectUser = $report->mod_subject === 'reporter'
+            ? $report->reporter
+            : $report->reportable?->author;
+
+        if ($subjectUser?->banned_at !== null) {
+            $actions[] = 'unban';
+        }
+
+        if ($subjectUser?->muted_until !== null && Carbon::parse($subjectUser->muted_until)->isFuture()) {
+            $actions[] = 'unmute';
+        }
 
         if ($report->mod_subject !== 'reporter' && $report->reportable?->removed_at !== null) {
             $actions = array_values(array_diff($actions, ['remove']));
@@ -165,6 +180,16 @@ class ModerationService
 
                 case 'ban':
                     User::whereKey($subjectUserId)->update(['banned_at' => now()]);
+                    $changes['mod_status'] = 'reviewed';
+                    break;
+
+                case 'unmute':
+                    User::whereKey($subjectUserId)->update(['muted_until' => null]);
+                    $changes['mod_status'] = 'reviewed';
+                    break;
+
+                case 'unban':
+                    User::whereKey($subjectUserId)->update(['banned_at' => null]);
                     $changes['mod_status'] = 'reviewed';
                     break;
 

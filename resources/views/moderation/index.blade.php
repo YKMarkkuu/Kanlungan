@@ -4,7 +4,7 @@
 @section('nav', 'me')
 
 @php
-    $labels = ['warn' => 'Warn', 'remove' => 'Remove', 'restore' => 'Restore', 'mute' => 'Mute', 'ban' => 'Ban', 'dismiss' => 'No action', 'refer' => 'Refer to Guidance', 'handled' => 'Mark handled'];
+    $labels = ['warn' => 'Warn', 'remove' => 'Remove', 'restore' => 'Restore', 'mute' => 'Mute', 'ban' => 'Ban', 'unmute' => 'Unmute', 'unban' => 'Unban', 'dismiss' => 'No action', 'refer' => 'Refer to Guidance', 'handled' => 'Mark handled'];
 @endphp
 
 @section('content')
