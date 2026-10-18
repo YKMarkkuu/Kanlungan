@@ -52,13 +52,17 @@ class LoginController extends Controller
         return response()->json(['status' => 'authenticated'], 200);
     }
 
-    public function logout(Request $request): JsonResponse
+        public function logout(Request $request): \Illuminate\Http\JsonResponse|\Illuminate\Http\RedirectResponse
     {
         Auth::logout();
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        return response()->json(['status' => 'logged_out'], 200);
+        if ($request->wantsJson()) {
+            return response()->json(['status' => 'logged_out'], 200);
+        }
+
+        return redirect('/')->with('status', 'You have been signed out.');
     }
 }
