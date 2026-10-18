@@ -49,9 +49,9 @@
                     </div>
 
                     @if ($card['subject'] === 'reporter')
-                        <p class="text-small"><strong>False report.</strong> The community said this report was false. Judging the reporter{{ $card['subject_user'] ? ': '.$card['subject_user']['name'].' ('.$card['subject_user']['email'].')' : '' }}.</p>
+                        <p class="text-small"><strong>False report.</strong> The community said this report was false. Judging the reporter: {{ $card['subject_user'] }}.</p>
                     @else
-                        <p class="text-small text-muted">Posted by {{ $card['subject_user'] ? $card['subject_user']['name'].' ('.$card['subject_user']['email'].')' : 'unknown' }}</p>
+                        <p class="text-small text-muted">Posted by {{ $card['subject_user'] }}</p>
                     @endif
 
                     <p class="cm-post__body">{{ $card['body'] }}</p>

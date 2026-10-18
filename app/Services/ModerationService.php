@@ -35,7 +35,7 @@ class ModerationService
      */
     public function queue(string $tab, ?string $severity): Collection
     {
-        $query = Report::query()->with(['reportable.author:id,name,email', 'reporter:id,name,email'])->withCount([
+        $query = Report::query()->with(['reportable.author:id,display_name', 'reporter:id,display_name'])->withCount([
             'votes',
             'votes as agree_count' => fn ($q) => $q->where('choice', 'agree'),
         ]);
@@ -202,7 +202,7 @@ class ModerationService
             'body' => $target?->body ?? '(deleted)',
             'removed' => $target?->removed_at !== null,
             'subject' => $r->mod_subject ?? 'content',
-            'subject_user' => $subjectUser ? ['name' => $subjectUser->name, 'email' => $subjectUser->email] : null,
+            'subject_user' => $subjectUser?->display_name ?? 'Anonymous',
             'referred' => $r->referred_guidance_at !== null,
             'handled' => $r->guidance_handled_at !== null,
             'time' => $r->created_at?->diffForHumans(),
