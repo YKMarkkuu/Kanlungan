@@ -20,3 +20,6 @@ yarn-error.log
 
 # Database backups (never commit)
 *.sql
+
+# User uploads (never commit photos)
+/public/uploads
