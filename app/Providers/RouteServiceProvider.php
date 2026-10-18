@@ -28,14 +28,22 @@ class RouteServiceProvider extends ServiceProvider
             return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
         });
 
-        // OTP limiters. Throttle middleware runs before FormRequest normalization,
-        // so the email is normalized here to keep "Mark@..." and "mark@..." in one bucket.
-        RateLimiter::for('otp-send', function (Request $request) {
-            return Limit::perHour(5)->by(self::otpEmailKey($request).'|'.$request->ip());
+                RateLimiter::for('otp-send', function (Request $request) {
+            $email = strtolower(trim((string) $request->input('email')));
+            // Allow 5 per email per hour AND 20 per IP per hour (to prevent inbox spam and botnets)
+            return [
+                Limit::perHour(5)->by('email:' . $email),
+                Limit::perHour(20)->by('ip:' . $request->ip()),
+            ];
         });
 
         RateLimiter::for('otp-verify', function (Request $request) {
-            return Limit::perHour(10)->by(self::otpEmailKey($request).'|'.$request->ip());
+            $email = strtolower(trim((string) $request->input('email')));
+            // Allow 10 verify attempts per email per hour AND 30 per IP
+            return [
+                Limit::perHour(10)->by('email:' . $email),
+                Limit::perHour(30)->by('ip:' . $request->ip()),
+            ];
         });
 
         // IP only: the email may be malformed at this point.
