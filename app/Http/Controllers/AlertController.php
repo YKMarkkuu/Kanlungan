@@ -33,7 +33,20 @@ class AlertController extends Controller
         }
 
         if ($alert->url !== null) {
-            return redirect($alert->url);
+            $path = parse_url($alert->url, PHP_URL_PATH) ?: '/';
+            $path = '/'.ltrim(str_replace('\\', '/', $path), '/');
+            $query = parse_url($alert->url, PHP_URL_QUERY);
+            $fragment = parse_url($alert->url, PHP_URL_FRAGMENT);
+
+            if ($query !== null) {
+                $path .= '?'.$query;
+            }
+
+            if ($fragment !== null) {
+                $path .= '#'.$fragment;
+            }
+
+            return redirect($path);
         }
 
         return view('alerts.notice', ['alert' => $alert]);
