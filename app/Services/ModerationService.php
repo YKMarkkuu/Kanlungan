@@ -113,6 +113,11 @@ class ModerationService
             $kind = $target instanceof \App\Models\Post ? 'post' : 'comment';
             $changes = [];
 
+            if (in_array($action, ['mute', 'ban'], true)
+                && in_array(User::whereKey($subjectUserId)->value('role'), ['moderator', 'guidance', 'admin'], true)) {
+                throw $this->error('Higher-privilege accounts cannot be muted or banned.');
+            }
+
             switch ($action) {
                 case 'warn':
                     User::whereKey($subjectUserId)->increment('warnings_count');
