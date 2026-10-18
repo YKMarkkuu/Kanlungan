@@ -7,6 +7,7 @@ use App\Models\Comment;
 use App\Models\ModAction;
 use App\Models\Post;
 use App\Models\Report;
+use App\Models\ReportVote;
 use App\Models\User;
 use App\Services\ReportService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -95,10 +96,53 @@ class ModerationFlowTest extends TestCase
         $this->assertNotNull($post->fresh()->removed_at);
     }
 
+    public function test_community_and_moderator_removals_delete_post_photos(): void
+    {
+        $uploadDirectory = public_path('uploads/posts');
+        if (! is_dir($uploadDirectory)) {
+            mkdir($uploadDirectory, 0775, true);
+        }
+
+        $communityAuthor = User::factory()->create();
+        $communityReporter = User::factory()->create();
+        $communityPhoto = 'uploads/posts/'.\Illuminate\Support\Str::uuid().'.jpg';
+        file_put_contents(public_path($communityPhoto), 'community photo');
+        $communityPost = $this->makePost($communityAuthor, 'COMMUNITY-PHOTO-POST');
+        $communityPost->update(['image_path' => $communityPhoto]);
+
+        $this->reportAndVote($communityPost, $communityReporter, 'Harassment', [
+            'agree', 'agree', 'agree', 'agree', 'false_report',
+        ]);
+
+        $this->assertNotNull($communityPost->fresh()->removed_at);
+        $this->assertFileDoesNotExist(public_path($communityPhoto));
+
+        $moderator = User::factory()->create(['role' => 'moderator']);
+        $moderatorAuthor = User::factory()->create();
+        $moderatorReporter = User::factory()->create();
+        $moderatorPhoto = 'uploads/posts/'.\Illuminate\Support\Str::uuid().'.jpg';
+        file_put_contents(public_path($moderatorPhoto), 'moderator photo');
+        $moderatorPost = $this->makePost($moderatorAuthor, 'MODERATOR-PHOTO-POST');
+        $moderatorPost->update(['image_path' => $moderatorPhoto]);
+        $this->actingAs($moderatorReporter)->post("/report/post/{$moderatorPost->id}", ['category' => 'Threats']);
+        $moderatorReport = Report::latest('id')->firstOrFail();
+
+        $this->actingAs($moderator)
+            ->post("/moderation/{$moderatorReport->id}", ['action' => 'remove', 'reason' => 'Remove harmful content'])
+            ->assertSessionHasNoErrors();
+
+        $this->assertNotNull($moderatorPost->fresh()->removed_at);
+        $this->assertFileDoesNotExist(public_path($moderatorPhoto));
+    }
+
     public function test_false_report_keeps_post_clears_red_and_sends_reporter_to_moderators(): void
     {
         $author = User::factory()->create();
-        $reporter = User::factory()->create(['points' => 10, 'name' => 'Rita Reporter']);
+        $reporter = User::factory()->create([
+            'points' => 10,
+            'name' => 'Rita Legal Name',
+            'display_name' => 'Rita Reporter',
+        ]);
         $mod = User::factory()->create(['role' => 'moderator']);
         $post = $this->makePost($author, 'FINE-POST');
 
@@ -114,7 +158,11 @@ class ModerationFlowTest extends TestCase
         $this->actingAs($author)->get('/feed')->assertSee('FINE-POST')->assertDontSee('cm-reported');
 
         // Moderator sees the reporter, must give a reason, then can warn them.
-        $this->actingAs($mod)->get('/moderation')->assertOk()->assertSee('Rita Reporter')->assertSee('False report');
+        $this->actingAs($mod)->get('/moderation')->assertOk()
+            ->assertSee('Rita Reporter')
+            ->assertSee('False report')
+            ->assertDontSee('Rita Legal Name')
+            ->assertDontSee($reporter->email);
         $this->actingAs($mod)->post("/moderation/{$report->id}", ['action' => 'warn', 'reason' => ''])->assertSessionHasErrors('reason');
         $this->actingAs($mod)->post("/moderation/{$report->id}", ['action' => 'warn', 'reason' => 'Do not file false reports.'])->assertSessionHasNoErrors();
 
@@ -166,6 +214,87 @@ class ModerationFlowTest extends TestCase
         $this->actingAs($mod)->get('/moderation?severity=medium')->assertDontSee('WORRYING-POST');
     }
 
+    public function test_critical_reports_are_ordered_before_the_queue_limit(): void
+    {
+        $author = User::factory()->create();
+        $post = $this->makePost($author);
+
+        foreach (User::factory()->count(100)->create() as $reporter) {
+            Report::create([
+                'reporter_id' => $reporter->id,
+                'reportable_type' => Post::class,
+                'reportable_id' => $post->id,
+                'category' => 'Other',
+                'status' => 'open',
+                'mod_status' => 'pending',
+                'mod_subject' => 'content',
+            ]);
+        }
+
+        $criticalReporter = User::factory()->create();
+        $criticalReport = Report::create([
+            'reporter_id' => $criticalReporter->id,
+            'reportable_type' => Post::class,
+            'reportable_id' => $post->id,
+            'category' => 'Threats',
+            'status' => 'open',
+            'mod_status' => 'pending',
+            'mod_subject' => 'content',
+        ]);
+
+        $queue = app(\App\Services\ModerationService::class)->queue('queue', null);
+
+        $this->assertCount(100, $queue);
+        $this->assertSame($criticalReport->id, $queue->first()['id']);
+    }
+
+    public function test_dismiss_resolves_report_and_prevents_community_resolution(): void
+    {
+        $author = User::factory()->create(['points' => 10]);
+        $reporter = User::factory()->create();
+        $moderator = User::factory()->create(['role' => 'moderator']);
+        $voters = User::factory()->count(3)->create();
+        $post = $this->makePost($author, 'DISMISSED-POST');
+        $report = Report::create([
+            'reporter_id' => $reporter->id,
+            'reportable_type' => Post::class,
+            'reportable_id' => $post->id,
+            'category' => 'Threats',
+            'status' => 'voting',
+            'mod_status' => 'pending',
+            'mod_subject' => 'content',
+            'voting_started_at' => now()->subHour(),
+            'voting_ends_at' => now()->addHours(23),
+        ]);
+
+        foreach ($voters as $voter) {
+            ReportVote::create(['report_id' => $report->id, 'voter_id' => $voter->id, 'choice' => 'agree']);
+        }
+
+        $this->actingAs($moderator)
+            ->post("/moderation/{$report->id}", ['action' => 'dismiss', 'reason' => 'No violation found'])
+            ->assertSessionHasNoErrors();
+
+        $report = $report->fresh();
+        $this->assertSame(Report::RESOLVED, $report->status);
+        $this->assertSame('moderator_cleared', $report->outcome);
+        $this->assertNotNull($report->resolved_at);
+        $this->assertTrue($report->voting_ends_at->equalTo($report->resolved_at));
+        $this->assertSame(10, $author->fresh()->points);
+        $this->assertNull($post->fresh()->removed_at);
+
+        // Simulate a stale active-vote entry reaching resolution after the moderator dismissal.
+        $staleReport = $report->replicate();
+        $staleReport->id = $report->id;
+        $staleReport->setAttribute('status', 'voting');
+        $resolve = new \ReflectionMethod(ReportService::class, 'resolve');
+        $resolve->invoke(app(ReportService::class), $staleReport);
+
+        $this->assertSame('moderator_cleared', $report->fresh()->outcome);
+        $this->assertSame(10, $author->fresh()->points);
+        $this->assertNull($post->fresh()->removed_at);
+    }
+
     public function test_moderator_can_refer_remove_and_restore_and_guidance_can_mark_handled(): void
     {
         $author = User::factory()->create();
@@ -194,6 +323,52 @@ class ModerationFlowTest extends TestCase
         $this->actingAs($mod)->get('/moderation?tab=history')->assertSee('Possible danger')->assertSee('Student contacted');
     }
 
+    public function test_admin_can_unmask_reporter_or_content_author_and_the_action_is_logged(): void
+    {
+        $author = User::factory()->create();
+        $reporter = User::factory()->create();
+        $admin = User::factory()->create(['role' => 'admin']);
+        $falseReportPost = $this->makePost($author, 'FALSE-REPORT-POST');
+        $falseReport = $this->reportAndVote(
+            $falseReportPost,
+            $reporter,
+            'Spam',
+            ['false_report', 'false_report', 'false_report', 'agree', 'wrong_tag'],
+        );
+
+        $this->actingAs($admin)
+            ->post("/moderation/{$falseReport->id}/unmask", ['reason' => 'Privacy investigation'])
+            ->assertSessionHas('report_status', "Identity unmasked: {$reporter->email}")
+            ->assertDontSee($reporter->email);
+
+        $this->assertDatabaseHas('mod_actions', [
+            'report_id' => $falseReport->id,
+            'moderator_id' => $admin->id,
+            'target_user_id' => $reporter->id,
+            'action' => 'unmask',
+            'reason' => 'Privacy investigation',
+        ]);
+
+        $contentAuthor = User::factory()->create();
+        $contentReporter = User::factory()->create();
+        $contentPost = $this->makePost($contentAuthor, 'CONTENT-REPORT-POST');
+        $this->actingAs($contentReporter)->post("/report/post/{$contentPost->id}", ['category' => 'Threats']);
+        $contentReport = Report::latest('id')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->post("/moderation/{$contentReport->id}/unmask", ['reason' => 'Safety investigation'])
+            ->assertSessionHas('report_status', "Identity unmasked: {$contentAuthor->email}")
+            ->assertDontSee($contentAuthor->email);
+
+        $this->assertDatabaseHas('mod_actions', [
+            'report_id' => $contentReport->id,
+            'moderator_id' => $admin->id,
+            'target_user_id' => $contentAuthor->id,
+            'action' => 'unmask',
+            'reason' => 'Safety investigation',
+        ]);
+    }
+
     public function test_muted_user_can_read_but_not_write_and_banned_user_is_locked_out(): void
     {
         $author = User::factory()->create();
@@ -206,6 +381,62 @@ class ModerationFlowTest extends TestCase
         $this->assertSame(0, Comment::count());
 
         $this->actingAs($banned)->get('/feed')->assertForbidden()->assertSee('suspended');
+    }
+
+    public function test_moderators_can_unmute_and_unban_users_from_the_queue(): void
+    {
+        $moderator = User::factory()->create(['role' => 'moderator']);
+        $mutedUser = User::factory()->create(['muted_until' => now()->addDays(3)]);
+        $bannedUser = User::factory()->create(['banned_at' => now()]);
+        $mutedPost = $this->makePost($mutedUser, 'MUTED-USER-POST');
+        $bannedPost = $this->makePost($bannedUser, 'BANNED-USER-POST');
+        $mutedReport = Report::create([
+            'reporter_id' => User::factory()->create()->id,
+            'reportable_type' => Post::class,
+            'reportable_id' => $mutedPost->id,
+            'category' => 'Threats',
+            'status' => 'open',
+            'mod_status' => 'pending',
+            'mod_subject' => 'content',
+        ]);
+        $bannedReport = Report::create([
+            'reporter_id' => User::factory()->create()->id,
+            'reportable_type' => Post::class,
+            'reportable_id' => $bannedPost->id,
+            'category' => 'Threats',
+            'status' => 'open',
+            'mod_status' => 'pending',
+            'mod_subject' => 'content',
+        ]);
+
+        $this->actingAs($moderator)->get('/moderation')
+            ->assertOk()
+            ->assertSee('Unmute')
+            ->assertSee('Unban');
+
+        $this->actingAs($moderator)
+            ->post("/moderation/{$mutedReport->id}", ['action' => 'unmute', 'reason' => 'Mute no longer needed'])
+            ->assertSessionHasNoErrors();
+        $this->actingAs($moderator)
+            ->post("/moderation/{$bannedReport->id}", ['action' => 'unban', 'reason' => 'Ban no longer needed'])
+            ->assertSessionHasNoErrors();
+
+        $this->assertNull($mutedUser->fresh()->muted_until);
+        $this->assertNull($bannedUser->fresh()->banned_at);
+        $this->assertDatabaseHas('mod_actions', [
+            'report_id' => $mutedReport->id,
+            'moderator_id' => $moderator->id,
+            'target_user_id' => $mutedUser->id,
+            'action' => 'unmute',
+            'reason' => 'Mute no longer needed',
+        ]);
+        $this->assertDatabaseHas('mod_actions', [
+            'report_id' => $bannedReport->id,
+            'moderator_id' => $moderator->id,
+            'target_user_id' => $bannedUser->id,
+            'action' => 'unban',
+            'reason' => 'Ban no longer needed',
+        ]);
     }
 
     public function test_comment_creates_an_alert_that_opens_the_thread_and_marks_read(): void
@@ -233,6 +464,30 @@ class ModerationFlowTest extends TestCase
         $this->actingAs($user)->get("/alerts/{$alert->id}")->assertOk()->assertSee('Warning: be kind');
         $this->assertNotNull($alert->fresh()->read_at);
         $this->actingAs(User::factory()->create())->get("/alerts/{$alert->id}")->assertNotFound();
+    }
+
+    public function test_alert_urls_redirect_to_a_local_path_even_when_the_stored_url_has_an_external_host(): void
+    {
+        $user = User::factory()->create();
+        $alert = Alert::create([
+            'user_id' => $user->id,
+            'kind' => 'comment',
+            'title' => 'New comment',
+            'url' => 'https://evil.example//evil.example/path?tab=queue#comment-5',
+        ]);
+
+        $this->actingAs($user)->get("/alerts/{$alert->id}")
+            ->assertRedirect(url('/evil.example/path?tab=queue#comment-5'));
+
+        $alertWithoutPath = Alert::create([
+            'user_id' => $user->id,
+            'kind' => 'notice',
+            'title' => 'Notice',
+            'url' => 'https://evil.example',
+        ]);
+
+        $this->actingAs($user)->get("/alerts/{$alertWithoutPath->id}")
+            ->assertRedirect(url('/'));
     }
 
     public function test_accepting_an_answer_gives_points_once_and_only_the_post_author_can(): void

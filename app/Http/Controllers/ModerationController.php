@@ -45,7 +45,7 @@ class ModerationController extends Controller
     public function act(Request $request, int $report): RedirectResponse
     {
         $data = $request->validate([
-            'action' => ['required', Rule::in(['warn', 'remove', 'restore', 'mute', 'ban', 'dismiss', 'refer', 'handled'])],
+            'action' => ['required', Rule::in(['warn', 'remove', 'restore', 'mute', 'ban', 'unmute', 'unban', 'dismiss', 'refer', 'handled'])],
             'reason' => ['required', 'string', 'min:3', 'max:500'],
         ], ['reason.required' => 'Every action needs a reason.', 'reason.min' => 'Every action needs a reason (at least 3 characters).']);
 
@@ -60,8 +60,8 @@ class ModerationController extends Controller
             'reason' => ['required', 'string'],
         ]);
 
-        $this->moderation->unmask($request->user(), $report, $data['reason']);
+        $email = $this->moderation->unmask($request->user(), $report, $data['reason']);
 
-        return back()->with('report_status', 'Identity unmasked.');
+        return back()->with('report_status', "Identity unmasked: {$email}");
     }
 }
