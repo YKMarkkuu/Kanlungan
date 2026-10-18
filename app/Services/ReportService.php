@@ -40,7 +40,7 @@ class ReportService
 
     public const TYPES = ['post' => Post::class, 'comment' => Comment::class];
 
-    public function __construct(private PointService $points, private AlertService $alerts)
+    public function __construct(private PointService $points, private AlertService $alerts, private ImageService $images)
     {
     }
 
@@ -229,6 +229,10 @@ class ReportService
         if ($outcome === VoteTally::UPHELD || $outcome === VoteTally::WRONG_TAG) {
             if ($target !== null && $target->removed_at === null) {
                 $target->forceFill(['removed_at' => now(), 'removed_by' => 'community'])->save();
+
+                if ($target instanceof Post) {
+                    $this->images->deletePhoto($target->image_path);
+                }
             }
 
             if ($authorId !== null) {

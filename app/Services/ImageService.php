@@ -5,6 +5,7 @@ namespace App\Services;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use RuntimeException;
 
 /**
  * Photos on posts. Every upload is decoded and re-encoded as a plain JPEG (max 1280px wide), which
@@ -57,6 +58,27 @@ class ImageService
         imagejpeg($canvas, $directory.DIRECTORY_SEPARATOR.$name, 82);
 
         return 'uploads/posts/'.$name;
+    }
+
+    public function deletePhoto(?string $path): void
+    {
+        if ($path === null || $path === '') {
+            return;
+        }
+
+        if (! preg_match('~\Auploads/posts/[A-Za-z0-9-]+\.jpg\z~D', $path)) {
+            throw new RuntimeException('Cannot delete a photo outside the post uploads directory.');
+        }
+
+        $file = public_path($path);
+
+        if (! is_file($file)) {
+            return;
+        }
+
+        if (! unlink($file)) {
+            throw new RuntimeException("Failed to delete post photo: {$path}");
+        }
     }
 
     /** @param  \GdImage  $image */
