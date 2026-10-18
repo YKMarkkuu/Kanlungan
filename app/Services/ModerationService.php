@@ -46,10 +46,30 @@ class ModerationService
             $query->where('mod_status', 'pending');
         }
 
-        return $query->limit(100)->get()
-            ->filter(fn (Report $r) => $severity === null || Report::severityFor($r->category) === $severity)
-            ->sortBy(fn (Report $r) => [['critical' => 0, 'high' => 1, 'medium' => 2][Report::severityFor($r->category)], -$r->id])
-            ->values()
+        if ($severity !== null) {
+            $categories = [
+                'critical' => Report::CRITICAL,
+                'high' => Report::HIGH,
+                'medium' => Report::MEDIUM,
+            ][$severity] ?? [];
+            $query->whereIn('category', $categories);
+        }
+
+        $criticalPlaceholders = implode(',', array_fill(0, count(Report::CRITICAL), '?'));
+        $highPlaceholders = implode(',', array_fill(0, count(Report::HIGH), '?'));
+        $mediumPlaceholders = implode(',', array_fill(0, count(Report::MEDIUM), '?'));
+
+        return $query
+            ->orderByRaw(
+                "CASE WHEN category IN ({$criticalPlaceholders}) THEN 1
+                    WHEN category IN ({$highPlaceholders}) THEN 2
+                    WHEN category IN ({$mediumPlaceholders}) THEN 3
+                    ELSE 4 END",
+                [...Report::CRITICAL, ...Report::HIGH, ...Report::MEDIUM],
+            )
+            ->orderByDesc('id')
+            ->limit(100)
+            ->get()
             ->map(fn (Report $r) => $this->card($r));
     }
 
@@ -178,6 +198,30 @@ class ModerationService
             if ($changes !== []) {
                 $report->update($changes);
             }
+        });
+    }
+
+    public function unmask(User $actor, int $reportId, string $reason): string
+    {
+        return DB::transaction(function () use ($actor, $reportId, $reason) {
+            $report = Report::with(['reportable.author', 'reporter'])->findOrFail($reportId);
+            $targetUser = $report->mod_subject === 'reporter'
+                ? $report->reporter
+                : $report->reportable?->author;
+
+            if (! $targetUser) {
+                throw $this->error('The user for this report could not be found.');
+            }
+
+            ModAction::create([
+                'report_id' => $report->id,
+                'moderator_id' => $actor->id,
+                'target_user_id' => $targetUser->id,
+                'action' => 'unmask',
+                'reason' => trim($reason),
+            ]);
+
+            return $targetUser->email;
         });
     }
 
