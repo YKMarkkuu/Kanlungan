@@ -169,6 +169,11 @@ class ModerationService
                     break;
 
                 case 'dismiss':
+                    $dismissedAt = now();
+                    $changes['status'] = Report::RESOLVED;
+                    $changes['outcome'] = 'moderator_cleared';
+                    $changes['resolved_at'] = $dismissedAt;
+                    $changes['voting_ends_at'] = $dismissedAt;
                     $changes['mod_status'] = 'reviewed';
                     break;
 

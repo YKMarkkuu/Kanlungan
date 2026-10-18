@@ -212,6 +212,10 @@ class ReportService
     /** Must be called inside a transaction with the report row locked. */
     private function resolve(Report $report): void
     {
+        if ($report->status === Report::RESOLVED || $report->outcome === 'moderator_cleared') {
+            return;
+        }
+
         $counts = $report->votes()->selectRaw('choice, count(*) as total')->groupBy('choice')->pluck('total', 'choice')->all();
         $outcome = VoteTally::decide($counts, self::MIN_VOTES);
 
