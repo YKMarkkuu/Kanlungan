@@ -46,9 +46,14 @@ class RouteServiceProvider extends ServiceProvider
             ];
         });
 
-        // IP only: the email may be malformed at this point.
+                // IP + Email: Prevents campus-wide lockouts on shared Wi-Fi while still stopping spam
         RateLimiter::for('otp-register', function (Request $request) {
-            return Limit::perHour(5)->by((string) $request->ip());
+            $email = strtolower(trim((string) $request->input('email')));
+            
+            return [
+                Limit::perHour(5)->by('email:' . $email),
+                Limit::perHour(20)->by('ip:' . $request->ip()),
+            ];
         });
 
         $this->routes(function () {
