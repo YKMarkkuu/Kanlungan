@@ -53,4 +53,15 @@ class ModerationController extends Controller
 
         return back()->with('report_status', 'Done. The action was logged.');
     }
+
+    public function unmask(Request $request, int $report): RedirectResponse
+    {
+        $data = $request->validate([
+            'reason' => ['required', 'string'],
+        ]);
+
+        $this->moderation->unmask($request->user(), $report, $data['reason']);
+
+        return back()->with('report_status', 'Identity unmasked.');
+    }
 }

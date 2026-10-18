@@ -66,4 +66,9 @@ Route::middleware(['auth', EnforceRestrictions::class])->group(function () {
         Route::get('/moderation', [ModerationController::class, 'index'])->name('moderation');
         Route::post('/moderation/{report}', [ModerationController::class, 'act'])->whereNumber('report')->middleware('throttle:60,1')->name('moderation.act');
     });
+
+    Route::post('/moderation/{report}/unmask', [ModerationController::class, 'unmask'])
+        ->whereNumber('report')
+        ->middleware(RequireRole::class.':admin,dpo')
+        ->name('moderation.unmask');
 });
