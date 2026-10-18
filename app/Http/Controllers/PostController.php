@@ -31,7 +31,7 @@ class PostController extends Controller
         $data = $request->validate([
             'category' => ['required', Rule::in(Post::CATEGORIES)],
             'body' => ['required', 'string', 'min:3', 'max:2000'],
-            'photo' => ['nullable', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
+            'photo' => ['nullable', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096', 'dimensions:max_width=2000,max_height=2000'],
         ], ['photo.max' => 'The photo must be 4 MB or smaller.', 'photo.image' => 'Please choose a JPG, PNG or WebP photo.']);
 
         // Anonymous is on by default; a missing value means "anonymous".
