@@ -1,11 +1,12 @@
 @extends('layouts.community')
 
+@section('back', 'history')
 @section('title', 'Community rules · Kanlungan')
 @section('nav', 'me')
 
 @section('content')
     <div class="stack">
-        <header class="cm-header"><a href="{{ route('community.me') }}" class="cm-back">@include('components.icon', ['name' => 'back']) Rules</a></header>
+        <header class="cm-header"><h1>Rules</h1></header>
 
         <div class="card stack">
             <h2>Community rules</h2>

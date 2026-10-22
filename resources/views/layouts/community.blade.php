@@ -2,7 +2,8 @@
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    {{-- viewport-fit=cover is required for env(safe-area-inset-bottom) to return a non-zero value on iPhones. --}}
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#1a6b4a">
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
@@ -13,9 +14,23 @@
     <link rel="stylesheet" href="{{ asset('css/community.css') }}">
 </head>
 <body>
+    {{-- Mobile back button is opt-in per page:
+         @section('back', 'history')            -> history.back(), falls back to the feed if there is no history
+         @section('back', route('post.show', 1)) -> goes to that specific route
+         Hidden on desktop by CSS. --}}
+    @php($back = trim($__env->yieldContent('back')))
+
     <div class="page cm-page">
         <main class="container cm-main @yield('main-class')">
             <header class="cm-header">
+                @if ($back !== '')
+                    <a href="{{ $back === 'history' ? route('feed') : $back }}"
+                       class="cm-mobile-back"
+                       aria-label="Go back"
+                       @if ($back === 'history') onclick="if (window.history.length > 1) { window.history.back(); return false; }" @endif>
+                        @include('components.icon', ['name' => 'back'])
+                    </a>
+                @endif
                 <a href="{{ route('feed') }}" class="cm-back">Kanlungan</a>
             </header>
 

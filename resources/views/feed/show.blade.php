@@ -1,5 +1,6 @@
 @extends('layouts.community')
 
+@section('back', 'history')
 @section('title', 'Post · Kanlungan')
 @section('hide-nav', '1')
 @section('main-class', 'cm-main--composer')
@@ -7,7 +8,7 @@
 @section('content')
     <div class="stack">
         <header class="cm-header">
-            <a href="{{ route('feed') }}" class="cm-back">@include('components.icon', ['name' => 'back']) Post</a>
+            <h1>Post</h1>
             <span class="cm-icon-btn is-disabled" title="More options are not built yet">@include('components.icon', ['name' => 'more'])</span>
         </header>
 
