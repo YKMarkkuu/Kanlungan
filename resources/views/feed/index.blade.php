@@ -11,10 +11,6 @@
                 <a href="{{ route('search') }}" class="cm-icon-btn" aria-label="Search">@include('components.icon', ['name' => 'search'])</a>
                 @php($unread = \App\Models\Alert::unreadCount(auth()->id()))
                 <a href="{{ route('alerts') }}" class="cm-icon-btn cm-bell" aria-label="Alerts">@include('components.icon', ['name' => 'bell'])@if ($unread > 0)<span class="cm-count">{{ $unread }}</span>@endif</a>
-                <form method="POST" action="{{ route('auth.logout') }}">
-                    @csrf
-                    <button type="submit" class="link-btn">Log out</button>
-                </form>
             </div>
         </header>
 

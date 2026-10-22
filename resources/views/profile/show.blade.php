@@ -68,9 +68,11 @@
             <div class="card cm-empty"><p class="text-muted">No points yet.</p></div>
         @endforelse
 
-        <form method="POST" action="{{ route('auth.logout') }}">
-            @csrf
-            <button type="submit" class="btn btn--block">Log out</button>
-        </form>
+        <div class="card">
+            <form method="POST" action="{{ route('auth.logout') }}">
+                @csrf
+                <button type="submit" class="btn btn--block">Log out</button>
+            </form>
+        </div>
     </div>
 @endsection

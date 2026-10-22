@@ -15,6 +15,10 @@
 <body>
     <div class="page cm-page">
         <main class="container cm-main @yield('main-class')">
+            <header class="cm-header">
+                <a href="{{ route('feed') }}" class="cm-back">Kanlungan</a>
+            </header>
+
             @if ($errors->has('report'))
                 <div class="card cm-notice cm-notice--error" role="alert">{{ $errors->first('report') }}</div>
             @endif
