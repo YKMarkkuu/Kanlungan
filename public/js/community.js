@@ -30,6 +30,23 @@
 
     /* ---------- Post page: anonymous toggle + reply-to ---------- */
 
+    document.querySelectorAll('[data-toggle-replies]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var replies = document.getElementById(button.getAttribute('data-toggle-replies'));
+
+            if (!replies) {
+                return;
+            }
+
+            var isExpanded = button.getAttribute('aria-expanded') === 'true';
+            button.setAttribute('aria-expanded', isExpanded ? 'false' : 'true');
+            replies.classList.toggle('hidden', isExpanded);
+            button.textContent = isExpanded
+                ? 'View ' + replies.children.length + ' ' + (replies.children.length === 1 ? 'reply' : 'replies')
+                : button.getAttribute('data-expanded-label');
+        });
+    });
+
     var commentForm = document.getElementById('comment-form');
 
     if (commentForm) {

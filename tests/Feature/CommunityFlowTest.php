@@ -49,12 +49,13 @@ class CommunityFlowTest extends TestCase
         $this->assertSame(0, $author->fresh()->points);
     }
 
-    public function test_liking_your_own_post_gives_no_points(): void
+    public function test_cannot_like_your_own_post(): void
     {
         $author = User::factory()->create();
         $post = $this->makePost($author);
 
-        $this->actingAs($author)->post("/post/{$post->id}/like");
+        $this->actingAs($author)->post("/post/{$post->id}/like")->assertSessionHasErrors('report');
+        $this->assertSame(0, $post->reactions()->count());
         $this->assertSame(0, $author->fresh()->points);
     }
 

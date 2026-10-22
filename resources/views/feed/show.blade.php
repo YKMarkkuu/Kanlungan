@@ -16,10 +16,6 @@
 
         @foreach ($comments as $comment)
             @include('components.comment-card', ['comment' => $comment, 'reply' => false, 'canAccept' => $post['mine']])
-
-            @foreach ($comment['replies'] as $child)
-                @include('components.comment-card', ['comment' => $child, 'reply' => true])
-            @endforeach
         @endforeach
 
         @if (count($comments) === 0)
