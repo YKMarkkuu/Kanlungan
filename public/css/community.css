@@ -146,6 +146,139 @@
     text-decoration: none;
 }
 
+.cm-comment-wrapper {
+    margin-bottom: 16px;
+}
+
+.cm-comment {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.cm-comment .cm-avatar {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    margin-top: 4px;
+}
+
+.cm-comment__content {
+    flex-grow: 1;
+    min-width: 0;
+}
+
+.cm-comment__bubble {
+    padding: 10px 12px;
+    border-radius: 16px;
+    border-top-left-radius: 4px;
+    background-color: var(--surface-hover);
+}
+
+.cm-comment__author {
+    display: block;
+    margin-bottom: 2px;
+    color: var(--text-primary);
+    font-size: 13px;
+}
+
+.cm-comment__body {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 14px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+}
+
+.cm-comment__actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 16px;
+    min-width: 0;
+    margin-top: 4px;
+    padding-left: 12px;
+    overflow-x: auto;
+}
+
+.cm-comment__actions > * {
+    flex: 0 0 auto;
+}
+
+.cm-comment__actions form {
+    margin: 0;
+}
+
+.cm-comment__action-btn {
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+    cursor: pointer;
+}
+
+.cm-comment__action-btn:hover,
+.cm-comment__action-btn.is-on {
+    color: var(--text-primary);
+}
+
+.cm-comment__action-count {
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.cm-comment__time {
+    color: var(--text-muted);
+    font-size: 11px;
+}
+
+.cm-comment .cm-icon-btn {
+    width: 24px;
+    height: 24px;
+    padding: 0;
+}
+
+.cm-comment .cm-icon-btn .icon {
+    width: 16px;
+    height: 16px;
+}
+
+.cm-comment--removed .cm-comment__bubble {
+    background-color: var(--surface-hover);
+}
+
+.cm-view-replies-btn {
+    padding: 8px 0 8px 40px;
+    border: 0;
+    background: none;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.cm-view-replies-btn:hover {
+    color: var(--text-primary);
+}
+
+.cm-replies-container {
+    margin-top: 8px;
+}
+
+.cm-replies-container.hidden {
+    display: none;
+}
+
+.hidden {
+    display: none !important;
+}
+
 .cm-post__foot {
     display: flex;
     align-items: center;
@@ -168,8 +301,8 @@
     margin-left: auto;
 }
 
-.cm-comment--reply {
-    margin-left: 24px;
+.cm-comment-wrapper--reply {
+    margin-left: 36px;
 }
 
 .cm-badge {
@@ -248,6 +381,7 @@
 
 .cm-nav__item.is-active {
     color: var(--accent);
+    font-weight: 700;
 }
 
 .cm-nav__item.is-disabled {
@@ -505,8 +639,12 @@ a.cm-stat { color: inherit; text-decoration: none; display: inline-flex; align-i
 .cm-post__img { display: block; width: 100%; max-height: 360px; object-fit: cover; border-radius: var(--radius-md); border: 1px solid var(--border-default); }
 .cm-post--removed { background: var(--surface-hover); border-style: dashed; }
 
-.cm-me__links { display: grid; gap: 4px; }
-.cm-me__links a { color: inherit; padding: 4px 0; }
+.cm-settings-list { display: grid; padding: 0 16px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--surface-card); }
+.cm-settings-item { display: flex; justify-content: space-between; padding: 16px 0; border-bottom: 1px solid var(--border-subtle); text-decoration: none; color: var(--text-primary); }
+.cm-settings-item:last-child { border-bottom: none; }
+.cm-settings-item:hover { color: var(--accent); }
+.cm-logout { margin-top: 12px; }
+.cm-logout .cm-btn-danger:hover { color: var(--danger); background: var(--surface-card); border-color: var(--danger); }
 .cm-edit-name > summary { cursor: pointer; list-style: none; }
 .cm-edit-name > summary::-webkit-details-marker { display: none; }
 .cm-edit-name[open] > summary { margin-bottom: 8px; }
@@ -574,7 +712,7 @@ a.cm-stat { color: inherit; text-decoration: none; display: inline-flex; align-i
     /* Main column: small side margins, room at the bottom for the fixed nav + home indicator */
     .cm-main {
         max-width: none;
-        padding: 12px 12px calc(var(--cm-nav-height) + env(safe-area-inset-bottom, 0px) + 24px);
+        padding: 24px 12px calc(var(--cm-nav-height) + env(safe-area-inset-bottom, 0px) + 24px);
     }
 
     .cm-main--composer {
@@ -621,6 +759,11 @@ a.cm-stat { color: inherit; text-decoration: none; display: inline-flex; align-i
         -webkit-tap-highlight-color: transparent;
     }
 
+    .cm-nav__item.is-active {
+        background-color: var(--accent-soft);
+        border-radius: var(--radius-sm);
+    }
+
     .cm-nav__item:active {
         background-color: var(--surface-hover);
     }
@@ -635,10 +778,9 @@ a.cm-stat { color: inherit; text-decoration: none; display: inline-flex; align-i
         padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
     }
 
-    /* ---------- Post + comment cards ---------- */
+    /* ---------- Post cards ---------- */
 
-    .cm-post,
-    .cm-comment {
+    .cm-post {
         padding: 12px;
     }
 
@@ -710,18 +852,22 @@ a.cm-stat { color: inherit; text-decoration: none; display: inline-flex; align-i
 
     /* ---------- Comments / threads ---------- */
 
-    .cm-comment--reply {
-        margin-left: 12px; /* was 24px */
-    }
-
-    /* With less indent, add a thin rail so the thread still reads as a thread.
-       :not(.cm-reported) keeps the red border on reported replies. */
-    .cm-comment--reply:not(.cm-reported) {
-        border-left: 3px solid var(--border-default);
-    }
-
-    .cm-comment .cm-post__author {
+    .cm-comment__author {
         overflow-wrap: anywhere;
+    }
+
+    .cm-comment {
+        min-width: 0;
+    }
+
+    .cm-comment__actions {
+        flex-wrap: nowrap;
+        white-space: nowrap;
+        scrollbar-width: none;
+    }
+
+    .cm-comment__actions::-webkit-scrollbar {
+        display: none;
     }
 
     /* ---------- Comment composer (pinned bottom bar) ----------
@@ -778,6 +924,7 @@ a.cm-stat { color: inherit; text-decoration: none; display: inline-flex; align-i
     .chip:hover:not(.chip--active) { background-color: var(--surface-card); }
     .btn--primary:hover { background-color: var(--accent); border-color: var(--accent); color: #ffffff; }
     .btn--outline:hover { background-color: transparent; color: var(--accent); }
+    .cm-logout .cm-btn-danger:hover { color: var(--danger); background: transparent; border-color: var(--danger); }
     .link-btn:hover { color: var(--accent); }
     .cm-fab:hover { background-color: var(--accent); }
     .cm-report-banner .btn:hover,
