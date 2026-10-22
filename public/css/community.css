@@ -474,9 +474,11 @@
     left: 0;
     right: 0;
     bottom: 0;
+    z-index: 100;
     padding: 12px 16px 14px;
-    background-color: var(--surface-card);
+    background-color: var(--surface-card) !important;
     border-top: 1px solid var(--border-default);
+    box-shadow: 0 -4px 16px rgba(30, 30, 30, 0.12);
 }
 
 .cm-composer > * {
@@ -560,6 +562,8 @@
 /* ---------- Reports: red glow, banner, vote buttons ---------- */
 
 .cm-reported {
+    position: relative;
+    z-index: 1;
     border-color: var(--danger);
     box-shadow: 0 0 0 1px var(--danger), 0 0 14px color-mix(in srgb, var(--danger) 45%, transparent);
     animation: cm-glow 1.8s ease-in-out infinite;
@@ -589,7 +593,7 @@
 /* ---------- Report bottom sheet (design screen 6) ---------- */
 
 .cm-sheet[hidden] { display: none; }
-.cm-sheet { position: fixed; inset: 0; z-index: 50; }
+.cm-sheet { position: fixed; inset: 0; z-index: 110; }
 .cm-sheet__backdrop { position: absolute; inset: 0; background: rgba(30, 30, 30, 0.45); }
 .cm-sheet__panel {
     position: absolute; left: 0; right: 0; bottom: 0;
