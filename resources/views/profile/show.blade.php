@@ -4,7 +4,7 @@
 @section('nav', 'me')
 
 @section('content')
-    <div class="stack">
+    <div class="stack cm-profile">
         <header class="cm-header"><h1>Me</h1></header>
 
         <div class="card stack">
@@ -48,15 +48,26 @@
             @endforeach
         </div>
 
-        <div class="card cm-me__links text-small">
-            <a href="{{ route('community.me.posts') }}">My posts</a>
-            <a href="{{ route('community.me.comments') }}">My comments</a>
-            <span class="text-muted">Language: English</span>
-            <span><a href="{{ route('page.privacy') }}">Privacy notice</a> · <a href="{{ route('page.rules') }}">Rules</a> · <a href="{{ route('page.help') }}">Help</a></span>
-            @if (in_array($role, ['moderator', 'admin', 'guidance'], true))
-                <a href="{{ route('moderation') }}">Moderation queue</a>
-            @endif
-        </div>
+        <section class="cm-settings-group" aria-labelledby="settings-activity">
+            <h2 class="cm-settings-header" id="settings-activity">Activity</h2>
+            <div class="cm-settings-list text-small">
+                <a class="cm-settings-item" href="{{ route('community.me.posts') }}">My posts</a>
+                <a class="cm-settings-item" href="{{ route('community.me.comments') }}">My comments</a>
+            </div>
+        </section>
+
+        <section class="cm-settings-group" aria-labelledby="settings-about">
+            <h2 class="cm-settings-header" id="settings-about">About &amp; Support</h2>
+            <div class="cm-settings-list text-small">
+                <a class="cm-settings-item" href="{{ route('page.privacy') }}">Privacy notice</a>
+                <a class="cm-settings-item" href="{{ route('page.rules') }}">Rules</a>
+                <a class="cm-settings-item" href="{{ route('page.help') }}">Help</a>
+                @if (in_array($role, ['moderator', 'admin', 'guidance'], true))
+                    <a class="cm-settings-item" href="{{ route('moderation') }}">Moderation queue</a>
+                @endif
+            </div>
+        </section>
+        <div class="text-small text-muted">Language: English</div>
 
         <h2>Points history</h2>
         @forelse ($history as $row)
@@ -68,11 +79,15 @@
             <div class="card cm-empty"><p class="text-muted">No points yet.</p></div>
         @endforelse
 
-        <div class="card">
-            <form method="POST" action="{{ route('auth.logout') }}">
-                @csrf
-                <button type="submit" class="btn btn--block">Log out</button>
-            </form>
-        </div>
+        <section class="cm-settings-group cm-settings-group--account" aria-labelledby="settings-account">
+            <h2 class="cm-settings-header" id="settings-account">Account</h2>
+            <div class="cm-settings-list text-small">
+                <form method="POST" action="{{ route('auth.logout') }}" class="cm-settings-item-form">
+                    @csrf
+                    <button type="submit" class="cm-settings-item cm-settings-item--danger">Log out</button>
+                </form>
+            </div>
+        </section>
+
     </div>
 @endsection
