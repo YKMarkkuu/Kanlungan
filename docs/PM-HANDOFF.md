@@ -123,3 +123,33 @@ All findings from `docs/AUDIT.md` closed on 2026-10-18. See commit history:
 - 2026-10-12: Community merge
 - 2026-10-16: Audit run (findings documented in docs/AUDIT.md)
 - 2026-10-18: All audit tiers closed, auth tests added
+
+What shipped today:
+
+    Fixed self-vote bug (backend + UI)
+
+    Centralized logout on profile page
+
+    Tokenized community CSS (removed hardcoded colors)
+
+    Complete Mobile Responsive Pass:
+
+        Foundation (viewport-fit, bottom nav, history back button)
+
+        Tap targets (44px), safe-area insets
+
+        Instagram-style collapsible comment threads (bubbles + JS toggle)
+
+        Organized profile settings (grouped by Activity, Support, Account)
+
+        Fixed report bottom sheet (max-height 80vh)
+
+        Fixed z-index/composer transparency over reported content
+
+Next Session:
+
+    Notifications UI (build the bell/dropdown for the alerts backend)
+
+    Profile Avatars (real image uploads)
+
+    PWA Setup (manifest, service worker, install prompt)
