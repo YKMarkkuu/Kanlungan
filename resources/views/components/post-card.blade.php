@@ -30,10 +30,15 @@
     @include('components.report-banner', ['item' => $post])
 
     <div class="cm-post__foot text-small text-muted">
-        <form method="POST" action="{{ route('post.like', $post['id']) }}">
-            @csrf
-            <button type="submit" class="cm-react {{ $post['liked'] ? 'is-on' : '' }}" aria-pressed="{{ $post['liked'] ? 'true' : 'false' }}" aria-label="Like">@include('components.icon', ['name' => 'like']) {{ $post['likes'] }}</button>
-        </form>
+        {{-- Authors cannot like their own post: no button, just the count. --}}
+        @if ($post['mine'])
+            <span class="cm-stat" aria-label="{{ $post['likes'] }} likes">@include('components.icon', ['name' => 'like']) {{ $post['likes'] }}</span>
+        @else
+            <form method="POST" action="{{ route('post.like', $post['id']) }}">
+                @csrf
+                <button type="submit" class="cm-react {{ $post['liked'] ? 'is-on' : '' }}" aria-pressed="{{ $post['liked'] ? 'true' : 'false' }}" aria-label="Like">@include('components.icon', ['name' => 'like']) {{ $post['likes'] }}</button>
+            </form>
+        @endif
         @if ($link)
             <a class="cm-stat" href="{{ route('post.show', $post['id']) }}" aria-label="Open comments">@include('components.icon', ['name' => 'comment']) {{ $post['comments'] }}</a>
         @else

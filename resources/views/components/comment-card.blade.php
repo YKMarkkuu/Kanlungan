@@ -21,16 +21,26 @@
     @include('components.report-banner', ['item' => $comment])
 
     <div class="cm-post__foot text-small text-muted">
-        <form method="POST" action="{{ route('comment.like', [$comment['post_id'], $comment['id']]) }}">
-            @csrf
-            <button type="submit" class="cm-react {{ $comment['liked'] ? 'is-on' : '' }}" aria-pressed="{{ $comment['liked'] ? 'true' : 'false' }}" aria-label="Like">@include('components.icon', ['name' => 'like']) {{ $comment['likes'] ?: '' }}</button>
-        </form>
-        @unless ($reply)
-            <form method="POST" action="{{ route('comment.helpful', [$comment['post_id'], $comment['id']]) }}">
+        {{-- Authors cannot like or mark their own comment helpful: no buttons, just the counts. --}}
+        @if ($comment['mine'])
+            <span class="cm-stat" aria-label="{{ $comment['likes'] }} likes">@include('components.icon', ['name' => 'like']) {{ $comment['likes'] ?: '' }}</span>
+            @unless ($reply)
+                @if ($comment['helpful_count'])
+                    <span class="cm-stat">@include('components.icon', ['name' => 'star']) Helpful {{ $comment['helpful_count'] }}</span>
+                @endif
+            @endunless
+        @else
+            <form method="POST" action="{{ route('comment.like', [$comment['post_id'], $comment['id']]) }}">
                 @csrf
-                <button type="submit" class="cm-react {{ $comment['helpful_marked'] ? 'is-on' : '' }}" aria-pressed="{{ $comment['helpful_marked'] ? 'true' : 'false' }}">@include('components.icon', ['name' => 'star']) Helpful{{ $comment['helpful_count'] ? ' '.$comment['helpful_count'] : '' }}</button>
+                <button type="submit" class="cm-react {{ $comment['liked'] ? 'is-on' : '' }}" aria-pressed="{{ $comment['liked'] ? 'true' : 'false' }}" aria-label="Like">@include('components.icon', ['name' => 'like']) {{ $comment['likes'] ?: '' }}</button>
             </form>
-        @endunless
+            @unless ($reply)
+                <form method="POST" action="{{ route('comment.helpful', [$comment['post_id'], $comment['id']]) }}">
+                    @csrf
+                    <button type="submit" class="cm-react {{ $comment['helpful_marked'] ? 'is-on' : '' }}" aria-pressed="{{ $comment['helpful_marked'] ? 'true' : 'false' }}">@include('components.icon', ['name' => 'star']) Helpful{{ $comment['helpful_count'] ? ' '.$comment['helpful_count'] : '' }}</button>
+                </form>
+            @endunless
+        @endif
         <button type="button" class="link-btn" data-reply-to="{{ $comment['id'] }}" data-reply-name="{{ $comment['author_alias'] }}">Reply</button>
         @if ($canAccept)
             <form method="POST" action="{{ route('comment.accept', [$comment['post_id'], $comment['id']]) }}">

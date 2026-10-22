@@ -219,21 +219,24 @@ class CommunityService
     /**
      * Switch a reaction on if the user has not given it, off if they have.
      * The author earns points for it (and loses them again if it is taken back).
-     * Rating your own post/comment gives no points.
+     * Nobody may react to their own post/comment: the guard below throws before
+     * anything is saved, so self-reactions can never inflate the visible counts.
      */
     public function toggleReaction(int $userId, Model $reactable, string $type): void
     {
-        $existing = $reactable->reactions()->where('user_id', $userId)->where('type', $type)->first();
         $authorId = (int) $reactable->author_id;
+
+        if ($authorId === $userId) {
+            throw ValidationException::withMessages(['report' => 'You cannot react to your own content.']);
+        }
+
+        $existing = $reactable->reactions()->where('user_id', $userId)->where('type', $type)->first();
         $amount = $type === Reaction::HELPFUL ? PointService::HELPFUL_RECEIVED : PointService::LIKE_RECEIVED;
         $name = $type === Reaction::HELPFUL ? 'helpful' : 'like';
 
         if ($existing !== null) {
             $existing->delete();
-
-            if ($authorId !== $userId) {
-                $this->points->award($authorId, -$amount, $name.'_removed', $reactable);
-            }
+            $this->points->award($authorId, -$amount, $name.'_removed', $reactable);
 
             return;
         }
@@ -245,12 +248,10 @@ class CommunityService
             return;
         }
 
-        if ($authorId !== $userId) {
-            $this->points->award($authorId, $amount, $name.'_received', $reactable);
+        $this->points->award($authorId, $amount, $name.'_received', $reactable);
 
-            if ($type === Reaction::HELPFUL && $reactable instanceof Comment) {
-                $this->alerts->notify($authorId, 'helpful', "Your answer was marked helpful +{$amount}", '"'.Str::limit($reactable->body, 40).'"', route('post.show', $reactable->post_id).'#comment-'.$reactable->id);
-            }
+        if ($type === Reaction::HELPFUL && $reactable instanceof Comment) {
+            $this->alerts->notify($authorId, 'helpful', "Your answer was marked helpful +{$amount}", '"'.Str::limit($reactable->body, 40).'"', route('post.show', $reactable->post_id).'#comment-'.$reactable->id);
         }
     }
 
