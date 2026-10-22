@@ -634,4 +634,166 @@ a.cm-stat { color: inherit; text-decoration: none; display: inline-flex; align-i
     .cm-composer {
         padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
     }
+
+    /* ---------- Post + comment cards ---------- */
+
+    .cm-post,
+    .cm-comment {
+        padding: 12px;
+    }
+
+    .cm-post__head {
+        margin-bottom: 6px;
+    }
+
+    .cm-post__body {
+        margin: 8px 0;
+    }
+
+    .cm-post__img {
+        max-height: 240px;
+    }
+
+    /* ---------- Tap targets: at least 44x44 ---------- */
+
+    .cm-post__foot {
+        gap: 0 4px; /* the buttons carry their own padding now */
+    }
+
+    .cm-icon-btn {
+        width: 44px;
+        height: 44px;
+    }
+
+    .cm-react,
+    .cm-post__foot a.cm-stat,
+    .cm-post__foot span.cm-stat {
+        min-width: 44px;
+        min-height: 44px;
+        padding: 0 8px;
+        justify-content: center;
+    }
+
+    .cm-post__foot .link-btn {
+        padding: 8px;
+    }
+
+    .cm-react .icon,
+    .cm-stat .icon {
+        width: 20px;
+        height: 20px;
+    }
+
+    /* Vote / start buttons inside the red report banner */
+    .cm-report-banner .btn {
+        min-height: 44px;
+        flex: 1 1 auto;
+    }
+
+    /* Moderation action buttons (same problem, same fix) */
+    .cm-mod__actions .btn {
+        min-height: 44px;
+    }
+
+    /* Report bottom sheet rows and photo picker */
+    .cm-sheet__reason {
+        min-height: 44px;
+    }
+
+    .cm-sheet__panel {
+        padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .cm-photo {
+        min-height: 44px;
+    }
+
+    /* ---------- Comments / threads ---------- */
+
+    .cm-comment--reply {
+        margin-left: 12px; /* was 24px */
+    }
+
+    /* With less indent, add a thin rail so the thread still reads as a thread.
+       :not(.cm-reported) keeps the red border on reported replies. */
+    .cm-comment--reply:not(.cm-reported) {
+        border-left: 3px solid var(--border-default);
+    }
+
+    .cm-comment .cm-post__author {
+        overflow-wrap: anywhere;
+    }
+
+    /* ---------- Comment composer (pinned bottom bar) ----------
+       Row 1: full-width text input.
+       Row 2: anonymous toggle (44x44) + Send filling the rest.
+       No Blade change needed; this uses flex-wrap on the existing row. */
+
+    .cm-composer {
+        padding: 10px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .cm-composer__row {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .cm-composer__row .input {
+        flex: 1 1 100%;
+    }
+
+    .cm-composer__row .cm-anon-toggle {
+        flex: none;
+    }
+
+    .cm-composer__row .cm-send {
+        flex: 1 1 0;
+        min-height: 44px;
+    }
+
+    /* Two rows instead of one, so the page needs more room underneath. */
+    .cm-main--composer {
+        padding-bottom: calc(200px + env(safe-area-inset-bottom, 0px));
+    }
+
+    /* ---------- Create post ---------- */
+
+    .cm-textarea {
+        min-height: 160px;
+    }
+}
+
+/* ==========================================================================
+   Touch devices: no sticky hover, use :active instead.
+   Uses (hover: none) rather than a width query so a narrow desktop window
+   keeps its hover effects and a touch tablet wider than 768px still gets
+   :active feedback.
+   ========================================================================== */
+
+@media (hover: none) {
+
+    /* Reset hover */
+    .cm-icon-btn:hover:not(:disabled):not(.is-disabled) { background-color: transparent; }
+    .cm-react:hover { color: inherit; }
+    .chip:hover:not(.chip--active) { background-color: var(--surface-card); }
+    .btn--primary:hover { background-color: var(--accent); border-color: var(--accent); color: #ffffff; }
+    .btn--outline:hover { background-color: transparent; color: var(--accent); }
+    .link-btn:hover { color: var(--accent); }
+    .cm-fab:hover { background-color: var(--accent); }
+    .cm-report-banner .btn:hover,
+    .cm-mod__actions .btn:hover { background: var(--surface-card); }
+
+    /* Keep the "liked / helpful" state visible (must come after the reset above) */
+    .cm-react.is-on { color: var(--accent); }
+
+    /* Pressed feedback */
+    .cm-icon-btn:active:not(:disabled):not(.is-disabled) { background-color: var(--surface-hover); }
+    .cm-react:active { color: var(--accent); }
+    .chip:active:not(.chip--active) { background-color: var(--surface-hover); }
+    .btn--primary:active { background-color: var(--accent-dark); border-color: var(--accent-dark); }
+    .btn--outline:active { background-color: var(--accent-soft); }
+    .link-btn:active { color: var(--accent-dark); }
+    .cm-fab:active { background-color: var(--accent-dark); }
+    .cm-report-banner .btn:active,
+    .cm-mod__actions .btn:active { background: var(--surface-hover); }
 }
