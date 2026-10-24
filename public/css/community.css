@@ -1006,3 +1006,233 @@ a.cm-stat { color: inherit; text-decoration: none; display: inline-flex; align-i
     .cm-report-banner .btn:active,
     .cm-mod__actions .btn:active { background: var(--surface-hover); }
 }
+
+/* ==========================================================================
+   Create post composer (social-style layout)
+   Avatar left, borderless textarea right, action bar underneath.
+   ========================================================================== */
+
+.cm-compose-form {
+    display: grid;
+    gap: 16px;
+}
+
+.cm-compose__spacer {
+    visibility: hidden; /* keeps the title centered between close and nothing */
+}
+
+.cm-compose {
+    padding: 0;
+    overflow: hidden;
+    border-color: var(--border-subtle);
+    background-color: var(--surface-card);
+    transition: border-color 0.15s ease;
+}
+
+.cm-compose:focus-within {
+    border-color: var(--accent);
+}
+
+.cm-compose__row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px 16px 8px;
+}
+
+.cm-compose__avatar {
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+}
+
+.cm-compose__main {
+    flex: 1;
+    min-width: 0; /* lets the textarea and preview shrink inside flex */
+    display: grid;
+    gap: 8px;
+}
+
+.cm-compose__as {
+    margin: 0;
+    min-height: 20px;
+    display: flex;
+    align-items: center;
+}
+
+/* Borderless, transparent: it looks like typing straight onto the page. */
+.cm-compose__input {
+    display: block;
+    width: 100%;
+    min-height: 140px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    outline: none;
+    background: transparent;
+    box-shadow: none;
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 16px; /* 16px prevents iOS zoom-on-focus */
+    line-height: 1.5;
+    resize: none;
+}
+
+.cm-compose__input::placeholder {
+    color: var(--text-muted);
+    opacity: 1;
+}
+
+/* ---------- Image preview (filled in Phase 2) ---------- */
+
+.cm-compose__preview {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    background-color: var(--surface-hover);
+}
+
+.cm-compose__preview img {
+    display: block;
+    width: 100%;
+    max-height: 320px;
+    object-fit: cover;
+}
+
+/* Optional remove button Phase 2 can drop inside the container */
+.cm-compose__preview-remove {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background-color: rgba(30, 30, 30, 0.7);
+    color: #fff;
+    cursor: pointer;
+}
+
+.cm-compose__preview-remove:hover {
+    background-color: rgba(30, 30, 30, 0.9);
+}
+
+/* ---------- Bottom action bar ---------- */
+
+.cm-compose__bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 12px;
+    border-top: 1px solid var(--border-subtle);
+}
+
+.cm-compose__tools {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+}
+
+.cm-compose__attach {
+    color: var(--accent);
+    cursor: pointer;
+}
+
+.cm-compose__attach:hover {
+    background-color: var(--accent-soft);
+}
+
+/* Anonymous: a badge-style switch instead of a checkbox */
+.cm-anon-badge {
+    display: inline-flex;
+    cursor: pointer;
+}
+
+.cm-anon-badge__pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 36px;
+    padding: 0 12px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 999px; /* badge, same exception as filter chips */
+    background-color: var(--surface-card);
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.cm-anon-badge__pill .icon {
+    width: 16px;
+    height: 16px;
+}
+
+.cm-anon-badge input:checked + .cm-anon-badge__pill {
+    border-color: var(--accent);
+    background-color: var(--accent-soft);
+    color: var(--accent-dark);
+}
+
+.cm-anon-badge input:focus-visible + .cm-anon-badge__pill {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+/* Post: prominent, but looks inactive until there is text */
+.cm-compose__post {
+    flex-shrink: 0;
+    width: auto;
+    min-height: 40px;
+    padding: 8px 22px;
+}
+
+.cm-compose__post:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* ---------- Layout widths ---------- */
+
+@media (min-width: 769px) {
+    .cm-main--compose {
+        max-width: 600px;
+    }
+
+    .cm-compose__row {
+        padding: 20px 20px 8px;
+    }
+
+    .cm-compose__bar {
+        padding: 10px 16px;
+    }
+}
+
+@media (max-width: 768px) {
+    .cm-compose__input {
+        min-height: 120px;
+    }
+
+    .cm-compose__post {
+        min-height: 44px;
+    }
+
+    .cm-anon-badge__pill {
+        min-height: 44px;
+    }
+}
+
+@media (hover: none) {
+    .cm-compose__attach:hover { background-color: transparent; }
+    .cm-compose__attach:active { background-color: var(--accent-soft); }
+    .cm-compose__preview-remove:hover { background-color: rgba(30, 30, 30, 0.7); }
+}

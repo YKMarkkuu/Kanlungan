@@ -153,3 +153,11 @@ Next Session:
     Profile Avatars (real image uploads)
 
     PWA Setup (manifest, service worker, install prompt)
+
+## UX & Feature Polish (Next Sessions)
+- **Photo Lightbox:** Clicking a post image should open a full-screen modal with a close button (currently they just sit in the frame).
+- **Feed Filtering:** If a user reports a comment or post, it currently stays visible on *their* feed with the red "reported" banner. We need to filter out content that the current user has reported from their feed view.
+- **Notifications UI:** Build the visual bell/dropdown for alerts.
+- **Profile Avatars:** Add actual image uploads for user avatars.
+- **PWA Setup:** Service worker, manifest, install prompt.
+- **Guidance Case Files:** Dashboard for Guidance staff.

@@ -2,63 +2,77 @@
 
 @section('title', 'New post · Kanlungan')
 @section('hide-nav', '1')
+@section('main-class', 'cm-main--compose')
 
 @section('content')
-    <form method="POST" action="{{ route('post.store') }}" class="stack--lg stack" id="post-form" enctype="multipart/form-data" data-alias="{{ $alias }}">
+    <form method="POST" action="{{ route('post.store') }}" class="cm-compose-form" id="post-form" enctype="multipart/form-data" data-alias="{{ $alias }}">
         @csrf
 
         <header class="cm-header">
             <a href="{{ route('feed') }}" class="cm-icon-btn" aria-label="Cancel">@include('components.icon', ['name' => 'close'])</a>
             <h1 class="cm-header__title">New post</h1>
-            <button type="submit" class="btn btn--primary cm-post-btn" id="post-btn" disabled>Post</button>
+            <span class="cm-icon-btn cm-compose__spacer" aria-hidden="true"></span>
         </header>
 
-        <fieldset class="cm-chips cm-fieldset" aria-label="Category">
-            @foreach ($categories as $category)
-                <label>
-                    <input type="radio" name="category" value="{{ $category }}" class="cm-visually-hidden"
-                        {{ old('category', 'Share') === $category ? 'checked' : '' }}>
-                    <span class="chip">{{ $category }}</span>
-                </label>
-            @endforeach
-        </fieldset>
+        <div class="card cm-compose">
+            <div class="cm-compose__row">
+                <div class="cm-avatar cm-compose__avatar" aria-hidden="true"></div>
 
-        <div class="field">
-            <label class="cm-visually-hidden" for="body">What's on your mind?</label>
-            <textarea class="input cm-textarea" id="body" name="body" rows="8" maxlength="2000"
-                      placeholder="What's on your mind?" required>{{ old('body') }}</textarea>
-            @error('body')
-                <p class="field__error">{{ $message }}</p>
-            @enderror
-            @error('category')
-                <p class="field__error">{{ $message }}</p>
-            @enderror
+                <div class="cm-compose__main">
+                    <p class="text-small text-muted cm-compose__as" id="anon-hint">You'll appear under a random alias (like {{ $alias }}) in this thread</p>
+
+                    <fieldset class="cm-chips cm-fieldset" aria-label="Category">
+                        @foreach ($categories as $category)
+                            <label>
+                                <input type="radio" name="category" value="{{ $category }}" class="cm-visually-hidden"
+                                    {{ old('category', 'Share') === $category ? 'checked' : '' }}>
+                                <span class="chip">{{ $category }}</span>
+                            </label>
+                        @endforeach
+                    </fieldset>
+
+                    <label class="cm-visually-hidden" for="body">What's on your mind?</label>
+                    <textarea class="cm-compose__input" id="body" name="body" rows="5" maxlength="2000"
+                              placeholder="What's on your mind?" required>{{ old('body') }}</textarea>
+
+                    @error('body')
+                        <p class="field__error">{{ $message }}</p>
+                    @enderror
+                    @error('category')
+                        <p class="field__error">{{ $message }}</p>
+                    @enderror
+
+                    {{-- Phase 2 renders the selected photo preview in here. --}}
+                    <div id="image-preview-container" class="cm-compose__preview hidden"></div>
+                </div>
+            </div>
+
+            <div class="cm-compose__bar">
+                <div class="cm-compose__tools">
+                    <label class="cm-icon-btn cm-compose__attach" for="photo" title="Add photo">
+                        @include('components.icon', ['name' => 'clip'])
+                        <span class="cm-visually-hidden" id="photo-name">Add photo</span>
+                    </label>
+                    <input class="cm-visually-hidden" type="file" id="photo" name="photo" accept="image/jpeg,image/png,image/webp">
+
+                    <input type="hidden" name="anonymous" value="0">
+                    <label class="cm-anon-badge" for="anonymous">
+                        <input class="cm-visually-hidden" type="checkbox" id="anonymous" name="anonymous" value="1" checked>
+                        <span class="cm-anon-badge__pill">
+                            @include('components.icon', ['name' => 'mask'])
+                            <span>Anonymous</span>
+                        </span>
+                    </label>
+                </div>
+
+                <button type="submit" class="btn btn--primary cm-compose__post" id="post-btn" disabled>Post</button>
+            </div>
         </div>
 
-        <div class="card cm-anon">
-            <input type="hidden" name="anonymous" value="0">
-            <label class="cm-anon__row" for="anonymous">
-                <strong>Post anonymously</strong>
-                <span class="cm-switch">
-                    <input type="checkbox" id="anonymous" name="anonymous" value="1" checked>
-                    <span class="cm-switch__track" aria-hidden="true"></span>
-                </span>
-            </label>
-            <p class="text-small text-muted" id="anon-hint">You'll appear under a random alias (like {{ $alias }}) in this thread</p>
-        </div>
-
-        <div class="field">
-            <label class="cm-photo" for="photo">
-                @include('components.icon', ['name' => 'clip'])
-                <span id="photo-name">Add photo</span>
-            </label>
-            <input class="cm-visually-hidden" type="file" id="photo" name="photo" accept="image/jpeg,image/png,image/webp">
-            <p class="text-small text-muted">JPG, PNG or WebP, up to 4 MB. Location data is removed from the photo.</p>
-            @error('photo')
-                <p class="field__error">{{ $message }}</p>
-            @enderror
-        </div>
-
+        @error('photo')
+            <p class="field__error">{{ $message }}</p>
+        @enderror
+        <p class="text-small text-muted">JPG, PNG or WebP, up to 4 MB. Location data is removed from the photo.</p>
         <p class="text-small text-muted">Need someone to talk to? Guidance support is available. <a class="cm-underline" href="{{ route('page.help') }}">See help</a></p>
     </form>
 @endsection
