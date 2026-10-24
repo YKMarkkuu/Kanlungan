@@ -1,7 +1,7 @@
 (function () {
     'use strict';
 
-    /* ---------- Create post: enable Post, show who you will appear as ---------- */
+    /* ---------- Create post: enable Post, alias hint, auto-grow, photo preview ---------- */
 
     var postForm = document.getElementById('post-form');
 
@@ -22,10 +22,210 @@
                 : 'Your display name will be shown on this post';
         };
 
-        body.addEventListener('input', syncPostBtn);
+        /* -- Auto-expanding textarea -- */
+
+        var TEXTAREA_MAX_HEIGHT = 360; // px; past this the textarea scrolls instead of growing
+
+        var autoGrow = function () {
+            // Reset first so the box can also shrink when text is deleted.
+            // min-height from CSS still applies, so it never gets smaller than the default.
+            body.style.height = 'auto';
+
+            var needed = body.scrollHeight;
+
+            body.style.height = Math.min(needed, TEXTAREA_MAX_HEIGHT) + 'px';
+            body.style.overflowY = needed > TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden';
+        };
+
+        body.addEventListener('input', function () {
+            syncPostBtn();
+            autoGrow();
+        });
+
+        // Width changes re-wrap the text, which changes the height it needs.
+        window.addEventListener('resize', autoGrow);
+
         anon.addEventListener('change', syncAnon);
+
+        /* -- Photo preview -- */
+
+        var photoInput = document.getElementById('photo');
+        var photoName = document.getElementById('photo-name');
+        var previewBox = document.getElementById('image-preview-container');
+
+        if (photoInput && previewBox) {
+            // Mirrors the server rules in PostController::store().
+            var ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+            var MAX_BYTES = 4 * 1024 * 1024;
+            var MAX_DIMENSION = 2000;
+            var DEFAULT_LABEL = 'Add photo';
+
+            var photoError = null;
+
+            // Bumped on every change/remove so a slow FileReader from an
+            // earlier pick can never overwrite a newer one.
+            var previewToken = 0;
+
+            var showPhotoError = function (message) {
+                if (!photoError) {
+                    photoError = document.createElement('p');
+                    photoError.className = 'field__error';
+                    photoError.setAttribute('aria-live', 'polite');
+                    previewBox.parentNode.insertBefore(photoError, previewBox.nextSibling);
+                }
+
+                photoError.textContent = message;
+                photoError.hidden = false;
+            };
+
+            var clearPhotoError = function () {
+                if (photoError) {
+                    photoError.textContent = '';
+                    photoError.hidden = true;
+                }
+            };
+
+            var emptyPreview = function () {
+                while (previewBox.firstChild) {
+                    previewBox.removeChild(previewBox.firstChild);
+                }
+            };
+
+            // Clears the file input (so nothing is uploaded) and hides the preview.
+            var resetPhoto = function () {
+                previewToken += 1;
+                photoInput.value = '';
+                emptyPreview();
+                previewBox.classList.add('hidden');
+                clearPhotoError();
+
+                if (photoName) {
+                    photoName.textContent = DEFAULT_LABEL;
+                }
+            };
+
+            // Inline SVG (no icon font, no emoji), same path as the "close" icon.
+            var buildCloseIcon = function () {
+                var ns = 'http://www.w3.org/2000/svg';
+                var svg = document.createElementNS(ns, 'svg');
+                var path = document.createElementNS(ns, 'path');
+
+                svg.setAttribute('class', 'icon');
+                svg.setAttribute('viewBox', '0 0 24 24');
+                svg.setAttribute('fill', 'none');
+                svg.setAttribute('stroke', 'currentColor');
+                svg.setAttribute('stroke-width', '1.75');
+                svg.setAttribute('stroke-linecap', 'round');
+                svg.setAttribute('stroke-linejoin', 'round');
+                svg.setAttribute('aria-hidden', 'true');
+                path.setAttribute('d', 'M6 6l12 12M18 6 6 18');
+                svg.appendChild(path);
+
+                return svg;
+            };
+
+            var showPreview = function (dataUrl, fileName, token) {
+                var img = document.createElement('img');
+
+                img.alt = 'Selected photo preview';
+
+                img.onload = function () {
+                    if (token !== previewToken) {
+                        return;
+                    }
+
+                    // The server rejects anything over 2000px on a side; say so now.
+                    if (img.naturalWidth > MAX_DIMENSION || img.naturalHeight > MAX_DIMENSION) {
+                        resetPhoto();
+                        showPhotoError('That photo is larger than ' + MAX_DIMENSION + ' \u00d7 ' + MAX_DIMENSION + ' pixels. Choose a smaller one.');
+                        return;
+                    }
+
+                    var remove = document.createElement('button');
+
+                    remove.type = 'button';
+                    remove.className = 'cm-compose__preview-remove';
+                    remove.setAttribute('aria-label', 'Remove photo');
+                    remove.appendChild(buildCloseIcon());
+                    remove.addEventListener('click', function () {
+                        resetPhoto();
+                        body.focus();
+                    });
+
+                    emptyPreview();
+                    previewBox.appendChild(img);
+                    previewBox.appendChild(remove);
+                    previewBox.classList.remove('hidden');
+
+                    if (photoName) {
+                        photoName.textContent = fileName;
+                    }
+                };
+
+                img.onerror = function () {
+                    if (token !== previewToken) {
+                        return;
+                    }
+
+                    resetPhoto();
+                    showPhotoError('That file could not be read as an image.');
+                };
+
+                img.src = dataUrl;
+            };
+
+            photoInput.addEventListener('change', function () {
+                var file = photoInput.files && photoInput.files[0];
+
+                // User opened the picker and cancelled, or the selection was cleared.
+                if (!file) {
+                    resetPhoto();
+                    return;
+                }
+
+                clearPhotoError();
+
+                if (ALLOWED_TYPES.indexOf(file.type) === -1) {
+                    resetPhoto();
+                    showPhotoError('Please choose a JPG, PNG or WebP photo.');
+                    return;
+                }
+
+                if (file.size > MAX_BYTES) {
+                    resetPhoto();
+                    showPhotoError('The photo must be 4 MB or smaller.');
+                    return;
+                }
+
+                previewToken += 1;
+
+                var token = previewToken;
+                var reader = new FileReader();
+
+                reader.onload = function () {
+                    if (token !== previewToken) {
+                        return;
+                    }
+
+                    showPreview(String(reader.result), file.name, token);
+                };
+
+                reader.onerror = function () {
+                    if (token !== previewToken) {
+                        return;
+                    }
+
+                    resetPhoto();
+                    showPhotoError('That file could not be read. Try another photo.');
+                };
+
+                reader.readAsDataURL(file);
+            });
+        }
+
         syncPostBtn();
         syncAnon();
+        autoGrow(); // handles old('body') after a failed validation
     }
 
     /* ---------- Post page: anonymous toggle + reply-to ---------- */
@@ -91,15 +291,6 @@
     /* ---------- Report bottom sheet ---------- */
 
     var sheet = document.getElementById('report-sheet');
-
-    var photoInput = document.getElementById('photo');
-    var photoName = document.getElementById('photo-name');
-
-    if (photoInput && photoName) {
-        photoInput.addEventListener('change', function () {
-            photoName.textContent = photoInput.files.length ? photoInput.files[0].name : 'Add photo';
-        });
-    }
 
     if (sheet) {
         var reportForm = document.getElementById('report-form');
