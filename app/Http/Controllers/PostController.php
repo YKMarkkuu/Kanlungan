@@ -28,7 +28,7 @@ class PostController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request): RedirectResponse|JsonResponse
     {
         $data = $request->validate([
             'category' => ['required', Rule::in(Post::CATEGORIES)],
@@ -42,6 +42,12 @@ class PostController extends Controller
         $imagePath = $request->hasFile('photo') ? $this->images->storePostPhoto($request->file('photo')) : null;
 
         $this->community->createPost($request->user()->id, $data['category'], trim($data['body']), $anonymous, $imagePath);
+
+        if ($request->expectsJson()) {
+            $request->session()->flash('status', 'Posted.');
+
+            return response()->json(['status' => 'success', 'redirect' => route('feed')], 201);
+        }
 
         return redirect()->route('feed')->with('status', 'Posted.');
     }
@@ -60,7 +66,7 @@ class PostController extends Controller
         ]);
     }
 
-    public function comment(Request $request, int $id): RedirectResponse
+    public function comment(Request $request, int $id): RedirectResponse|JsonResponse
     {
         $post = Post::findOrFail($id);
 
@@ -71,7 +77,23 @@ class PostController extends Controller
 
         $anonymous = $request->input('anonymous', '1') === '1';
 
-        $this->community->addComment($request->user()->id, $post, trim($data['body']), $anonymous, $data['parent_id'] ?? null);
+        $comment = $this->community->addComment($request->user()->id, $post, trim($data['body']), $anonymous, $data['parent_id'] ?? null);
+
+        if ($request->expectsJson()) {
+            $card = $this->community->commentCard($request->user()->id, $comment->id);
+
+            return response()->json([
+                'status' => 'success',
+                'comment_id' => $comment->id,
+                'parent_id' => $comment->parent_id,
+                'comments_count' => $post->comments()->count(),
+                'html' => view('components.comment-card', [
+                    'comment' => $card,
+                    'reply' => $comment->parent_id !== null,
+                    'canAccept' => false,
+                ])->render(),
+            ], 201);
+        }
 
         return redirect()->route('post.show', $post->id);
     }

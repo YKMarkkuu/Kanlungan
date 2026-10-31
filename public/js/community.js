@@ -1,6 +1,110 @@
 (function () {
     'use strict';
 
+    /* ---------- Shared helpers for AJAX forms (composer) ---------- */
+
+    // Sends a form as multipart FormData. Resolves to { ok, status, data } or
+    // { networkError: true }.
+    function sendForm(form) {
+        var headers = {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        };
+        var token = reactCsrf();
+
+        if (token) {
+            headers['X-CSRF-TOKEN'] = token;
+        }
+
+        return fetch(form.action, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: headers,
+            body: new FormData(form)
+        }).then(function (response) {
+            return response.json().then(function (data) {
+                return data;
+            }, function () {
+                return {};
+            }).then(function (data) {
+                return { ok: response.ok, status: response.status, data: data || {} };
+            });
+        }, function () {
+            return { networkError: true };
+        }).then(function (result) {
+            return result;
+        }, function () {
+            return { networkError: true };
+        });
+    }
+
+    function showInlineError(el, message) {
+        if (!el) {
+            return;
+        }
+
+        el.textContent = message || '';
+        el.hidden = !message;
+    }
+
+    function setSending(button, label) {
+        button.dataset.label = button.textContent;
+        button.textContent = label;
+        button.disabled = true;
+    }
+
+    function clearSending(button) {
+        if (button.dataset.label) {
+            button.textContent = button.dataset.label;
+        }
+
+        button.disabled = false;
+    }
+
+    function composerFailure(res, errorEl) {
+        var errors = res.data && res.data.errors;
+        var fields = ['body', 'category', 'photo', 'parent_id', 'report'];
+        var message = '';
+        var i;
+
+        if (res.networkError) {
+            showInlineError(errorEl, 'Could not reach server.');
+            return;
+        }
+
+        if (res.status === 401) {
+            window.location.href = '/';
+            return;
+        }
+
+        if (res.status === 403) {
+            window.location.reload();
+            return;
+        }
+
+        if (errors) {
+            for (i = 0; i < fields.length && message === ''; i++) {
+                if (errors[fields[i]] && errors[fields[i]].length) {
+                    message = errors[fields[i]][0];
+                }
+            }
+        }
+
+        if (message === '') {
+            if (res.status === 419) {
+                message = 'Your session expired. Refresh the page and try again.';
+            } else if (res.status === 429) {
+                message = 'You are posting too fast. Try again in a moment.';
+            } else if (res.status === 413) {
+                message = 'That upload is too large.';
+            } else {
+                message = (res.data && res.data.message) || 'Something went wrong. Try again.';
+            }
+        }
+
+        showInlineError(errorEl, message);
+    }
+
     /* ---------- Create post: enable Post, alias hint, auto-grow, photo preview ---------- */
 
     var postForm = document.getElementById('post-form');
@@ -11,9 +115,10 @@
         var anon = document.getElementById('anonymous');
         var anonHint = document.getElementById('anon-hint');
         var alias = postForm.getAttribute('data-alias');
+        var postSubmitting = false;
 
         var syncPostBtn = function () {
-            postBtn.disabled = body.value.trim().length < 3;
+            postBtn.disabled = postSubmitting || body.value.trim().length < 3;
         };
 
         var syncAnon = function () {
@@ -46,6 +151,34 @@
         window.addEventListener('resize', autoGrow);
 
         anon.addEventListener('change', syncAnon);
+
+        /* -- AJAX submit -- */
+
+        var postError = document.getElementById('post-error');
+
+        postForm.addEventListener('submit', function (event) {
+            event.preventDefault();
+
+            if (postSubmitting || postBtn.disabled) {
+                return;
+            }
+
+            postSubmitting = true;
+            showInlineError(postError, '');
+            setSending(postBtn, 'Posting\u2026');
+
+            sendForm(postForm).then(function (res) {
+                if (res.ok && res.data.status === 'success') {
+                    window.location.href = res.data.redirect || '/feed';
+                    return;
+                }
+
+                postSubmitting = false;
+                clearSending(postBtn);
+                syncPostBtn();
+                composerFailure(res, postError);
+            });
+        });
 
         /* -- Photo preview -- */
 
@@ -230,21 +363,25 @@
 
     /* ---------- Post page: anonymous toggle + reply-to ---------- */
 
-    document.querySelectorAll('[data-toggle-replies]').forEach(function (button) {
-        button.addEventListener('click', function () {
-            var replies = document.getElementById(button.getAttribute('data-toggle-replies'));
+    document.addEventListener('click', function (event) {
+        var button = event.target.closest('[data-toggle-replies]');
 
-            if (!replies) {
-                return;
-            }
+        if (!button) {
+            return;
+        }
 
-            var isExpanded = button.getAttribute('aria-expanded') === 'true';
-            button.setAttribute('aria-expanded', isExpanded ? 'false' : 'true');
-            replies.classList.toggle('hidden', isExpanded);
-            button.textContent = isExpanded
-                ? 'View ' + replies.children.length + ' ' + (replies.children.length === 1 ? 'reply' : 'replies')
-                : button.getAttribute('data-expanded-label');
-        });
+        var replies = document.getElementById(button.getAttribute('data-toggle-replies'));
+
+        if (!replies) {
+            return;
+        }
+
+        var isExpanded = button.getAttribute('aria-expanded') === 'true';
+        button.setAttribute('aria-expanded', isExpanded ? 'false' : 'true');
+        replies.classList.toggle('hidden', isExpanded);
+        button.textContent = isExpanded
+            ? 'View ' + replies.children.length + ' ' + (replies.children.length === 1 ? 'reply' : 'replies')
+            : button.getAttribute('data-expanded-label');
     });
 
     var commentForm = document.getElementById('comment-form');
@@ -275,17 +412,139 @@
             commentBody.placeholder = 'Write a comment\u2026';
         };
 
-        document.querySelectorAll('[data-reply-to]').forEach(function (button) {
-            button.addEventListener('click', function () {
-                parentId.value = button.getAttribute('data-reply-to');
-                replyName.textContent = 'Replying to ' + button.getAttribute('data-reply-name');
-                replyNote.hidden = false;
-                commentBody.placeholder = 'Write a reply\u2026';
-                commentBody.focus();
-            });
+        document.addEventListener('click', function (event) {
+            var button = event.target.closest('[data-reply-to]');
+
+            if (!button) {
+                return;
+            }
+
+            parentId.value = button.getAttribute('data-reply-to');
+            replyName.textContent = 'Replying to ' + button.getAttribute('data-reply-name');
+            replyNote.hidden = false;
+            commentBody.placeholder = 'Write a reply\u2026';
+            commentBody.focus();
         });
 
         replyCancel.addEventListener('click', clearReply);
+
+        /* -- AJAX submit -- */
+
+        var commentError = document.getElementById('comment-error');
+        var commentList = document.getElementById('comment-list');
+        var commentSubmit = commentForm.querySelector('button[type="submit"]');
+        var commentSending = false;
+
+        var repliesContainerFor = function (parent) {
+            var containerId = 'comment-replies-' + parent;
+            var container = document.getElementById(containerId);
+
+            if (container) {
+                return container;
+            }
+
+            var parentEl = document.getElementById('comment-' + parent);
+            var wrapper = parentEl ? parentEl.closest('.cm-comment-wrapper') : null;
+
+            if (!wrapper) {
+                return null;
+            }
+
+            var toggleBtn = document.createElement('button');
+            toggleBtn.type = 'button';
+            toggleBtn.className = 'cm-view-replies-btn';
+            toggleBtn.setAttribute('data-toggle-replies', containerId);
+            toggleBtn.setAttribute('data-expanded-label', 'Hide replies');
+            toggleBtn.setAttribute('aria-controls', containerId);
+            toggleBtn.setAttribute('aria-expanded', 'true');
+            toggleBtn.textContent = 'Hide replies';
+
+            container = document.createElement('div');
+            container.className = 'cm-replies-container';
+            container.id = containerId;
+
+            wrapper.appendChild(toggleBtn);
+            wrapper.appendChild(container);
+
+            return container;
+        };
+
+        var insertComment = function (data) {
+            var target = commentList;
+            var empty = document.getElementById('comments-empty');
+
+            if (empty) {
+                empty.parentNode.removeChild(empty);
+            }
+
+            if (data.parent_id) {
+                var container = repliesContainerFor(data.parent_id);
+
+                if (container) {
+                    target = container;
+
+                    if (container.classList.contains('hidden')) {
+                        container.classList.remove('hidden');
+
+                        var toggleButton = document.querySelector('[data-toggle-replies="' + container.id + '"]');
+
+                        if (toggleButton) {
+                            toggleButton.setAttribute('aria-expanded', 'true');
+                            toggleButton.textContent = toggleButton.getAttribute('data-expanded-label');
+                        }
+                    }
+                }
+            }
+
+            if (!target) {
+                window.location.reload();
+                return;
+            }
+
+            target.insertAdjacentHTML('beforeend', data.html);
+
+            document.querySelectorAll('[data-comments-count]').forEach(function (el) {
+                el.textContent = String(data.comments_count);
+            });
+
+            var added = document.getElementById('comment-' + data.comment_id);
+
+            if (added) {
+                added.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        };
+
+        commentForm.addEventListener('submit', function (event) {
+            event.preventDefault();
+
+            if (commentSending) {
+                return;
+            }
+
+            if (commentBody.value.trim() === '') {
+                commentBody.focus();
+                return;
+            }
+
+            commentSending = true;
+            showInlineError(commentError, '');
+            setSending(commentSubmit, 'Sending\u2026');
+
+            sendForm(commentForm).then(function (res) {
+                commentSending = false;
+                clearSending(commentSubmit);
+
+                if (res.ok && res.data.status === 'success') {
+                    insertComment(res.data);
+                    commentBody.value = '';
+                    clearReply();
+                    commentBody.focus();
+                    return;
+                }
+
+                composerFailure(res, commentError);
+            });
+        });
     }
 
     /* ---------- AJAX reactions (Like / Helpful) ----------

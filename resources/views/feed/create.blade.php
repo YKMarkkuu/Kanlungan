@@ -47,6 +47,9 @@
                 </div>
             </div>
 
+            {{-- Filled by community.js on 422 / network errors. Sits right above the Post button. --}}
+            <p class="field__error cm-compose__error" id="post-error" role="alert" aria-live="polite" hidden></p>
+
             <div class="cm-compose__bar">
                 <div class="cm-compose__tools">
                     <label class="cm-icon-btn cm-compose__attach" for="photo" title="Add photo">

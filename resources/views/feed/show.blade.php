@@ -14,13 +14,16 @@
 
         @include('components.post-card', ['post' => $post, 'link' => false])
 
-        @foreach ($comments as $comment)
-            @include('components.comment-card', ['comment' => $comment, 'reply' => false, 'canAccept' => $post['mine']])
-        @endforeach
+        {{-- community.js injects new comments / replies here. --}}
+        <div class="cm-comment-list" id="comment-list">
+            @foreach ($comments as $comment)
+                @include('components.comment-card', ['comment' => $comment, 'reply' => false, 'canAccept' => $post['mine']])
+            @endforeach
 
-        @if (count($comments) === 0)
-            <div class="card cm-empty"><p class="text-muted">No comments yet. Start the conversation.</p></div>
-        @endif
+            @if (count($comments) === 0)
+                <div class="card cm-empty" id="comments-empty"><p class="text-muted">No comments yet. Start the conversation.</p></div>
+            @endif
+        </div>
     </div>
 
     {{-- Comment box pinned to the bottom (mockup screen 5). --}}
@@ -34,6 +37,7 @@
             <button type="button" class="link-btn" id="reply-cancel">Cancel</button>
         </p>
         @error('body') <p class="field__error">{{ $message }}</p> @enderror
+        <p class="field__error" id="comment-error" role="alert" aria-live="polite" hidden></p>
 
         <div class="cm-composer__row">
             <input class="input" type="text" name="body" id="comment-body" placeholder="Write a comment…" maxlength="1000" autocomplete="off" required>

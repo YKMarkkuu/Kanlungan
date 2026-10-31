@@ -46,9 +46,9 @@
             </form>
         @endif
         @if ($link)
-            <a class="cm-stat" href="{{ route('post.show', $post['id']) }}" aria-label="Open comments">@include('components.icon', ['name' => 'comment']) {{ $post['comments'] }}</a>
+            <a class="cm-stat" href="{{ route('post.show', $post['id']) }}" aria-label="Open comments">@include('components.icon', ['name' => 'comment']) <span class="cm-stat__count" data-comments-count>{{ $post['comments'] }}</span></a>
         @else
-            <span class="cm-stat">@include('components.icon', ['name' => 'comment']) {{ $post['comments'] }}</span>
+            <span class="cm-stat">@include('components.icon', ['name' => 'comment']) <span class="cm-stat__count" data-comments-count>{{ $post['comments'] }}</span></span>
         @endif
         @include('components.report-flag', ['type' => 'post', 'item' => $post])
     </div>

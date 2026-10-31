@@ -1275,3 +1275,23 @@ a.cm-stat { color: inherit; text-decoration: none; display: inline-flex; align-i
     top: 8px;
     z-index: 60;
 }
+
+/* ---------- AJAX composer: inline errors, comment list spacing ---------- */
+
+.cm-compose__error {
+    margin: 0;
+    padding: 0 16px 8px;
+}
+
+.cm-compose__error[hidden],
+#comment-error[hidden] {
+    display: none;
+}
+
+#comment-error {
+    margin: 0 auto 6px;
+}
+
+.cm-comment-list > * + * {
+    margin-top: 12px;
+}

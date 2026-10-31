@@ -35,6 +35,57 @@ class CommunityFlowTest extends TestCase
         $this->actingAs($user)->get("/post/{$post->id}")->assertOk()->assertSee('first!')->assertDontSee($user->email);
     }
 
+    public function test_json_post_creation_returns_redirect_data(): void
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->postJson('/post', [
+            'category' => 'Share',
+            'body' => 'hello from ajax',
+            'anonymous' => '1',
+        ]);
+
+        $response->assertCreated()
+            ->assertJson([
+                'status' => 'success',
+                'redirect' => route('feed'),
+            ]);
+        $this->assertSame(1, Post::count());
+        $response->assertSessionHas('status', 'Posted.');
+    }
+
+    public function test_json_comment_creation_returns_renderable_card_and_count(): void
+    {
+        [$author, $commenter] = User::factory()->count(2)->create();
+        $post = $this->makePost($author);
+
+        $response = $this->actingAs($commenter)->postJson("/post/{$post->id}/comments", [
+            'body' => 'first ajax comment',
+            'anonymous' => '1',
+        ]);
+
+        $response->assertCreated()
+            ->assertJson([
+                'status' => 'success',
+                'parent_id' => null,
+                'comments_count' => 1,
+            ])
+            ->assertJsonStructure(['comment_id', 'html'])
+            ->assertSee('first ajax comment');
+
+        $commentId = $response->json('comment_id');
+        $this->actingAs($commenter)->postJson("/post/{$post->id}/comments", [
+            'body' => 'ajax reply',
+            'parent_id' => $commentId,
+            'anonymous' => '1',
+        ])->assertCreated()
+            ->assertJson([
+                'parent_id' => $commentId,
+                'comments_count' => 2,
+            ])
+            ->assertSee('ajax reply');
+    }
+
     public function test_like_toggles_and_gives_author_points(): void
     {
         [$author, $fan] = User::factory()->count(2)->create();

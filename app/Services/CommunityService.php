@@ -156,6 +156,18 @@ class CommunityService
             ->all();
     }
 
+    /**
+     * One comment as a card array (same shape as comments()), for rendering a freshly posted comment.
+     *
+     * @return array<string, mixed>
+     */
+    public function commentCard(int $viewerId, int $commentId): array
+    {
+        $comment = $this->commentQuery($viewerId)->findOrFail($commentId);
+
+        return $this->commentArray($comment, $viewerId, null);
+    }
+
     /** The alias this viewer has (or will get) inside a given thread. */
     public function aliasIn(int $viewerId, int $postId): string
     {
