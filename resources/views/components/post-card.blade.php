@@ -17,14 +17,25 @@
 
     <span class="chip">{{ $post['category'] }}</span>
 
-    @if ($link)
-        <a class="cm-post__body cm-post__link" href="{{ route('post.show', $post['id']) }}">{{ $post['body'] }}</a>
-    @else
-        <p class="cm-post__body">{{ $post['body'] }}</p>
-    @endif
+    {{-- Feed cards clamp to 6 lines; the thread page ($link = false) shows everything. --}}
+    <div class="cm-post__text" @if ($link) data-clamp-wrap @endif>
+        @if ($link)
+            <a class="cm-post__body cm-post__link cm-clamp" href="{{ route('post.show', $post['id']) }}">{{ $post['body'] }}</a>
+        @else
+            <p class="cm-post__body">{{ $post['body'] }}</p>
+        @endif
+
+        @if ($link)
+            <button type="button" class="link-btn cm-see-more" data-see-more aria-expanded="false" hidden>See more</button>
+        @endif
+    </div>
 
     @if ($post['image'])
-        <img class="cm-post__img" src="{{ asset($post['image']) }}" alt="Photo attached to this post" loading="lazy">
+        <img class="cm-post__img"
+             src="{{ asset($post['image']) }}"
+             data-lightbox-src="{{ asset($post['image']) }}"
+             alt="Photo attached to this post"
+             loading="lazy">
     @endif
 
     @include('components.report-banner', ['item' => $post])

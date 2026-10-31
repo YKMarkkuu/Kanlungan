@@ -139,6 +139,7 @@
     display: block;
     margin: 12px 0;
     color: var(--text-primary);
+    white-space: pre-wrap;
     overflow-wrap: anywhere;
 }
 
@@ -188,6 +189,7 @@
     color: var(--text-primary);
     font-size: 14px;
     line-height: 1.4;
+    white-space: pre-wrap;
     overflow-wrap: anywhere;
 }
 
@@ -337,6 +339,7 @@
 
 .cm-fab {
     position: fixed;
+    z-index: 50;
     right: 20px;
     bottom: 80px;
     display: flex;
@@ -1294,4 +1297,92 @@ a.cm-stat { color: inherit; text-decoration: none; display: inline-flex; align-i
 
 .cm-comment-list > * + * {
     margin-top: 12px;
+}
+
+/* ---------- Feed polish: text clamp ("See more") ---------- */
+
+.cm-clamp {
+    display: -webkit-box;
+    -webkit-line-clamp: 6;
+    line-clamp: 6;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Sits above the card-wide link overlay (.cm-post__link::after) so it stays tappable. */
+.cm-see-more {
+    position: relative;
+    z-index: 1;
+    margin-top: -8px;
+    text-decoration: none;
+}
+
+.cm-see-more[hidden] {
+    display: none;
+}
+
+/* ---------- Feed polish: photo lightbox ---------- */
+
+/* Photo must sit above the card-wide link overlay to receive clicks. */
+.cm-post__img {
+    position: relative;
+    z-index: 1;
+    cursor: zoom-in;
+}
+
+.cm-no-scroll {
+    overflow: hidden;
+}
+
+.cm-lightbox[hidden] {
+    display: none;
+}
+
+.cm-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: calc(56px + env(safe-area-inset-top, 0px)) 16px calc(16px + env(safe-area-inset-bottom, 0px));
+    background: rgba(30, 30, 30, 0.92);
+}
+
+.cm-lightbox__img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border-radius: var(--radius-sm);
+}
+
+.cm-lightbox__close {
+    position: absolute;
+    top: calc(8px + env(safe-area-inset-top, 0px));
+    right: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    cursor: pointer;
+}
+
+.cm-lightbox__close:hover {
+    background: rgba(255, 255, 255, 0.22);
+}
+
+.cm-lightbox__close .icon {
+    width: 24px;
+    height: 24px;
+}
+
+@media (hover: none) {
+    .cm-lightbox__close:hover { background: rgba(255, 255, 255, 0.12); }
+    .cm-lightbox__close:active { background: rgba(255, 255, 255, 0.22); }
 }
