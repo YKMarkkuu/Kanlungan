@@ -34,9 +34,9 @@ Route::middleware(['auth', EnforceRestrictions::class])->group(function () {
 
     Route::post('/post/{id}/comments/{commentId}/accept', [PostController::class, 'acceptComment'])->whereNumber(['id', 'commentId'])->name('comment.accept');
 
-    Route::post('/post/{id}/like', [PostController::class, 'likePost'])->whereNumber('id')->name('post.like');
-    Route::post('/post/{id}/comments/{commentId}/like', [PostController::class, 'likeComment'])->whereNumber(['id', 'commentId'])->name('comment.like');
-    Route::post('/post/{id}/comments/{commentId}/helpful', [PostController::class, 'helpfulComment'])->whereNumber(['id', 'commentId'])->name('comment.helpful');
+    Route::post('/post/{id}/like', [PostController::class, 'likePost'])->whereNumber('id')->middleware('throttle:60,1')->name('post.like');
+    Route::post('/post/{id}/comments/{commentId}/like', [PostController::class, 'likeComment'])->whereNumber(['id', 'commentId'])->middleware('throttle:60,1')->name('comment.like');
+    Route::post('/post/{id}/comments/{commentId}/helpful', [PostController::class, 'helpfulComment'])->whereNumber(['id', 'commentId'])->middleware('throttle:60,1')->name('comment.helpful');
 
     // Reports + community vote
     Route::post('/report/{type}/{id}', [ReportController::class, 'store'])->whereIn('type', ['post', 'comment'])->whereNumber('id')->middleware('throttle:10,1')->name('report.store');

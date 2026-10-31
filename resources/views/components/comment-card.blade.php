@@ -25,21 +25,29 @@
 
                 <div class="cm-comment__actions">
                     @if ($comment['mine'])
-                        <span class="cm-comment__action-count" aria-label="{{ $comment['likes'] }} likes">Like{{ $comment['likes'] ? ' '.$comment['likes'] : '' }}</span>
+                        <span class="cm-comment__action-count" aria-label="{{ $comment['likes'] }} likes">Like{{ $comment['likes'] ? ' ' : '' }}<span class="cm-stat__count" data-hide-zero>{{ $comment['likes'] ?: '' }}</span></span>
                         @unless ($reply)
                             @if ($comment['helpful_count'])
-                                <span class="cm-comment__action-count">Helpful {{ $comment['helpful_count'] }}</span>
+                                <span class="cm-comment__action-count">Helpful <span class="cm-stat__count">{{ $comment['helpful_count'] }}</span></span>
                             @endif
                         @endunless
                     @else
                         <form method="POST" action="{{ route('comment.like', [$comment['post_id'], $comment['id']]) }}">
                             @csrf
-                            <button type="submit" class="cm-comment__action-btn {{ $comment['liked'] ? 'is-on' : '' }}" aria-pressed="{{ $comment['liked'] ? 'true' : 'false' }}">Like{{ $comment['likes'] ? ' '.$comment['likes'] : '' }}</button>
+                            <button type="submit"
+                                    class="cm-comment__action-btn {{ $comment['liked'] ? 'is-active' : '' }}"
+                                    data-react="like"
+                                    data-comment-id="{{ $comment['id'] }}"
+                                    aria-pressed="{{ $comment['liked'] ? 'true' : 'false' }}">Like<span class="cm-stat__count" data-hide-zero>{{ $comment['likes'] ?: '' }}</span></button>
                         </form>
                         @unless ($reply)
                             <form method="POST" action="{{ route('comment.helpful', [$comment['post_id'], $comment['id']]) }}">
                                 @csrf
-                                <button type="submit" class="cm-comment__action-btn {{ $comment['helpful_marked'] ? 'is-on' : '' }}" aria-pressed="{{ $comment['helpful_marked'] ? 'true' : 'false' }}">Helpful{{ $comment['helpful_count'] ? ' '.$comment['helpful_count'] : '' }}</button>
+                                <button type="submit"
+                                        class="cm-comment__action-btn {{ $comment['helpful_marked'] ? 'is-active' : '' }}"
+                                        data-react="helpful"
+                                        data-comment-id="{{ $comment['id'] }}"
+                                        aria-pressed="{{ $comment['helpful_marked'] ? 'true' : 'false' }}">Helpful<span class="cm-stat__count" data-hide-zero>{{ $comment['helpful_count'] ?: '' }}</span></button>
                             </form>
                         @endunless
                     @endif

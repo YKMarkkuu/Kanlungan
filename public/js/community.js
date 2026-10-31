@@ -288,6 +288,145 @@
         replyCancel.addEventListener('click', clearReply);
     }
 
+    /* ---------- AJAX reactions (Like / Helpful) ----------
+       One delegated listener for the whole page. A button opts in with
+       data-react="like|helpful" plus data-post-id or data-comment-id.
+       The URL comes from the button's own <form action>, so Blade stays the
+       single source of truth for routes and the no-JS fallback still works. */
+
+    var reactErrorTimer = null;
+
+    function reactCsrf() {
+        var meta = document.querySelector('meta[name="csrf-token"]');
+        return meta ? meta.getAttribute('content') : null;
+    }
+
+    function showReactError(message) {
+        var main = document.querySelector('main');
+        var box = document.getElementById('react-error');
+
+        if (!main) {
+            return;
+        }
+
+        if (!box) {
+            box = document.createElement('div');
+            box.id = 'react-error';
+            box.className = 'card cm-notice cm-notice--error';
+            box.setAttribute('role', 'alert');
+            main.insertBefore(box, main.children[1] || null);
+        }
+
+        box.textContent = message;
+
+        clearTimeout(reactErrorTimer);
+        reactErrorTimer = setTimeout(function () {
+            if (box.parentNode) {
+                box.parentNode.removeChild(box);
+            }
+        }, 5000);
+    }
+
+    // Updates EVERY matching button on the page (the same post can appear
+    // twice, e.g. pinned + feed), not just the one that was tapped.
+    function applyReaction(button, data) {
+        var kind = button.hasAttribute('data-post-id') ? 'post' : 'comment';
+        var id = button.getAttribute('data-' + kind + '-id');
+        var type = button.getAttribute('data-react');
+        var selector = '[data-react="' + type + '"][data-' + kind + '-id="' + id + '"]';
+
+        document.querySelectorAll(selector).forEach(function (el) {
+            var count = el.querySelector('.cm-stat__count');
+
+            el.classList.toggle('is-active', !!data.is_active);
+            el.setAttribute('aria-pressed', data.is_active ? 'true' : 'false');
+
+            if (count) {
+                // Comment buttons hide a zero ("Like"), post buttons show it ("0").
+                count.textContent = (data.new_count > 0 || !count.hasAttribute('data-hide-zero'))
+                    ? String(data.new_count)
+                    : '';
+            }
+        });
+    }
+
+    function handleReactFailure(res) {
+        var errors = res.data && res.data.errors;
+        var message = (errors && errors.report && errors.report[0]) || (res.data && res.data.message) || '';
+
+        if (res.status === 401) {
+            window.location.href = '/';
+            return;
+        }
+
+        if (res.status === 403 && message === '') {
+            window.location.reload(); // banned: the server renders the suspended page
+            return;
+        }
+
+        if (res.status === 419) {
+            message = 'Your session expired. Refresh the page and try again.';
+        } else if (res.status === 429) {
+            message = 'You are going too fast. Try again in a moment.';
+        }
+
+        showReactError(message || 'Something went wrong. Try again.');
+    }
+
+    document.addEventListener('click', function (event) {
+        var button = event.target.closest('[data-react]');
+
+        if (!button || !button.form) {
+            return;
+        }
+
+        event.preventDefault();
+
+        // Ignore taps while this button's request is still in flight.
+        if (button.classList.contains('is-loading')) {
+            return;
+        }
+
+        var headers = {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        };
+        var token = reactCsrf();
+
+        if (token) {
+            headers['X-CSRF-TOKEN'] = token;
+        }
+
+        button.classList.add('is-loading');
+        button.setAttribute('aria-busy', 'true');
+
+        fetch(button.form.action, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: headers
+        }).then(function (response) {
+            return response.json().then(function (data) {
+                return data;
+            }, function () {
+                return {};
+            }).then(function (data) {
+                return { ok: response.ok, status: response.status, data: data || {} };
+            });
+        }).then(function (res) {
+            if (res.ok && res.data.status === 'success') {
+                applyReaction(button, res.data);
+                return;
+            }
+
+            handleReactFailure(res);
+        }, function () {
+            showReactError('Could not reach server.');
+        }).then(function () {
+            button.classList.remove('is-loading');
+            button.removeAttribute('aria-busy');
+        });
+    });
+
     /* ---------- Report bottom sheet ---------- */
 
     var sheet = document.getElementById('report-sheet');

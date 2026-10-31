@@ -218,11 +218,12 @@ class CommunityService
 
     /**
      * Switch a reaction on if the user has not given it, off if they have.
+     * Returns true when the reaction is ON after the call, false when it is OFF.
      * The author earns points for it (and loses them again if it is taken back).
      * Nobody may react to their own post/comment: the guard below throws before
      * anything is saved, so self-reactions can never inflate the visible counts.
      */
-    public function toggleReaction(int $userId, Model $reactable, string $type): void
+    public function toggleReaction(int $userId, Model $reactable, string $type): bool
     {
         $authorId = (int) $reactable->author_id;
 
@@ -238,14 +239,18 @@ class CommunityService
             $existing->delete();
             $this->points->award($authorId, -$amount, $name.'_removed', $reactable);
 
-            return;
+            return false;
         }
 
         try {
             $reactable->reactions()->create(['user_id' => $userId, 'type' => $type]);
         } catch (QueryException $e) {
-            // Double-click race: the unique index already has this reaction. Nothing to do.
-            return;
+            // A concurrent request may have created this reaction first.
+            if (! $reactable->reactions()->where('user_id', $userId)->where('type', $type)->exists()) {
+                throw $e;
+            }
+
+            return true;
         }
 
         $this->points->award($authorId, $amount, $name.'_received', $reactable);
@@ -253,6 +258,8 @@ class CommunityService
         if ($type === Reaction::HELPFUL && $reactable instanceof Comment) {
             $this->alerts->notify($authorId, 'helpful', "Your answer was marked helpful +{$amount}", '"'.Str::limit($reactable->body, 40).'"', route('post.show', $reactable->post_id).'#comment-'.$reactable->id);
         }
+
+        return true;
     }
 
     /**

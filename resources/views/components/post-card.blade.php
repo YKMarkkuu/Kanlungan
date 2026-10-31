@@ -34,9 +34,15 @@
         @if ($post['mine'])
             <span class="cm-stat" aria-label="{{ $post['likes'] }} likes">@include('components.icon', ['name' => 'like']) {{ $post['likes'] }}</span>
         @else
+            {{-- Plain form = no-JS fallback. community.js intercepts the button click (data-react). --}}
             <form method="POST" action="{{ route('post.like', $post['id']) }}">
                 @csrf
-                <button type="submit" class="cm-react {{ $post['liked'] ? 'is-on' : '' }}" aria-pressed="{{ $post['liked'] ? 'true' : 'false' }}" aria-label="Like">@include('components.icon', ['name' => 'like']) {{ $post['likes'] }}</button>
+                <button type="submit"
+                        class="cm-react {{ $post['liked'] ? 'is-active' : '' }}"
+                        data-react="like"
+                        data-post-id="{{ $post['id'] }}"
+                        aria-pressed="{{ $post['liked'] ? 'true' : 'false' }}"
+                        aria-label="Like">@include('components.icon', ['name' => 'like']) <span class="cm-stat__count">{{ $post['likes'] }}</span></button>
             </form>
         @endif
         @if ($link)

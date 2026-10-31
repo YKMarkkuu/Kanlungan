@@ -49,6 +49,36 @@ class CommunityFlowTest extends TestCase
         $this->assertSame(0, $author->fresh()->points);
     }
 
+    public function test_json_like_response_returns_the_current_state_and_count(): void
+    {
+        [$author, $fan] = User::factory()->count(2)->create();
+        $post = $this->makePost($author);
+
+        $this->actingAs($fan)->postJson("/post/{$post->id}/like")
+            ->assertOk()
+            ->assertJson(['status' => 'success', 'new_count' => 1, 'is_active' => true]);
+
+        $this->actingAs($fan)->postJson("/post/{$post->id}/like")
+            ->assertOk()
+            ->assertJson(['status' => 'success', 'new_count' => 0, 'is_active' => false]);
+    }
+
+    public function test_json_reaction_requests_receive_restriction_responses(): void
+    {
+        [$author, $fan] = User::factory()->count(2)->create();
+        $post = $this->makePost($author);
+
+        $fan->forceFill(['muted_until' => now()->addHour()])->save();
+        $this->actingAs($fan)->postJson("/post/{$post->id}/like")
+            ->assertUnprocessable()
+            ->assertJsonStructure(['message', 'errors' => ['report']]);
+
+        $fan->forceFill(['muted_until' => null, 'banned_at' => now()])->save();
+        $this->actingAs($fan)->postJson("/post/{$post->id}/like")
+            ->assertForbidden()
+            ->assertJson(['message' => 'Your account is suspended.']);
+    }
+
     public function test_cannot_like_your_own_post(): void
     {
         $author = User::factory()->create();

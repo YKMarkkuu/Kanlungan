@@ -21,6 +21,10 @@ class EnforceRestrictions
         }
 
         if ($user->banned_at !== null) {
+            if ($request->expectsJson()) {
+                return response()->json(['message' => 'Your account is suspended.'], 403);
+            }
+
             return response()->view('community.restricted', [], 403);
         }
 
@@ -28,7 +32,13 @@ class EnforceRestrictions
             $until = Carbon::parse($user->muted_until);
 
             if ($until->isFuture()) {
-                return back()->withErrors(['report' => 'You are muted until '.$until->format('M j, g:i A').'. You can read, but not post, comment, like, report or vote.']);
+                $message = 'You are muted until '.$until->format('M j, g:i A').'. You can read, but not post, comment, like, report or vote.';
+
+                if ($request->expectsJson()) {
+                    return response()->json(['message' => $message, 'errors' => ['report' => [$message]]], 422);
+                }
+
+                return back()->withErrors(['report' => $message]);
             }
         }
 

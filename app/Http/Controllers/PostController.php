@@ -7,6 +7,8 @@ use App\Models\Post;
 use App\Models\Reaction;
 use App\Services\CommunityService;
 use App\Services\ImageService;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -84,28 +86,45 @@ class PostController extends Controller
         return back();
     }
 
-    public function likePost(Request $request, int $id): RedirectResponse
+    public function likePost(Request $request, int $id): RedirectResponse|JsonResponse
     {
-        $this->community->toggleReaction($request->user()->id, Post::findOrFail($id), Reaction::LIKE);
+        $post = Post::findOrFail($id);
+        $active = $this->community->toggleReaction($request->user()->id, $post, Reaction::LIKE);
 
-        return back();
+        return $this->reactionResponse($request, $post, Reaction::LIKE, $active);
     }
 
-    public function likeComment(Request $request, int $id, int $commentId): RedirectResponse
+    public function likeComment(Request $request, int $id, int $commentId): RedirectResponse|JsonResponse
     {
         $comment = Comment::where('post_id', $id)->findOrFail($commentId);
+        $active = $this->community->toggleReaction($request->user()->id, $comment, Reaction::LIKE);
 
-        $this->community->toggleReaction($request->user()->id, $comment, Reaction::LIKE);
-
-        return back();
+        return $this->reactionResponse($request, $comment, Reaction::LIKE, $active);
     }
 
-    public function helpfulComment(Request $request, int $id, int $commentId): RedirectResponse
+    public function helpfulComment(Request $request, int $id, int $commentId): RedirectResponse|JsonResponse
     {
         $comment = Comment::where('post_id', $id)->findOrFail($commentId);
+        $active = $this->community->toggleReaction($request->user()->id, $comment, Reaction::HELPFUL);
 
-        $this->community->toggleReaction($request->user()->id, $comment, Reaction::HELPFUL);
+        return $this->reactionResponse($request, $comment, Reaction::HELPFUL, $active);
+    }
 
-        return back();
+    /**
+     * fetch() callers (Accept: application/json) get the fresh count as JSON;
+     * plain form posts keep the old redirect. The count is re-queried, so it is
+     * the real number even if two people react at once.
+     */
+    private function reactionResponse(Request $request, Model $target, string $type, bool $active): RedirectResponse|JsonResponse
+    {
+        if (! $request->expectsJson()) {
+            return back();
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'new_count' => $target->reactions()->where('type', $type)->count(),
+            'is_active' => $active,
+        ]);
     }
 }
