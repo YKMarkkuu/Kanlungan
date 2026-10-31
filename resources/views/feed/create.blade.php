@@ -68,6 +68,7 @@
                     </label>
                 </div>
 
+                <span id="char-count" class="text-small text-muted" style="margin-right: auto; margin-left: 12px;">0 / 2000</span>
                 <button type="submit" class="btn btn--primary cm-compose__post" id="post-btn" disabled>Post</button>
             </div>
         </div>

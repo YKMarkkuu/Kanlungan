@@ -12,7 +12,7 @@
     <div class="cm-post__head">
         <div class="cm-avatar" aria-hidden="true"></div>
         <strong class="cm-post__author">{{ $post['author_alias'] }}</strong>
-        <span class="text-small text-muted">{{ $post['time_ago'] }}</span>
+        <span class="text-small text-muted" title="{{ $post['created_at']->format('F j, Y, g:i A') }}">{{ $post['time_ago'] }}</span>
     </div>
 
     <span class="chip">{{ $post['category'] }}</span>
@@ -61,6 +61,7 @@
         @else
             <span class="cm-stat">@include('components.icon', ['name' => 'comment']) <span class="cm-stat__count" data-comments-count>{{ $post['comments'] }}</span></span>
         @endif
+        <button type="button" class="cm-stat" onclick="copyLink('{{ route('post.show', $post['id']) }}')">Share</button>
         @include('components.report-flag', ['type' => 'post', 'item' => $post])
     </div>
 </article>

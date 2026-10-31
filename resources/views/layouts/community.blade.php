@@ -61,6 +61,12 @@
 
     @include('components.report-sheet')
 
+    {{-- Photo lightbox. community.js fills the <img> and toggles [hidden]. --}}
+    <div class="cm-lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Photo viewer" hidden>
+        <button type="button" class="cm-lightbox__close" id="lightbox-close" aria-label="Close photo">@include('components.icon', ['name' => 'close'])</button>
+        <img class="cm-lightbox__img" id="lightbox-img" src="" alt="">
+    </div>
+
     <script src="{{ asset('js/community.js') }}" defer></script>
 </body>
 </html>

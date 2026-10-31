@@ -66,6 +66,19 @@ class PostController extends Controller
         ]);
     }
 
+    public function destroy(Request $request, int $id): RedirectResponse
+    {
+        $post = Post::findOrFail($id);
+        abort_unless((int) $post->author_id === (int) $request->user()->id, 403);
+
+        if ($post->removed_at === null) {
+            $post->forceFill(['removed_at' => now(), 'removed_by' => 'author'])->save();
+            $this->images->deletePhoto($post->image_path);
+        }
+
+        return redirect()->route('feed')->with('status', 'Post deleted.');
+    }
+
     public function comment(Request $request, int $id): RedirectResponse|JsonResponse
     {
         $post = Post::findOrFail($id);

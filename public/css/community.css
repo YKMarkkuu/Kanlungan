@@ -1299,6 +1299,14 @@ a.cm-stat { color: inherit; text-decoration: none; display: inline-flex; align-i
     margin-top: 12px;
 }
 
+.text-warning {
+    color: var(--warning);
+}
+
+.text-danger {
+    color: var(--danger);
+}
+
 /* ---------- Feed polish: text clamp ("See more") ---------- */
 
 .cm-clamp {

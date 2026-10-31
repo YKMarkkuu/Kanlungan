@@ -1,6 +1,19 @@
 (function () {
     'use strict';
 
+    window.copyLink = function (url) {
+        if (!navigator.clipboard || !navigator.clipboard.writeText) {
+            window.alert('Clipboard access is unavailable in this browser.');
+            return;
+        }
+
+        navigator.clipboard.writeText(url).then(function () {
+            window.alert('Link copied to clipboard!');
+        }, function () {
+            window.alert('Could not copy link to clipboard.');
+        });
+    };
+
     /* ---------- Shared helpers for AJAX forms (composer) ---------- */
 
     // Sends a form as multipart FormData. Resolves to { ok, status, data } or
@@ -114,8 +127,20 @@
         var postBtn = document.getElementById('post-btn');
         var anon = document.getElementById('anonymous');
         var anonHint = document.getElementById('anon-hint');
+        var charCount = document.getElementById('char-count');
         var alias = postForm.getAttribute('data-alias');
         var postSubmitting = false;
+
+        var syncCharCount = function () {
+            if (!charCount) {
+                return;
+            }
+
+            var length = body.value.length;
+            charCount.textContent = length + ' / 2000';
+            charCount.classList.toggle('text-warning', length > 1800);
+            charCount.classList.toggle('text-danger', length > 1950);
+        };
 
         var syncPostBtn = function () {
             postBtn.disabled = postSubmitting || body.value.trim().length < 3;
@@ -144,6 +169,7 @@
 
         body.addEventListener('input', function () {
             syncPostBtn();
+            syncCharCount();
             autoGrow();
         });
 
@@ -357,6 +383,7 @@
         }
 
         syncPostBtn();
+        syncCharCount();
         syncAnon();
         autoGrow(); // handles old('body') after a failed validation
     }
@@ -714,6 +741,99 @@
         document.addEventListener('keydown', function (event) {
             if (event.key === 'Escape' && !sheet.hidden) {
                 closeSheet();
+            }
+        });
+    }
+
+    /* ---------- Feed polish: "See more" truncation ---------- */
+
+    var clampWraps = Array.prototype.slice.call(document.querySelectorAll('[data-clamp-wrap]'));
+
+    function syncSeeMore(wrap) {
+        var text = wrap.querySelector('.cm-clamp');
+        var button = wrap.querySelector('[data-see-more]');
+
+        if (!text || !button) {
+            return;
+        }
+
+        button.hidden = !(text.scrollHeight > text.clientHeight);
+    }
+
+    function syncAllSeeMore() {
+        clampWraps.forEach(syncSeeMore);
+    }
+
+    document.addEventListener('click', function (event) {
+        var button = event.target.closest('[data-see-more]');
+
+        if (!button) {
+            return;
+        }
+
+        var wrap = button.closest('[data-clamp-wrap]');
+        var text = wrap ? wrap.querySelector('.cm-clamp') : null;
+
+        if (text) {
+            text.classList.remove('cm-clamp');
+        }
+
+        button.setAttribute('aria-expanded', 'true');
+        button.hidden = true;
+    });
+
+    syncAllSeeMore();
+    window.addEventListener('load', syncAllSeeMore);
+    window.addEventListener('resize', syncAllSeeMore);
+
+    /* ---------- Feed polish: photo lightbox ---------- */
+
+    var lightbox = document.getElementById('lightbox');
+
+    if (lightbox) {
+        var lightboxImg = document.getElementById('lightbox-img');
+        var lightboxClose = document.getElementById('lightbox-close');
+        var lightboxOpener = null;
+
+        var openLightbox = function (img) {
+            lightboxOpener = img;
+            lightboxImg.src = img.getAttribute('data-lightbox-src') || img.src;
+            lightboxImg.alt = img.alt || '';
+            lightbox.hidden = false;
+            document.body.classList.add('cm-no-scroll');
+            lightboxClose.focus();
+        };
+
+        var closeLightbox = function () {
+            lightbox.hidden = true;
+            lightboxImg.removeAttribute('src');
+            document.body.classList.remove('cm-no-scroll');
+
+            if (lightboxOpener && lightboxOpener.focus) {
+                lightboxOpener.focus();
+            }
+
+            lightboxOpener = null;
+        };
+
+        document.addEventListener('click', function (event) {
+            var img = event.target.closest('.cm-post__img');
+
+            if (img) {
+                event.preventDefault();
+                openLightbox(img);
+            }
+        });
+
+        lightbox.addEventListener('click', function (event) {
+            if (event.target !== lightboxImg) {
+                closeLightbox();
+            }
+        });
+
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && !lightbox.hidden) {
+                closeLightbox();
             }
         });
     }

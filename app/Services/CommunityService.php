@@ -355,6 +355,7 @@ class CommunityService
             'author_alias' => $this->displayName($post->is_anonymous, $post->author?->display_name, $post->author_id, $post->id),
             'is_anonymous' => $post->is_anonymous,
             'category' => $post->category,
+            'created_at' => $post->created_at,
             'body' => $removed ? $this->tombstone('post', $post->removed_by) : $post->body,
             'image' => $removed || $post->image_path === null ? null : $post->image_path,
             'removed' => $removed,
@@ -376,6 +377,7 @@ class CommunityService
             'id' => $comment->id,
             'post_id' => $comment->post_id,
             'parent_id' => $comment->parent_id,
+            'created_at' => $comment->created_at,
             'post_excerpt' => $comment->relationLoaded('post') && $comment->post !== null ? Str::limit($comment->post->body, 70) : null,
             'author_alias' => $this->displayName($comment->is_anonymous, $comment->author?->display_name, $comment->author_id, $comment->post_id),
             'is_anonymous' => $comment->is_anonymous,
@@ -394,7 +396,11 @@ class CommunityService
 
     private function tombstone(string $kind, ?string $by): string
     {
-        return $by === 'moderator' ? "This {$kind} was removed by moderators." : "This {$kind} was removed by community vote.";
+        return match ($by) {
+            'moderator' => "This {$kind} was removed by moderators.",
+            'author' => "This {$kind} was removed by its author.",
+            default => "This {$kind} was removed by community vote.",
+        };
     }
 
     /** Anonymous => alias. Not anonymous => display name, or the alias if none is set (docs/AUTH.md). */

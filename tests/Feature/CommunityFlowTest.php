@@ -35,6 +35,42 @@ class CommunityFlowTest extends TestCase
         $this->actingAs($user)->get("/post/{$post->id}")->assertOk()->assertSee('first!')->assertDontSee($user->email);
     }
 
+    public function test_post_and_comment_cards_include_full_timestamp_titles(): void
+    {
+        [$author, $commenter] = User::factory()->count(2)->create();
+        $post = $this->makePost($author);
+        $comment = Comment::create([
+            'post_id' => $post->id,
+            'author_id' => $commenter->id,
+            'body' => 'A timestamped comment',
+            'is_anonymous' => true,
+        ]);
+
+        $this->actingAs($commenter)->get("/post/{$post->id}")
+            ->assertOk()
+            ->assertSee($post->created_at->format('F j, Y, g:i A'))
+            ->assertSee($comment->created_at->format('F j, Y, g:i A'));
+    }
+
+    public function test_only_post_author_can_delete_and_removal_hides_content(): void
+    {
+        [$author, $other] = User::factory()->count(2)->create();
+        $post = $this->makePost($author);
+
+        $this->actingAs($other)->delete("/post/{$post->id}")->assertForbidden();
+        $this->assertNull($post->fresh()->removed_at);
+
+        $this->actingAs($author)->delete("/post/{$post->id}")
+            ->assertRedirect('/feed')
+            ->assertSessionHas('status', 'Post deleted.');
+
+        $this->assertNotNull($post->fresh()->removed_at);
+        $this->assertSame('author', $post->fresh()->removed_by);
+        $this->actingAs($other)->get("/post/{$post->id}")
+            ->assertOk()
+            ->assertSee('removed by its author');
+    }
+
     public function test_json_post_creation_returns_redirect_data(): void
     {
         $user = User::factory()->create();

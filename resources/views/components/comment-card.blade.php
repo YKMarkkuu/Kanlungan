@@ -62,7 +62,7 @@
                     @endif
 
                     @include('components.report-flag', ['type' => 'comment', 'item' => $comment])
-                    <span class="cm-comment__time">{{ $comment['time_ago'] }}</span>
+                    <span class="cm-comment__time" title="{{ $comment['created_at']->format('F j, Y, g:i A') }}">{{ $comment['time_ago'] }}</span>
                 </div>
             @endunless
         </div>
