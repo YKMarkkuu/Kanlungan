@@ -30,6 +30,7 @@ class ProfileController extends Controller
             'points' => $points,
             'standing' => PointService::standing($points),
             'history' => $history,
+            'blockedUsers' => $user->blockedUsers()->orderByPivot('created_at', 'desc')->get(),
         ]);
     }
 

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AlertController;
+use App\Http\Controllers\BlockController;
 use App\Http\Controllers\FeedController;
 use App\Http\Controllers\ModerationController;
 use App\Http\Controllers\PageController;
@@ -72,4 +73,10 @@ Route::middleware(['auth', EnforceRestrictions::class])->group(function () {
         ->whereNumber('report')
         ->middleware(RequireRole::class.':admin,dpo')
         ->name('moderation.unmask');
+});
+
+Route::middleware('auth')->group(function () {
+    // Blocking and unblocking remain available to authenticated restricted users.
+    Route::post('/block/{type}/{id}', [BlockController::class, 'store'])->whereIn('type', ['post', 'comment'])->whereNumber('id')->middleware('throttle:20,1')->name('block.store');
+    Route::post('/blocks/{block}/unblock', [BlockController::class, 'destroy'])->whereNumber('block')->middleware('throttle:20,1')->name('block.destroy');
 });

@@ -63,6 +63,7 @@
         @endif
         <button type="button" class="cm-stat" onclick="copyLink('{{ route('post.show', $post['id']) }}')">Share</button>
         @include('components.report-flag', ['type' => 'post', 'item' => $post])
+        @include('components.block-button', ['type' => 'post', 'item' => $post])
     </div>
 </article>
 @endif

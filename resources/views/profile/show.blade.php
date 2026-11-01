@@ -67,6 +67,23 @@
                 @endif
             </div>
         </section>
+
+        <section class="cm-settings-group" aria-labelledby="settings-blocked">
+            <h2 class="cm-settings-header" id="settings-blocked">Blocked Users</h2>
+            <div class="cm-settings-list text-small">
+                @forelse ($blockedUsers as $blockedUser)
+                    <form method="POST" action="{{ route('block.destroy', $blockedUser->pivot->id) }}" class="cm-settings-item-form">
+                        @csrf
+                        <button type="submit" class="cm-settings-item cm-settings-item--row">
+                            <span>{{ $blockedUser->display_name ?: 'Anonymous account' }}</span>
+                            <span class="cm-settings-item--danger">Unblock</span>
+                        </button>
+                    </form>
+                @empty
+                    <p class="text-small text-muted">You haven't blocked anyone.</p>
+                @endforelse
+            </div>
+        </section>
         <div class="text-small text-muted">Language: English</div>
 
         <h2>Points history</h2>

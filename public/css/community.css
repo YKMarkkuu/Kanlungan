@@ -1394,3 +1394,30 @@ a.cm-stat { color: inherit; text-decoration: none; display: inline-flex; align-i
     .cm-lightbox__close:hover { background: rgba(255, 255, 255, 0.12); }
     .cm-lightbox__close:active { background: rgba(255, 255, 255, 0.22); }
 }
+
+/* ---------- Block button ---------- */
+
+.cm-block-form { margin: 0; }
+
+.cm-block-btn {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.cm-block-btn:hover { color: var(--danger); }
+
+@media (max-width: 768px) {
+    .cm-block-btn { min-height: 44px; padding: 0 8px; }
+}
+
+@media (hover: none) {
+    .cm-block-btn:hover { color: var(--text-muted); }
+    .cm-block-btn:active { color: var(--danger); }
+}
+
+.cm-settings-item--row { align-items: center; }

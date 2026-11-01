@@ -17,5 +17,6 @@
     <div class="cm-post__foot text-small text-muted">
         <a class="cm-stat cm-underline" href="{{ route('post.show', $comment['post_id']) }}#comment-{{ $comment['id'] }}">See in thread</a>
         @include('components.report-flag', ['type' => 'comment', 'item' => $comment])
+        @include('components.block-button', ['type' => 'comment', 'item' => $comment])
     </div>
 </article>

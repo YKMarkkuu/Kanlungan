@@ -99,7 +99,7 @@ class PostController extends Controller
                 'status' => 'success',
                 'comment_id' => $comment->id,
                 'parent_id' => $comment->parent_id,
-                'comments_count' => $post->comments()->count(),
+                'comments_count' => $this->community->commentCount((int) $request->user()->id, (int) $post->id),
                 'html' => view('components.comment-card', [
                     'comment' => $card,
                     'reply' => $comment->parent_id !== null,

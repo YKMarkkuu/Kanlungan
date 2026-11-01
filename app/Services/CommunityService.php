@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Comment;
+use App\Models\Block;
 use App\Models\Post;
 use App\Models\Reaction;
 use App\Models\Report;
@@ -24,6 +25,9 @@ use Illuminate\Validation\ValidationException;
 class CommunityService
 {
     private const FEED_LIMIT = 50;
+
+    /** @var array<int, array<int, int>> */
+    private array $blockedCache = [];
 
     public function __construct(
         private ReportService $reports,
@@ -174,6 +178,14 @@ class CommunityService
         return Alias::for($viewerId, $postId);
     }
 
+    public function commentCount(int $viewerId, int $postId): int
+    {
+        return Comment::query()
+            ->where('post_id', $postId)
+            ->whereNotIn('author_id', $this->blockedIds($viewerId))
+            ->count();
+    }
+
     public function createPost(int $authorId, string $category, string $body, bool $anonymous, ?string $imagePath = null): Post
     {
         return Post::create([
@@ -307,6 +319,15 @@ class CommunityService
 
     /* ---------- internals ---------- */
 
+    /** @return array<int, int> ids of users the viewer has blocked */
+    private function blockedIds(int $viewerId): array
+    {
+        return $this->blockedCache[$viewerId] ??= Block::where('blocker_id', $viewerId)
+            ->pluck('blocked_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+    }
+
     private function setAccepted(Comment $comment, bool $accepted): void
     {
         $comment->forceFill(['is_accepted' => $accepted])->save();
@@ -320,10 +341,13 @@ class CommunityService
 
     private function postQuery(int $viewerId)
     {
+        $blocked = $this->blockedIds($viewerId);
+
         return Post::query()
+            ->whereNotIn('author_id', $blocked)
             ->with('author:id,display_name')
             ->withCount([
-                'comments',
+                'comments' => fn ($q) => $q->whereNotIn('author_id', $blocked),
                 'reactions as likes_count' => fn ($q) => $q->where('type', Reaction::LIKE),
             ])
             ->withExists([
@@ -334,6 +358,7 @@ class CommunityService
     private function commentQuery(int $viewerId)
     {
         return Comment::query()
+            ->whereNotIn('author_id', $this->blockedIds($viewerId))
             ->with('author:id,display_name')
             ->withCount([
                 'reactions as likes_count' => fn ($q) => $q->where('type', Reaction::LIKE),

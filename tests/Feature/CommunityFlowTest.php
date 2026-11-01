@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Block;
 use App\Models\Comment;
 use App\Models\Post;
 use App\Models\Report;
@@ -21,6 +22,72 @@ class CommunityFlowTest extends TestCase
     private function makePost(User $author): Post
     {
         return Post::create(['author_id' => $author->id, 'category' => 'Share', 'body' => 'hello there', 'is_anonymous' => true]);
+    }
+
+    public function test_blocking_an_author_hides_their_content_and_excludes_their_comments_from_counts(): void
+    {
+        [$viewer, $blockedAuthor, $otherAuthor] = User::factory()->count(3)->create();
+        $blockedPost = $this->makePost($blockedAuthor);
+        $visiblePost = $this->makePost($otherAuthor);
+        $blockedPost->update(['body' => 'blocked author post']);
+        $visiblePost->update(['body' => 'visible author post']);
+        Comment::create([
+            'post_id' => $visiblePost->id,
+            'author_id' => $blockedAuthor->id,
+            'body' => 'hidden blocked comment',
+            'is_anonymous' => true,
+        ]);
+        Comment::create([
+            'post_id' => $visiblePost->id,
+            'author_id' => $otherAuthor->id,
+            'body' => 'visible comment',
+            'is_anonymous' => true,
+        ]);
+
+        $this->actingAs($viewer)->post("/block/post/{$blockedPost->id}")
+            ->assertRedirect(route('feed'))
+            ->assertSessionHas('report_status', 'Blocked. You will no longer see their posts or comments.');
+
+        $this->assertSame(1, Block::where('blocker_id', $viewer->id)->where('blocked_id', $blockedAuthor->id)->count());
+        $this->actingAs($viewer)->get(route('feed'))
+            ->assertOk()
+            ->assertDontSee($blockedPost->body)
+            ->assertSee($visiblePost->body)
+            ->assertSee('data-comments-count>1</span>', false);
+        $this->actingAs($viewer)->get("/post/{$blockedPost->id}")->assertNotFound();
+        $this->actingAs($viewer)->get("/post/{$visiblePost->id}")
+            ->assertOk()
+            ->assertDontSee('hidden blocked comment')
+            ->assertSee('visible comment');
+        $this->actingAs($viewer)->postJson("/post/{$visiblePost->id}/comments", [
+            'body' => 'new visible comment',
+            'anonymous' => '1',
+        ])->assertCreated()->assertJson(['comments_count' => 2]);
+
+        $block = Block::where('blocker_id', $viewer->id)->firstOrFail();
+        $this->actingAs($viewer)->get('/me')
+            ->assertOk()
+            ->assertSee('Blocked Users')
+            ->assertSee(route('block.destroy', $block->id));
+    }
+
+    public function test_block_routes_prevent_self_blocking_and_only_allow_the_blocker_to_unblock(): void
+    {
+        [$viewer, $author, $otherUser] = User::factory()->count(3)->create();
+        $ownPost = $this->makePost($viewer);
+        $targetPost = $this->makePost($author);
+
+        $this->actingAs($viewer)->post("/block/post/{$ownPost->id}")->assertSessionHasErrors('report');
+        $this->actingAs($viewer)->post("/block/post/{$targetPost->id}");
+
+        $block = Block::where('blocker_id', $viewer->id)->where('blocked_id', $author->id)->firstOrFail();
+        $this->actingAs($otherUser)->post("/blocks/{$block->id}/unblock")->assertNotFound();
+        $this->assertNotNull($block->fresh());
+
+        $viewer->forceFill(['banned_at' => now()])->save();
+        $this->actingAs($viewer)->post("/blocks/{$block->id}/unblock")
+            ->assertSessionHas('report_status', 'Unblocked.');
+        $this->assertNull($block->fresh());
     }
 
     public function test_create_post_and_comment(): void

@@ -6,6 +6,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
@@ -46,4 +47,16 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
         'verified_at' => 'datetime',
     ];
+
+    /** Users this user has blocked. */
+    public function blockedUsers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'blocks', 'blocker_id', 'blocked_id')->withPivot('id')->withTimestamps();
+    }
+
+    /** Users who have blocked this user. */
+    public function blockedBy(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'blocks', 'blocked_id', 'blocker_id')->withTimestamps();
+    }
 }
