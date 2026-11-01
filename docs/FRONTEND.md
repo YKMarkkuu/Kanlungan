@@ -11,9 +11,19 @@ opening a PR.
 - Vanilla CSS in `public/css/`
 - Vanilla JS in `public/js/`
 - **No Tailwind.** Tailwind classes render as nothing in this project.
-- **No React, Vue, Alpine, Livewire, jQuery.**
+- **No React, Vue, Alpine, Livewire, jQuery.** Cropper.js 1.6.2 is the sole
+  approved third-party UI library, loaded only on the profile page for avatar cropping.
 - **No build step.** Do not use Vite. Link CSS/JS manually from Blade.
 - **No npm packages that require a build.**
+
+Cropper.js is loaded from pinned cdnjs URLs:
+
+- CSS: `https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css`
+- JS: `https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js`
+
+For deployments that cannot use a CDN, download those same two files and place
+them under `public/vendor/cropperjs/`, then update the profile page asset URLs
+to `vendor/cropperjs/cropper.min.css` and `vendor/cropperjs/cropper.min.js`.
 
 ## Design tokens
 
@@ -52,7 +62,7 @@ Never use:
 
 - Tailwind utility classes
 - Purple or blue gradients
-- Pill buttons everywhere (use them only for filter chips)
+- Pill buttons everywhere (use them only for filter chips; post categories use non-pill tags)
 - Centered hero text
 - Emoji as icons
 - Default browser scrollbars (style them or hide them)
@@ -78,7 +88,7 @@ Blade components in `resources/views/components/`:
 Layouts in `resources/views/layouts/`:
 
 - `guest.blade.php` — login, register
-- `app.blade.php` — authenticated, bottom nav (Home / Search / Alerts / Me)
+- `community.blade.php` — authenticated, floating bottom nav (Home / Search / Post / Activity / Me); Activity contains notification and community-verdict tabs
 
 ## Data shape contract
 Even with dummy data, controllers must pass arrays shaped like this.
@@ -151,6 +161,8 @@ Route::view('/moderation/history', 'moderation.history')->name('moderation.histo
 ```
 
 Replace with controllers when auth and DB are wired.
+
+Active community reports are reviewed and voted on at `/reports`, not in the main feed.
 
 ## Commit conventions
 Use Conventional Commits. Examples:
