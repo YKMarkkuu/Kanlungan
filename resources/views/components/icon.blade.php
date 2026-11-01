@@ -11,6 +11,7 @@
         @case('flag') <path d="M6 20V5M6 5h11l-2 4 2 4H6" /> @break
         @case('like') <path d="M8 11v9H4v-9h4Z" /><path d="M8 11l4-7a2 2 0 0 1 2 2v3h5a1.5 1.5 0 0 1 1.5 1.7l-1 6.5A2 2 0 0 1 17.5 19H8" /> @break
         @case('comment') <path d="M4 5h16v11H9l-5 4V5Z" /> @break
+        @case('share') <path d="M14 4h6v6M20 4l-9 9" /><path d="M18 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5" /> @break
         @case('star') <path d="m12 4 2.4 5 5.4.7-4 3.7 1 5.4L12 16.2 7.2 18.8l1-5.4-4-3.7 5.4-.7L12 4Z" /> @break
         @case('more') <circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /> @break
         @case('mask') <path d="M3 9c3-1 6-1 9 0s6 1 9 0v3a4 4 0 0 1-4 4h-2.5L12 14l-1.5 2H8a4 4 0 0 1-4-4V9Z" /> @break

@@ -143,6 +143,12 @@ class CommunityFlowTest extends TestCase
         [$author, $other] = User::factory()->count(2)->create();
         $post = $this->makePost($author);
 
+        $this->actingAs($author)->get('/feed')
+            ->assertOk()
+            ->assertSee(route('post.destroy', $post->id))
+            ->assertSee('Delete this post?')
+            ->assertDontSee(route('report.store', ['post', $post->id]));
+
         $this->actingAs($other)->delete("/post/{$post->id}")->assertForbidden();
         $this->assertNull($post->fresh()->removed_at);
 
@@ -155,6 +161,35 @@ class CommunityFlowTest extends TestCase
         $this->actingAs($other)->get("/post/{$post->id}")
             ->assertOk()
             ->assertSee('removed by its author');
+    }
+
+    public function test_comment_actions_are_contextual_and_only_author_can_delete(): void
+    {
+        [$postAuthor, $commentAuthor, $other] = User::factory()->count(3)->create();
+        $post = $this->makePost($postAuthor);
+        $comment = Comment::create([
+            'post_id' => $post->id,
+            'author_id' => $commentAuthor->id,
+            'body' => 'Comment with contextual actions',
+            'is_anonymous' => true,
+        ]);
+
+        $this->actingAs($commentAuthor)->get("/post/{$post->id}")
+            ->assertOk()
+            ->assertSee(route('comment.destroy', [$post->id, $comment->id]))
+            ->assertSee('Delete this comment?')
+            ->assertDontSee(route('report.store', ['comment', $comment->id]));
+
+        $this->actingAs($other)->delete(route('comment.destroy', [$post->id, $comment->id]))
+            ->assertForbidden();
+        $this->assertNull($comment->fresh()->removed_at);
+
+        $this->actingAs($commentAuthor)->delete(route('comment.destroy', [$post->id, $comment->id]))
+            ->assertRedirect()
+            ->assertSessionHas('status', 'Comment deleted.');
+
+        $this->assertNotNull($comment->fresh()->removed_at);
+        $this->assertSame('author', $comment->fresh()->removed_by);
     }
 
     public function test_json_post_creation_returns_redirect_data(): void
@@ -206,6 +241,37 @@ class CommunityFlowTest extends TestCase
                 'comments_count' => 2,
             ])
             ->assertSee('ajax reply');
+    }
+
+    public function test_helpful_reactions_are_available_on_replies_and_award_points(): void
+    {
+        [$author, $replyAuthor, $viewer] = User::factory()->count(3)->create();
+        $post = $this->makePost($author);
+        $parent = Comment::create([
+            'post_id' => $post->id,
+            'author_id' => $author->id,
+            'body' => 'Top-level comment',
+            'is_anonymous' => true,
+        ]);
+        $reply = Comment::create([
+            'post_id' => $post->id,
+            'author_id' => $replyAuthor->id,
+            'parent_id' => $parent->id,
+            'body' => 'Helpful reply',
+            'is_anonymous' => true,
+        ]);
+
+        $this->actingAs($viewer)->get("/post/{$post->id}")
+            ->assertOk()
+            ->assertSee('Helpful reply')
+            ->assertSee('data-react="helpful"', false)
+            ->assertSee('data-comment-id="'.$reply->id.'"', false);
+
+        $this->actingAs($viewer)->post("/post/{$post->id}/comments/{$reply->id}/helpful")
+            ->assertRedirect();
+
+        $this->assertSame(1, $reply->reactions()->where('type', 'helpful')->count());
+        $this->assertSame(3, $replyAuthor->fresh()->points);
     }
 
     public function test_like_toggles_and_gives_author_points(): void

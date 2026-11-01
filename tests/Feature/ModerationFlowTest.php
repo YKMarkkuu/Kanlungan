@@ -457,6 +457,34 @@ class ModerationFlowTest extends TestCase
         $this->actingAs($mod)->get('/moderation?tab=history')->assertSee('Possible danger')->assertSee('Student contacted');
     }
 
+    public function test_moderator_can_override_report_category_before_referring_case(): void
+    {
+        $author = User::factory()->create();
+        $reporter = User::factory()->create();
+        $moderator = User::factory()->create(['role' => 'moderator']);
+        $guidance = User::factory()->create(['role' => 'guidance']);
+        $post = $this->makePost($author, 'CATEGORY-OVERRIDE-POST');
+
+        $this->actingAs($reporter)->post("/report/post/{$post->id}", ['category' => 'Spam']);
+        $report = Report::firstOrFail();
+        $report->update(['mod_status' => 'pending', 'mod_subject' => 'content']);
+
+        $this->actingAs($moderator)->get('/moderation')
+            ->assertOk()
+            ->assertSee('Override Category (if reporter chose wrong)')
+            ->assertSee('value="Spam" selected', false)
+            ->assertSee('value="Self-harm"', false);
+
+        $this->actingAs($moderator)->post("/moderation/{$report->id}", [
+            'action' => 'refer',
+            'reason' => 'Safety review needed',
+            'override_category' => 'Self-harm',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame('Self-harm', $report->fresh()->category);
+        $this->assertTrue(Alert::where('user_id', $guidance->id)->where('body', 'A post reported for Self-harm was referred to Guidance.')->exists());
+    }
+
     public function test_admin_can_unmask_reporter_or_content_author_and_the_action_is_logged(): void
     {
         $author = User::factory()->create();

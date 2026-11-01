@@ -9,13 +9,6 @@
     <div class="stack">
         <header class="cm-header">
             <h1>Post</h1>
-            @if ($post['mine'] && ! $post['removed'])
-                <form method="POST" action="{{ route('post.destroy', $post['id']) }}" onsubmit="return confirm('Are you sure you want to delete this post?');">
-                    @csrf
-                    @method('DELETE')
-                    <button type="submit" class="link-btn text-danger">Delete Post</button>
-                </form>
-            @endif
         </header>
 
         @include('components.post-card', ['post' => $post, 'link' => false])

@@ -29,6 +29,12 @@
             <div class="card cm-notice">There are active community reports waiting for a verdict. <a href="{{ route('reports.index') }}">Go to Reports</a></div>
         @endif
 
+        <div id="skeleton-loader" class="hidden" aria-hidden="true">
+            <div class="cm-skeleton cm-skeleton--post"></div>
+            <div class="cm-skeleton cm-skeleton--post"></div>
+            <div class="cm-skeleton cm-skeleton--post"></div>
+        </div>
+
         <p class="text-small text-muted">Sort: Newest</p>
 
         @forelse ($posts as $post)

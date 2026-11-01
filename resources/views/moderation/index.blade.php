@@ -71,6 +71,12 @@
                         <form method="POST" action="{{ route('moderation.act', $card['id']) }}" class="stack">
                             @csrf
                             <input class="input" type="text" name="reason" placeholder="Reason (required, saved in the log)" maxlength="500" required>
+                            <label class="text-small" for="override-category-{{ $card['id'] }}">Override Category (if reporter chose wrong)</label>
+                            <select class="input" id="override-category-{{ $card['id'] }}" name="override_category">
+                                @foreach ($categories as $category)
+                                    <option value="{{ $category }}" @selected($category === $card['category'])>{{ $category }}</option>
+                                @endforeach
+                            </select>
                             <div class="cm-mod__actions">
                                 @foreach ($card['actions'] as $action)
                                     <button type="submit" name="action" value="{{ $action }}" class="btn {{ $action === 'refer' ? 'cm-btn-danger' : '' }}">{{ $labels[$action] }}</button>

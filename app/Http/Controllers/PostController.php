@@ -78,6 +78,18 @@ class PostController extends Controller
         return redirect()->route('feed')->with('status', 'Post deleted.');
     }
 
+    public function destroyComment(Request $request, int $id, int $commentId): RedirectResponse
+    {
+        $comment = Comment::where('post_id', $id)->findOrFail($commentId);
+        abort_unless((int) $comment->author_id === (int) $request->user()->id, 403);
+
+        if ($comment->removed_at === null) {
+            $comment->forceFill(['removed_at' => now(), 'removed_by' => 'author'])->save();
+        }
+
+        return back()->with('status', 'Comment deleted.');
+    }
+
     public function comment(Request $request, int $id): RedirectResponse|JsonResponse
     {
         $post = Post::findOrFail($id);

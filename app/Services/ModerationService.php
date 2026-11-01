@@ -128,7 +128,7 @@ class ModerationService
         return $actions;
     }
 
-    public function act(User $actor, int $reportId, string $action, string $reason): void
+    public function act(User $actor, int $reportId, string $action, string $reason, ?string $overrideCategory = null): void
     {
         $reason = trim($reason);
 
@@ -136,11 +136,16 @@ class ModerationService
             throw $this->error('Every action needs a reason (at least 3 characters).');
         }
 
-        DB::transaction(function () use ($actor, $reportId, $action, $reason) {
+        DB::transaction(function () use ($actor, $reportId, $action, $reason, $overrideCategory) {
             $report = Report::lockForUpdate()->with('reportable')->findOrFail($reportId);
 
             if (! in_array($action, $this->actionsFor((string) $actor->role, $report), true)) {
                 throw $this->error('That action is not available for this case.');
+            }
+
+            if ($overrideCategory !== null && $overrideCategory !== $report->category) {
+                $report->category = $overrideCategory;
+                $report->save();
             }
 
             $target = $report->reportable;

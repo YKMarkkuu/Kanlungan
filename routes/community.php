@@ -33,6 +33,7 @@ Route::middleware(['auth', EnforceRestrictions::class])->group(function () {
     Route::get('/post/{id}', [PostController::class, 'show'])->whereNumber('id')->name('post.show');
     Route::delete('/post/{id}', [PostController::class, 'destroy'])->whereNumber('id')->middleware('throttle:10,1')->name('post.destroy');
     Route::post('/post/{id}/comments', [PostController::class, 'comment'])->whereNumber('id')->middleware('throttle:20,1')->name('post.comment');
+    Route::delete('/post/{id}/comments/{commentId}', [PostController::class, 'destroyComment'])->whereNumber(['id', 'commentId'])->middleware('throttle:10,1')->name('comment.destroy');
 
     Route::post('/post/{id}/comments/{commentId}/accept', [PostController::class, 'acceptComment'])->whereNumber(['id', 'commentId'])->name('comment.accept');
 
