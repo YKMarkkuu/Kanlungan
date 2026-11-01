@@ -692,6 +692,9 @@
 .cm-post__foot, .cm-report-banner { position: relative; z-index: 1; }
 a.cm-stat { color: inherit; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
 .cm-icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.cm-load-more { display: grid; justify-items: center; gap: 8px; padding: 8px 0; }
+.cm-load-more[hidden] { display: none !important; }
+.cm-load-more .field__error { margin: 0; text-align: center; }
 
 /* ---------- Me page (design screen 8) ---------- */
 
@@ -844,6 +847,27 @@ a.cm-stat { color: inherit; text-decoration: none; display: inline-flex; align-i
 .cm-activity-panel[hidden] {
     display: none !important;
 }
+
+.cm-my-report { display: grid; gap: 12px; }
+.cm-my-report__preview { margin: 0; overflow-wrap: anywhere; }
+.cm-my-report__meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.cm-report-status {
+    display: inline-flex;
+    align-items: center;
+    min-height: 28px;
+    padding: 4px 10px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    background: var(--surface-hover);
+    color: var(--text-primary);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.25;
+}
+.cm-report-status--pending { background: var(--warning-soft); color: var(--warning-dark); }
+.cm-report-status--removed { background: var(--danger); color: #fff; }
+.cm-report-status--dismissed { background: var(--accent-soft); color: var(--accent-dark); }
+.cm-report-status--neutral { background: var(--surface-hover); color: var(--text-muted); }
 
 .cm-search { display: flex; gap: 8px; }
 .cm-search .input { flex: 1; min-width: 0; }
@@ -1633,10 +1657,8 @@ a.cm-stat { color: inherit; text-decoration: none; display: inline-flex; align-i
 
 /* ---------- Post and comment action bars ---------- */
 
-.cm-post__foot,
-.cm-comment__actions {
-    gap: 12px;
-}
+.cm-post__foot { gap: 20px; }
+.cm-comment__actions { gap: 12px; }
 
 .cm-post__foot form,
 .cm-comment__actions form {
@@ -1749,7 +1771,7 @@ a.cm-stat { color: inherit; text-decoration: none; display: inline-flex; align-i
 }
 
 @media (max-width: 768px) {
-    .cm-post__foot { gap: 8px; }
+    .cm-post__foot { gap: 12px; }
 
     .cm-comment__actions {
         flex-wrap: wrap;

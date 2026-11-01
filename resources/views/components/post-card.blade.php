@@ -58,15 +58,15 @@
                         data-post-id="{{ $post['id'] }}"
                         aria-pressed="{{ $post['liked'] ? 'true' : 'false' }}"
                         aria-label="{{ $post['liked'] ? 'Unlike' : 'Like' }} post, {{ $post['likes'] }} likes"
-                        title="{{ $post['liked'] ? 'Unlike post' : 'Like post' }}">@include('components.icon', ['name' => 'like']) <span class="cm-action-label">Like</span><span class="cm-stat__count">{{ $post['likes'] }}</span></button>
+                        title="{{ $post['liked'] ? 'Unlike post' : 'Like post' }}">@include('components.icon', ['name' => 'like'])<span class="cm-stat__count">{{ $post['likes'] }}</span></button>
             </form>
         @endif
         @if ($link)
-            <a class="cm-action-btn cm-stat" href="{{ route('post.show', $post['id']) }}" aria-label="View comments, {{ $post['comments'] }} comments" title="View comments">@include('components.icon', ['name' => 'comment']) <span class="cm-action-label">Comment</span><span class="cm-stat__count" data-comments-count>{{ $post['comments'] }}</span></a>
+            <a class="cm-action-btn cm-stat" href="{{ route('post.show', $post['id']) }}" aria-label="Comment, {{ $post['comments'] }} comments" title="Comment">@include('components.icon', ['name' => 'comment'])<span class="cm-stat__count" data-comments-count>{{ $post['comments'] }}</span></a>
         @else
-            <span class="cm-action-btn cm-stat" aria-label="{{ $post['comments'] }} comments" title="{{ $post['comments'] }} comments">@include('components.icon', ['name' => 'comment']) <span class="cm-action-label">Comment</span><span class="cm-stat__count" data-comments-count>{{ $post['comments'] }}</span></span>
+            <span class="cm-action-btn cm-stat" aria-label="Comment, {{ $post['comments'] }} comments" title="Comment">@include('components.icon', ['name' => 'comment'])<span class="cm-stat__count" data-comments-count>{{ $post['comments'] }}</span></span>
         @endif
-        <button type="button" class="cm-action-btn" onclick="copyLink('{{ route('post.show', $post['id']) }}')" aria-label="Share post" title="Share post">@include('components.icon', ['name' => 'share']) <span class="cm-action-label">Share</span></button>
+        <button type="button" class="cm-action-btn" onclick="copyLink('{{ route('post.show', $post['id']) }}')" aria-label="Share" title="Share">@include('components.icon', ['name' => 'share'])</button>
         <div class="cm-more-menu">
             <button type="button" class="cm-action-btn cm-more-menu__toggle" data-menu-toggle
                     aria-label="More post actions" title="More actions" aria-expanded="false"

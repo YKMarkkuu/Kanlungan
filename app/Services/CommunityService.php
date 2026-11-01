@@ -23,8 +23,6 @@ use Illuminate\Validation\ValidationException;
  */
 class CommunityService
 {
-    private const FEED_LIMIT = 50;
-
     /** @var array<int, array<int, int>> */
     private array $blockedCache = [];
 
@@ -34,7 +32,7 @@ class CommunityService
         private AlertService $alerts,
     ) {}
 
-    /** @return array{hasPendingReports: bool, posts: array<int, array<string, mixed>>} */
+    /** @return array{hasPendingReports: bool, posts: \Illuminate\Pagination\CursorPaginator} */
     public function feed(int $viewerId, ?string $category = null): array
     {
         $this->reports->sweepDue();
@@ -52,13 +50,12 @@ class CommunityService
             ->when($category !== null && in_array($category, Post::CATEGORIES, true), fn ($q) => $q->where('category', $category))
             ->latest()
             ->latest('id')
-            ->limit(self::FEED_LIMIT)
-            ->get();
-        $states = $this->reports->statesFor($viewerId, Post::class, $posts);
+            ->cursorPaginate(15);
+        $states = $this->reports->statesFor($viewerId, Post::class, $posts->getCollection());
 
         return [
             'hasPendingReports' => $activeReports->isNotEmpty(),
-            'posts' => $posts->map(fn (Post $post) => $this->postArray($post, $viewerId, $states[$post->id] ?? null))->all(),
+            'posts' => $posts->through(fn (Post $post) => $this->postArray($post, $viewerId, $states[$post->id] ?? null)),
         ];
     }
 

@@ -37,14 +37,24 @@
 
         <p class="text-small text-muted">Sort: Newest</p>
 
-        @forelse ($posts as $post)
-            @include('components.post-card', ['post' => $post, 'showReportStatus' => false])
-        @empty
-            <div class="card cm-empty">
-                <p><strong>No posts here yet.</strong></p>
-                <p class="text-small text-muted">Be the first to post in this category.</p>
+        <div id="feed-posts">
+            @forelse ($posts as $post)
+                @include('components.post-card', ['post' => $post, 'showReportStatus' => false])
+            @empty
+                <div class="card cm-empty">
+                    <p><strong>No posts here yet.</strong></p>
+                    <p class="text-small text-muted">Be the first to post in this category.</p>
+                </div>
+            @endforelse
+        </div>
+
+        @if ($posts->hasMorePages())
+            <div id="load-more-container" class="cm-load-more">
+                <button type="button" id="load-more-btn" class="btn btn--outline"
+                        data-next-url="{{ $posts->nextPageUrl() }}">Load more</button>
+                <p id="load-more-error" class="field__error" role="alert" hidden></p>
             </div>
-        @endforelse
+        @endif
     </div>
 
 @endsection

@@ -141,6 +141,53 @@ class ModerationFlowTest extends TestCase
         $this->assertSame(1, substr_count($viewerResponse->getContent(), 'id="post-'.$post->id.'"'));
     }
 
+    public function test_activity_my_reports_shows_safe_previews_and_current_statuses(): void
+    {
+        [$author, $reporter] = User::factory()->count(2)->create();
+        $author->forceFill(['display_name' => 'Secret Author Identity'])->save();
+
+        $openPost = $this->makePost($author, 'MY-OPEN-REPORT-PREVIEW');
+        $votingPost = $this->makePost($author, 'MY-VOTING-REPORT-PREVIEW');
+        $moderatorRemovedPost = $this->makePost($author, 'MY-MOD-REMOVED-PREVIEW');
+        $moderatorRemovedPost->forceFill(['removed_at' => now(), 'removed_by' => 'moderator'])->save();
+        $dismissedComment = Comment::create([
+            'post_id' => $openPost->id,
+            'author_id' => $author->id,
+            'body' => 'MY-DISMISSED-COMMENT-PREVIEW',
+            'is_anonymous' => false,
+        ]);
+
+        foreach ([
+            [$openPost, Report::OPEN, null],
+            [$votingPost, Report::VOTING, null],
+            [$moderatorRemovedPost, Report::OPEN, null],
+            [$dismissedComment, Report::RESOLVED, 'moderator_cleared'],
+        ] as [$target, $status, $outcome]) {
+            Report::create([
+                'reporter_id' => $reporter->id,
+                'reportable_type' => $target::class,
+                'reportable_id' => $target->id,
+                'category' => 'Spam',
+                'status' => $status,
+                'outcome' => $outcome,
+            ]);
+        }
+
+        $this->actingAs($reporter)->get(route('alerts'))
+            ->assertOk()
+            ->assertSee('My Reports')
+            ->assertSee('activity-panel-reports')
+            ->assertSee('MY-OPEN-REPORT-PREVIEW')
+            ->assertSee('MY-VOTING-REPORT-PREVIEW')
+            ->assertSee('MY-MOD-REMOVED-PREVIEW')
+            ->assertSee('MY-DISMISSED-COMMENT-PREVIEW')
+            ->assertSee('Awaiting community review')
+            ->assertSee('Voting in progress')
+            ->assertSee('Removed by Moderator')
+            ->assertSee('Dismissed / No Violation')
+            ->assertDontSee('Secret Author Identity');
+    }
+
     public function test_multiple_active_reports_do_not_duplicate_a_post_in_the_feed(): void
     {
         [$author, $reporterOne, $reporterTwo, $viewer] = User::factory()->count(4)->create();

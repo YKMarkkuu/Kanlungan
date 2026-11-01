@@ -14,10 +14,11 @@ class FeedController extends Controller
         $active = in_array($category, Post::CATEGORIES, true) ? $category : null;
 
         $feed = $community->feed($request->user()->id, $active);
+        $posts = $feed['posts']->appends($active !== null ? ['category' => $active] : []);
 
         return view('feed.index', [
             'hasPendingReports' => $feed['hasPendingReports'],
-            'posts' => $feed['posts'],
+            'posts' => $posts,
             'categories' => Post::CATEGORIES,
             'active' => $active,
         ]);

@@ -213,6 +213,40 @@ class CommunityFlowTest extends TestCase
         $response->assertSessionHas('status', 'Posted.');
     }
 
+    public function test_feed_uses_cursor_pagination_and_keeps_category_filter_on_next_page(): void
+    {
+        $viewer = User::factory()->create();
+
+        for ($i = 0; $i < 18; $i++) {
+            $post = $this->makePost($viewer);
+            $post->forceFill([
+                'body' => "cursor-post-{$i}",
+                'created_at' => now()->subMinutes($i),
+            ])->save();
+        }
+
+        $firstPage = $this->actingAs($viewer)
+            ->get(route('feed', ['category' => 'Share']))
+            ->assertOk()
+            ->assertSee('id="load-more-btn"', false);
+
+        $posts = $firstPage->viewData('posts');
+        $this->assertSame(15, $posts->count());
+        $nextPageQuery = [];
+        parse_str((string) parse_url($posts->nextPageUrl(), PHP_URL_QUERY), $nextPageQuery);
+        $this->assertSame('Share', $nextPageQuery['category'] ?? null);
+        $firstPage->assertSee('cursor-post-0')->assertDontSee('cursor-post-17');
+
+        $secondPage = $this->actingAs($viewer)
+            ->get($posts->nextPageUrl())
+            ->assertOk()
+            ->assertDontSee('id="load-more-btn"', false)
+            ->assertSee('cursor-post-17')
+            ->assertDontSee('cursor-post-0');
+
+        $this->assertSame(3, $secondPage->viewData('posts')->count());
+    }
+
     public function test_avatar_upload_is_cropped_and_hidden_on_anonymous_content(): void
     {
         $author = User::factory()->create();
@@ -236,7 +270,7 @@ class CommunityFlowTest extends TestCase
             'is_anonymous' => false,
         ]);
         $feed = app(CommunityService::class)->feed((int) $author->id);
-        $postsById = collect($feed['posts'])->keyBy('id');
+        $postsById = $feed['posts']->getCollection()->keyBy('id');
 
         $this->assertNull($postsById[$anonymousPost->id]['avatar_path']);
         $this->assertSame($avatarPath, $postsById[$namedPost->id]['avatar_path']);

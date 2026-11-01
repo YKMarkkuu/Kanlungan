@@ -302,6 +302,113 @@
 
     var feedSkeleton = document.getElementById('skeleton-loader');
 
+    var loadMoreButton = document.getElementById('load-more-btn');
+
+    if (loadMoreButton) {
+        var feedPosts = document.getElementById('feed-posts');
+        var loadMoreContainer = document.getElementById('load-more-container');
+        var loadMoreError = document.getElementById('load-more-error');
+        var feedPageLoading = false;
+        var pauseAutoLoad = false;
+        var loadMoreLabel = loadMoreButton.textContent;
+
+        function loadNextFeedPage() {
+            if (feedPageLoading || loadMoreButton.disabled) {
+                return;
+            }
+
+            var nextUrl = loadMoreButton.getAttribute('data-next-url');
+            if (!nextUrl) {
+                loadMoreContainer.hidden = true;
+                return;
+            }
+
+            var pageUrl = new URL(nextUrl, window.location.href);
+            if (pageUrl.origin !== window.location.origin) {
+                loadMoreError.textContent = 'Could not load more posts because the page address was invalid.';
+                loadMoreError.hidden = false;
+                return;
+            }
+
+            feedPageLoading = true;
+            loadMoreButton.disabled = true;
+            loadMoreButton.setAttribute('aria-busy', 'true');
+            loadMoreButton.textContent = 'Loading…';
+            loadMoreError.hidden = true;
+            loadMoreError.textContent = '';
+
+            if (feedSkeleton) {
+                feedSkeleton.classList.remove('hidden');
+                feedSkeleton.setAttribute('aria-hidden', 'false');
+            }
+
+            fetch(pageUrl.href, {
+                credentials: 'same-origin',
+                headers: { Accept: 'text/html' }
+            }).then(function (response) {
+                if (!response.ok) {
+                    throw new Error('Could not load more posts (HTTP ' + response.status + ').');
+                }
+
+                if (response.redirected) {
+                    throw new Error('Your session may have expired. Refresh the page and sign in again.');
+                }
+
+                return response.text();
+            }).then(function (html) {
+                var nextDocument = new DOMParser().parseFromString(html, 'text/html');
+                var newPosts = nextDocument.querySelectorAll('#feed-posts > article.cm-post');
+                newPosts.forEach(function (post) {
+                    feedPosts.appendChild(post);
+                });
+
+                var nextPageButton = nextDocument.getElementById('load-more-btn');
+                if (nextPageButton && nextPageButton.getAttribute('data-next-url')) {
+                    loadMoreButton.setAttribute('data-next-url', nextPageButton.getAttribute('data-next-url'));
+                    loadMoreContainer.hidden = false;
+                    loadMoreButton.disabled = false;
+                    loadMoreButton.textContent = loadMoreLabel;
+                } else {
+                    loadMoreButton.removeAttribute('data-next-url');
+                    loadMoreContainer.hidden = true;
+                    loadMoreButton.textContent = loadMoreLabel;
+                }
+
+                if (window.cmRefreshPostClamps) {
+                    window.cmRefreshPostClamps();
+                }
+            }).catch(function (error) {
+                pauseAutoLoad = true;
+                loadMoreError.textContent = error.message || 'Could not load more posts. Please try again.';
+                loadMoreError.hidden = false;
+                loadMoreButton.disabled = false;
+                loadMoreButton.textContent = loadMoreLabel;
+            }).then(function () {
+                feedPageLoading = false;
+                loadMoreButton.removeAttribute('aria-busy');
+
+                if (feedSkeleton) {
+                    feedSkeleton.classList.add('hidden');
+                    feedSkeleton.setAttribute('aria-hidden', 'true');
+                }
+            });
+        }
+
+        loadMoreButton.addEventListener('click', function () {
+            pauseAutoLoad = false;
+            loadNextFeedPage();
+        });
+
+        if ('IntersectionObserver' in window) {
+            var feedObserver = new IntersectionObserver(function (entries) {
+                if (!pauseAutoLoad && entries.some(function (entry) { return entry.isIntersecting; })) {
+                    loadNextFeedPage();
+                }
+            }, { rootMargin: '250px 0px' });
+            feedObserver.observe(loadMoreContainer);
+        }
+    }
+
     if (feedSkeleton) {
         var touchStartY = null;
         var touchStartX = null;
@@ -1147,8 +1254,6 @@
 
     /* ---------- Feed polish: "See more" truncation ---------- */
 
-    var clampWraps = Array.prototype.slice.call(document.querySelectorAll('[data-clamp-wrap]'));
-
     function syncSeeMore(wrap) {
         var text = wrap.querySelector('.cm-clamp');
         var button = wrap.querySelector('[data-see-more]');
@@ -1161,8 +1266,10 @@
     }
 
     function syncAllSeeMore() {
-        clampWraps.forEach(syncSeeMore);
+        document.querySelectorAll('[data-clamp-wrap]').forEach(syncSeeMore);
     }
+
+    window.cmRefreshPostClamps = syncAllSeeMore;
 
     document.addEventListener('click', function (event) {
         var button = event.target.closest('[data-see-more]');
