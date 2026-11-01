@@ -26,16 +26,21 @@
             @php($unread = auth()->check() ? \App\Models\Alert::unreadCount(auth()->id()) : 0)
             @php($headerAlerts = auth()->check() ? \App\Models\Alert::where('user_id', auth()->id())->latest('id')->limit(5)->get() : collect())
             <header class="cm-header">
-                @if ($back !== '')
-                    <a href="{{ $back === 'history' ? route('feed') : $back }}"
-                       class="cm-mobile-back"
-                       aria-label="Go back"
-                       @if ($back === 'history') onclick="if (window.history.length > 1) { window.history.back(); return false; }" @endif>
-                        @include('components.icon', ['name' => 'back'])
-                    </a>
-                @endif
-                <a href="{{ route('feed') }}" class="cm-back">Kanlungan</a>
+                <div class="cm-header__brand">
+                    @if ($back !== '')
+                        <a href="{{ $back === 'history' ? route('feed') : $back }}"
+                           class="cm-mobile-back"
+                           aria-label="Go back"
+                           @if ($back === 'history') onclick="if (window.history.length > 1) { window.history.back(); return false; }" @endif>
+                            @include('components.icon', ['name' => 'back'])
+                        </a>
+                    @endif
+                    <a href="{{ route('feed') }}" class="cm-back">Kanlungan</a>
+                </div>
                 <div class="cm-header__actions">
+                    <a href="{{ route('search') }}" class="cm-icon-btn" aria-label="Search">
+                        @include('components.icon', ['name' => 'search'])
+                    </a>
                     @include('components.notification-dropdown', ['alerts' => $headerAlerts, 'unread' => $unread])
                 </div>
             </header>

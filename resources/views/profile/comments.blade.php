@@ -15,7 +15,7 @@
                 <span class="text-small text-muted">{{ $comment['is_anonymous'] ? 'As '.$comment['author_alias'] : 'With your name' }} · {{ $comment['time_ago'] }}</span>
             </a>
         @empty
-            <div class="card cm-empty"><p class="text-muted">You haven't commented yet.</p></div>
+            <x-empty-state icon="comment" title="No comments yet" message="Your comments will appear here." />
         @endforelse
     </div>
 @endsection

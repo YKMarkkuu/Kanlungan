@@ -7,9 +7,6 @@
     <div class="stack">
         <header class="cm-header">
             <h1>Community</h1>
-            <div class="cm-header__actions">
-                <a href="{{ route('search') }}" class="cm-icon-btn" aria-label="Search">@include('components.icon', ['name' => 'search'])</a>
-            </div>
         </header>
 
         @if (session('status'))
@@ -39,10 +36,7 @@
             @forelse ($posts as $post)
                 @include('components.post-card', ['post' => $post, 'showReportStatus' => false])
             @empty
-                <div class="card cm-empty">
-                    <p><strong>No posts here yet.</strong></p>
-                    <p class="text-small text-muted">Be the first to post in this category.</p>
-                </div>
+                <x-empty-state icon="home" title="It's quiet here" message="Be the first to post on Kanlungan." />
             @endforelse
         </div>
 

@@ -9,7 +9,7 @@
         @forelse ($posts as $post)
             @include('components.post-card', ['post' => $post])
         @empty
-            <div class="card cm-empty"><p class="text-muted">You haven't posted yet.</p></div>
+            <x-empty-state icon="home" title="No posts yet" message="Your posts will appear here." />
         @endforelse
     </div>
 @endsection

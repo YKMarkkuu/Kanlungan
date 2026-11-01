@@ -13,12 +13,12 @@
         </form>
 
         @if ($q === '')
-            <div class="card cm-empty"><p class="text-muted">Type at least 2 letters to search posts.</p></div>
+            <x-empty-state icon="search" title="Search Kanlungan" message="Type at least 2 letters to search posts." />
         @else
             @forelse ($results as $post)
                 @include('components.post-card', ['post' => $post])
             @empty
-                <div class="card cm-empty"><p><strong>No posts found.</strong></p><p class="text-small text-muted">Try a different word.</p></div>
+                <x-empty-state icon="search" title="No posts found" message="Try a different word." />
             @endforelse
         @endif
     </div>
