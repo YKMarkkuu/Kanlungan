@@ -153,6 +153,24 @@ small,
     background-color: var(--text-muted);
 }
 
+/* ---------- Touch behaviour ---------- */
+
+html {
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Removes the ~300ms double-tap-zoom delay on tappable things. */
+a,
+button,
+input,
+select,
+textarea,
+label,
+summary,
+[role="button"] {
+    touch-action: manipulation;
+}
+
 /* ---------- Layout primitives ---------- */
 
 .page {

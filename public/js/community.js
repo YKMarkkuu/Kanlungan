@@ -1180,8 +1180,27 @@
         }, 5000);
     }
 
+    function readReactionCount(el) {
+        var count = el.querySelector('.cm-stat__count');
+
+        return count ? (parseInt(count.textContent, 10) || 0) : 0;
+    }
+
+    // Restarts the pop animation even if it is already running.
+    function popReaction(el) {
+        el.classList.remove('is-popping');
+        void el.offsetWidth; // force reflow so the animation restarts
+
+        el.classList.add('is-popping');
+        el.addEventListener('animationend', function done() {
+            el.classList.remove('is-popping');
+            el.removeEventListener('animationend', done);
+        });
+    }
+
     // Updates EVERY matching button on the page (the same post can appear
-    // twice, e.g. pinned + feed), not just the one that was tapped.
+    // twice, e.g. reports list + feed), not just the one that was tapped.
+    // Used for the optimistic update, the server confirmation and the rollback.
     function applyReaction(button, data) {
         var kind = button.hasAttribute('data-post-id') ? 'post' : 'comment';
         var id = button.getAttribute('data-' + kind + '-id');
@@ -1190,6 +1209,7 @@
 
         document.querySelectorAll(selector).forEach(function (el) {
             var count = el.querySelector('.cm-stat__count');
+            var wasActive = el.classList.contains('is-active');
 
             el.classList.toggle('is-active', !!data.is_active);
             el.setAttribute('aria-pressed', data.is_active ? 'true' : 'false');
@@ -1209,6 +1229,11 @@
                 var helpfulAction = data.is_active ? 'Remove helpful mark' : 'Mark helpful';
                 el.setAttribute('aria-label', helpfulAction + ', ' + data.new_count + ' helpful marks');
                 el.title = helpfulAction;
+            }
+
+            // Pop only on off -> on, so a server confirmation or a rollback never re-pops.
+            if (data.is_active && !wasActive) {
+                popReaction(el);
             }
         });
     }
@@ -1250,6 +1275,16 @@
             return;
         }
 
+        // What to restore if the request fails.
+        var wasActive = button.classList.contains('is-active');
+        var previous = { is_active: wasActive, new_count: readReactionCount(button) };
+
+        // What we show right now, before the server answers.
+        var optimistic = {
+            is_active: !wasActive,
+            new_count: Math.max(0, previous.new_count + (wasActive ? -1 : 1))
+        };
+
         var headers = {
             'Accept': 'application/json',
             'X-Requested-With': 'XMLHttpRequest'
@@ -1262,6 +1297,7 @@
 
         button.classList.add('is-loading');
         button.setAttribute('aria-busy', 'true');
+        applyReaction(button, optimistic);
 
         fetch(button.form.action, {
             method: 'POST',
@@ -1277,12 +1313,15 @@
             });
         }).then(function (res) {
             if (res.ok && res.data.status === 'success') {
+                // Snap to the server's real count (covers two people reacting at once).
                 applyReaction(button, res.data);
                 return;
             }
 
+            applyReaction(button, previous);
             handleReactFailure(res);
         }, function () {
+            applyReaction(button, previous);
             showReactError('Could not reach server.');
         }).then(function () {
             button.classList.remove('is-loading');

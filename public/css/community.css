@@ -462,6 +462,7 @@
     color: var(--text-muted);
     text-decoration: none;
     -webkit-tap-highlight-color: transparent;
+    transition: background-color 0.12s ease, color 0.12s ease;
 }
 
 .cm-nav__item .icon {
@@ -481,6 +482,7 @@
 }
 
 .cm-nav__item:active { background-color: var(--surface-hover); }
+.cm-nav__item.is-active:active { background-color: var(--accent-soft); }
 
 .cm-nav__item--create {
     flex: 0 0 56px;
@@ -745,10 +747,12 @@
 
 .cm-post {
     position: relative;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    transition: background-color 0.12s ease;
 }
 
-.cm-post:active { transform: scale(0.98); }
+.cm-post:has(.cm-post__link):active:not(:has(button:active, .cm-post__img:active, a:not(.cm-post__link):active)) {
+    background-color: var(--surface-hover);
+}
 
 .cm-post__link::after { content: ""; position: absolute; inset: 0; }
 .cm-post__foot, .cm-report-banner { position: relative; z-index: 1; }
@@ -1605,22 +1609,27 @@ a.cm-stat { color: inherit; text-decoration: none; display: inline-flex; align-i
     .cm-compose__preview-remove:hover { background-color: rgba(30, 30, 30, 0.7); }
 }
 
-/* ---------- AJAX reactions: loading pulse, count spacing, error notice ---------- */
+/* ---------- AJAX reactions: optimistic state, pop ---------- */
 
 .cm-react.is-loading,
 .cm-comment__action-btn.is-loading {
     pointer-events: none;
-    animation: cm-pulse 0.7s ease-in-out infinite;
 }
 
-@keyframes cm-pulse {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.55; transform: scale(0.94); }
+@keyframes cm-pop {
+    0%   { transform: scale(1); }
+    45%  { transform: scale(1.25); }
+    100% { transform: scale(1); }
+}
+
+.cm-react.is-popping,
+.cm-comment__action-btn.is-popping {
+    animation: cm-pop 0.22s ease-out;
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .cm-react.is-loading,
-    .cm-comment__action-btn.is-loading { animation: none; opacity: 0.6; }
+    .cm-react.is-popping,
+    .cm-comment__action-btn.is-popping { animation: none; }
 }
 
 .cm-comment__action-btn .cm-stat__count:not(:empty) {
@@ -2049,11 +2058,6 @@ a.cm-stat { color: inherit; text-decoration: none; display: inline-flex; align-i
     background: var(--surface-hover);
 }
 
-.cm-comment__actions .cm-comment__reaction[data-react="like"].is-active {
-    background: color-mix(in srgb, var(--danger) 12%, transparent);
-    color: var(--danger);
-}
-
 .cm-comment__actions .cm-comment__reaction--helpful.is-active {
     background: var(--accent-soft);
     color: var(--accent);
@@ -2399,9 +2403,6 @@ a.cm-stat { color: inherit; text-decoration: none; display: inline-flex; align-i
 .cm-comment__actions .cm-comment__action-btn:hover,
 .cm-view-replies-btn:hover { color: var(--text-primary); }
 .cm-view-replies-btn::before { content: none; }
-.cm-comment__actions .cm-comment__reaction[data-react="like"].is-active {
-    color: var(--danger);
-}
 .cm-comment__actions .cm-comment__reaction--helpful.is-active {
     color: var(--accent);
 }
@@ -2456,4 +2457,12 @@ a.cm-stat { color: inherit; text-decoration: none; display: inline-flex; align-i
         padding: 4px;
         font-size: 11px;
     }
+}
+
+/* ---------- One active colour for every reaction ---------- */
+
+.cm-react.is-active,
+.cm-comment__action-btn.is-active,
+.cm-comment__actions .cm-comment__reaction.is-active {
+    color: var(--accent);
 }
