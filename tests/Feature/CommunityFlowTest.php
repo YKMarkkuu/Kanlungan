@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Alert;
 use App\Models\Block;
 use App\Models\Comment;
 use App\Models\Post;
@@ -24,6 +25,38 @@ class CommunityFlowTest extends TestCase
     private function makePost(User $author): Post
     {
         return Post::create(['author_id' => $author->id, 'category' => 'Share', 'body' => 'hello there', 'is_anonymous' => true]);
+    }
+
+    public function test_notification_dropdown_and_unread_count_are_scoped_to_the_current_user(): void
+    {
+        [$viewer, $otherUser] = User::factory()->count(2)->create();
+
+        for ($i = 1; $i <= 6; $i++) {
+            Alert::create([
+                'user_id' => $viewer->id,
+                'kind' => 'notice',
+                'title' => 'Viewer notification '.$i,
+            ]);
+        }
+
+        Alert::create([
+            'user_id' => $otherUser->id,
+            'kind' => 'notice',
+            'title' => 'Other user notification',
+        ]);
+
+        $this->actingAs($viewer)->get('/alerts/unread-count')
+            ->assertOk()
+            ->assertJson(['count' => 6]);
+
+        $this->get('/feed')
+            ->assertOk()
+            ->assertSee('Viewer notification 6')
+            ->assertSee('Viewer notification 2')
+            ->assertDontSee('Viewer notification 1')
+            ->assertDontSee('Other user notification')
+            ->assertSee('data-notification-dropdown', false)
+            ->assertSee('Mark all as read');
     }
 
     public function test_blocking_an_author_keeps_content_visible_but_prevents_interactions(): void
@@ -339,6 +372,7 @@ class CommunityFlowTest extends TestCase
         $this->actingAs($viewer)->get("/post/{$post->id}")
             ->assertOk()
             ->assertSee('Helpful reply')
+            ->assertSee('data-react="like"', false)
             ->assertSee('data-react="helpful"', false)
             ->assertSee('data-comment-id="'.$reply->id.'"', false);
 
