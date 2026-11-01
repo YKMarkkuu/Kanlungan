@@ -1,9 +1,14 @@
-{{-- Red banner + vote controls under a reported post/comment. Expects $item (post/comment array). --}}
+{{-- Muted report status + vote controls under a reported post/comment. Expects $item (post/comment array). --}}
 @php($report = $item['report'])
 @if (! $item['mine'] && $report && ! ($report['is_reporter'] ?? false) && ! ($report['is_author'] ?? false))
     <div class="cm-report-banner" role="status">
         @if ($report['status'] === 'open')
-            <p class="text-small"><strong>Reported: {{ $report['category'] }}</strong></p>
+            <p class="text-small">
+                <span class="cm-report-banner__label">
+                    @include('components.icon', ['name' => 'flag'])
+                    <strong>Reported: {{ $report['category'] }}</strong>
+                </span>
+            </p>
             @if ($report['can_start'])
                 <form method="POST" action="{{ route('report.start', $report['id']) }}">
                     @csrf
@@ -16,7 +21,10 @@
             @endif
         @else
             <p class="text-small">
-                <strong>Vote: is this {{ $report['category'] }}?</strong>
+                <span class="cm-report-banner__label">
+                    @include('components.icon', ['name' => 'flag'])
+                    <strong>Vote: is this {{ $report['category'] }}?</strong>
+                </span>
                 <span class="text-muted">{{ $report['votes'] }}/{{ $report['quorum'] }} votes · ends in {{ $report['ends_in'] }}</span>
             </p>
             @if ($report['can_vote'])
