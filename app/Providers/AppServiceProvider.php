@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\URL;
 use RuntimeException;
 
 class AppServiceProvider extends ServiceProvider
@@ -20,6 +21,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        if (app()->environment('production')) {
+            URL::forceScheme('https');
+        }
+
         if (app()->environment('production') && in_array(config('mail.default'), ['log', 'array', 'failover'], true)) {
             throw new RuntimeException('Live OTPs would be written to disk. Configure a real mailer, such as SMTP or Resend, in production.');
         }
