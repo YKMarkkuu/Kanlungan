@@ -58,6 +58,7 @@ Route::middleware(['auth', EnforceRestrictions::class])->group(function () {
     // Search + alerts (design screens 3 and 7)
     Route::get('/search', [SearchController::class, 'index'])->name('search');
     Route::get('/alerts', [AlertController::class, 'index'])->name('alerts');
+    Route::get('/alerts/unread-count', [AlertController::class, 'unreadCount'])->name('alerts.unread-count');
     Route::post('/alerts/read-all', [AlertController::class, 'readAll'])->name('alerts.read-all');
     Route::get('/alerts/{id}', [AlertController::class, 'open'])->whereNumber('id')->name('alerts.open');
 

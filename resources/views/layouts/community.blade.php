@@ -23,6 +23,8 @@
 
     <div class="page cm-page">
         <main class="container cm-main @yield('main-class')">
+            @php($unread = auth()->check() ? \App\Models\Alert::unreadCount(auth()->id()) : 0)
+            @php($headerAlerts = auth()->check() ? \App\Models\Alert::where('user_id', auth()->id())->latest('id')->limit(5)->get() : collect())
             <header class="cm-header">
                 @if ($back !== '')
                     <a href="{{ $back === 'history' ? route('feed') : $back }}"
@@ -33,6 +35,9 @@
                     </a>
                 @endif
                 <a href="{{ route('feed') }}" class="cm-back">Kanlungan</a>
+                <div class="cm-header__actions">
+                    @include('components.notification-dropdown', ['alerts' => $headerAlerts, 'unread' => $unread])
+                </div>
             </header>
 
             @if ($errors->has('report'))
@@ -47,15 +52,14 @@
         {{-- Bottom nav (design screen 3). Pages that need the whole screen (create post, comment box)
              set @section('hide-nav'). @section('nav', 'home|search|alerts|me') highlights a tab. --}}
         @if (trim($__env->yieldContent('hide-nav')) === '')
-            @php($unread = auth()->check() ? \App\Models\Alert::unreadCount(auth()->id()) : 0)
             @php($tab = trim($__env->yieldContent('nav')))
             <nav class="cm-nav" aria-label="Main navigation">
                 <a href="{{ route('feed') }}" class="cm-nav__item {{ $tab === 'home' ? 'is-active' : '' }}" aria-label="Home" @if ($tab === 'home') aria-current="page" @endif>@include('components.icon', ['name' => 'home'])</a>
                 <a href="{{ route('search') }}" class="cm-nav__item {{ $tab === 'search' ? 'is-active' : '' }}" aria-label="Search" @if ($tab === 'search') aria-current="page" @endif>@include('components.icon', ['name' => 'search'])</a>
                 <a href="{{ route('post.create') }}" class="cm-nav__item cm-nav__item--create" aria-label="Create post">@include('components.icon', ['name' => 'plus'])</a>
-                <a href="{{ route('alerts') }}" class="cm-nav__item {{ $tab === 'alerts' ? 'is-active' : '' }}" aria-label="Activity{{ $unread > 0 ? ', '.$unread.' unread' : '' }}" @if ($tab === 'alerts') aria-current="page" @endif>
+                <a href="{{ route('alerts') }}" class="cm-nav__item {{ $tab === 'alerts' ? 'is-active' : '' }}" data-alert-activity-link aria-label="Activity{{ $unread > 0 ? ', '.$unread.' unread' : '' }}" @if ($tab === 'alerts') aria-current="page" @endif>
                     @include('components.icon', ['name' => 'bell'])
-                    @if ($unread > 0)<span class="cm-count" aria-hidden="true">{{ $unread }}</span>@endif
+                    <span class="cm-count" data-unread-badge aria-hidden="true" @if ($unread === 0) hidden @endif>{{ $unread }}</span>
                 </a>
                 <a href="{{ route('community.me') }}" class="cm-nav__item {{ $tab === 'me' ? 'is-active' : '' }}" aria-label="Profile" @if ($tab === 'me') aria-current="page" @endif><x-avatar :avatar-path="auth()->user()->avatar_path" :name="auth()->user()->display_name" class="cm-nav__avatar" /></a>
             </nav>

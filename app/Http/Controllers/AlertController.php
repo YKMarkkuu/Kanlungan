@@ -7,6 +7,7 @@ use App\Models\Comment;
 use App\Models\Post;
 use App\Models\Report;
 use App\Services\CommunityService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
@@ -114,5 +115,12 @@ class AlertController extends Controller
         Alert::where('user_id', $request->user()->id)->whereNull('read_at')->update(['read_at' => now()]);
 
         return back();
+    }
+
+    public function unreadCount(Request $request): JsonResponse
+    {
+        return response()->json([
+            'count' => Alert::unreadCount((int) $request->user()->id),
+        ]);
     }
 }

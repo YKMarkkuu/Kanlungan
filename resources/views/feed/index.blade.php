@@ -9,8 +9,6 @@
             <h1>Community</h1>
             <div class="cm-header__actions">
                 <a href="{{ route('search') }}" class="cm-icon-btn" aria-label="Search">@include('components.icon', ['name' => 'search'])</a>
-                @php($unread = \App\Models\Alert::unreadCount(auth()->id()))
-                <a href="{{ route('alerts') }}" class="cm-icon-btn cm-bell" aria-label="Alerts">@include('components.icon', ['name' => 'bell'])@if ($unread > 0)<span class="cm-count">{{ $unread }}</span>@endif</a>
             </div>
         </header>
 

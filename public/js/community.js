@@ -14,6 +14,76 @@
         });
     };
 
+    /* ---------- Notification dropdown and unread-count polling ---------- */
+
+    var notificationToggle = document.querySelector('[data-notification-toggle]');
+    var notificationDropdown = document.querySelector('[data-notification-dropdown]');
+
+    if (notificationToggle && notificationDropdown) {
+        function closeNotificationDropdown() {
+            notificationDropdown.classList.add('hidden');
+            notificationToggle.setAttribute('aria-expanded', 'false');
+        }
+
+        notificationToggle.addEventListener('click', function () {
+            var isOpen = notificationToggle.getAttribute('aria-expanded') === 'true';
+            notificationDropdown.classList.toggle('hidden', isOpen);
+            notificationToggle.setAttribute('aria-expanded', String(!isOpen));
+        });
+
+        document.addEventListener('click', function (event) {
+            if (!event.target.closest('[data-notification-menu]')) {
+                closeNotificationDropdown();
+            }
+        });
+
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') {
+                closeNotificationDropdown();
+            }
+        });
+
+        var unreadCountUrl = notificationToggle.getAttribute('data-unread-count-url');
+        var renderedUnreadCount = Number(notificationToggle.getAttribute('data-unread-count'));
+
+        window.setInterval(function () {
+            fetch(unreadCountUrl, {
+                method: 'GET',
+                credentials: 'same-origin',
+                cache: 'no-store',
+                headers: { 'Accept': 'application/json' }
+            }).then(function (response) {
+                if (!response.ok) {
+                    throw new Error('Unread notification polling failed with HTTP ' + response.status);
+                }
+
+                return response.json();
+            }).then(function (data) {
+                var nextCount = Number(data.count);
+
+                if (!Number.isInteger(nextCount) || nextCount < 0 || nextCount === renderedUnreadCount) {
+                    return;
+                }
+
+                renderedUnreadCount = nextCount;
+                notificationToggle.setAttribute('data-unread-count', String(nextCount));
+                notificationToggle.setAttribute('aria-label', 'Notifications' + (nextCount > 0 ? ', ' + nextCount + ' unread' : ''));
+
+                document.querySelectorAll('[data-unread-badge]').forEach(function (badge) {
+                    badge.textContent = String(nextCount);
+                    badge.hidden = nextCount === 0;
+                });
+
+                var activityLink = document.querySelector('[data-alert-activity-link]');
+                if (activityLink) {
+                    activityLink.setAttribute('aria-label', 'Activity' + (nextCount > 0 ? ', ' + nextCount + ' unread' : ''));
+                }
+            }).catch(function (error) {
+                console.error(error);
+            });
+        }, 30000);
+    }
+
     /* ---------- Profile avatar preview and crop ---------- */
 
     document.querySelectorAll('[data-profile-edit-toggle]').forEach(function (toggle) {
