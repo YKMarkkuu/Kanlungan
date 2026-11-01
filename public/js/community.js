@@ -14,6 +14,227 @@
         });
     };
 
+    /* ---------- Profile avatar preview and crop ---------- */
+
+    document.querySelectorAll('[data-profile-edit-toggle]').forEach(function (toggle) {
+        toggle.addEventListener('click', function () {
+            var form = document.getElementById(toggle.getAttribute('aria-controls'));
+
+            if (!form) {
+                return;
+            }
+
+            var isExpanded = toggle.getAttribute('aria-expanded') === 'true';
+            toggle.setAttribute('aria-expanded', String(!isExpanded));
+            form.hidden = isExpanded;
+
+            if (!isExpanded) {
+                var nameInput = form.querySelector('input');
+                if (nameInput) {
+                    nameInput.focus();
+                }
+                form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        });
+    });
+
+    var avatarForm = document.querySelector('[data-avatar-upload]');
+
+    if (avatarForm) {
+        var avatarInput = avatarForm.querySelector('[data-avatar-input]');
+        var avatarChoose = avatarForm.querySelector('[data-avatar-choose]');
+        var avatarModal = document.querySelector('[data-avatar-crop]');
+        var avatarPreview = avatarModal.querySelector('[data-avatar-preview]');
+        var avatarError = avatarModal.querySelector('[data-avatar-error]');
+        var avatarSave = avatarModal.querySelector('[data-avatar-save]');
+        var avatarCancel = avatarModal.querySelectorAll('[data-avatar-cancel]');
+        var avatarObjectUrl = null;
+        var avatarCropper = null;
+        var avatarOpener = null;
+
+        function showAvatarError(message) {
+            avatarError.textContent = message;
+            avatarError.hidden = false;
+        }
+
+        function destroyAvatarCropper() {
+            if (avatarCropper) {
+                avatarCropper.destroy();
+                avatarCropper = null;
+            }
+        }
+
+        function closeAvatarModal() {
+            avatarModal.hidden = true;
+            document.body.classList.remove('cm-no-scroll');
+            destroyAvatarCropper();
+
+            if (avatarObjectUrl) {
+                URL.revokeObjectURL(avatarObjectUrl);
+                avatarObjectUrl = null;
+            }
+
+            avatarPreview.onload = null;
+            avatarPreview.onerror = null;
+            avatarPreview.removeAttribute('src');
+            avatarError.hidden = true;
+            avatarError.textContent = '';
+            avatarSave.disabled = false;
+            avatarSave.textContent = 'Save Avatar';
+
+            if (avatarOpener) {
+                avatarOpener.focus();
+            }
+        }
+
+        avatarChoose.addEventListener('click', function () {
+            avatarOpener = avatarChoose;
+            avatarInput.click();
+        });
+
+        avatarInput.addEventListener('change', function () {
+            if (!avatarInput.files || !avatarInput.files[0]) {
+                return;
+            }
+
+            destroyAvatarCropper();
+            if (avatarObjectUrl) {
+                URL.revokeObjectURL(avatarObjectUrl);
+                avatarObjectUrl = null;
+            }
+
+            avatarError.hidden = true;
+            avatarError.textContent = '';
+            avatarSave.disabled = true;
+            avatarSave.textContent = 'Save Avatar';
+            avatarModal.hidden = false;
+            document.body.classList.add('cm-no-scroll');
+            avatarModal.querySelector('.cm-avatar-crop__actions [data-avatar-cancel]').focus();
+
+            if (typeof window.Cropper !== 'function') {
+                showAvatarError('The photo editor could not be loaded. Refresh the page and try again.');
+                return;
+            }
+
+            try {
+                avatarObjectUrl = URL.createObjectURL(avatarInput.files[0]);
+            } catch (error) {
+                showAvatarError('Could not open this image. Please choose another photo.');
+                return;
+            }
+
+            avatarPreview.onload = function () {
+                try {
+                    avatarCropper = new window.Cropper(avatarPreview, {
+                        aspectRatio: 1,
+                        viewMode: 1,
+                        dragMode: 'move',
+                        guides: false,
+                        center: true,
+                        highlight: false,
+                        background: false,
+                        autoCropArea: 1,
+                        cropBoxResizable: false,
+                        toggleDragModeOnDblclick: false,
+                        responsive: true,
+                        zoomOnTouch: true,
+                        zoomOnWheel: false,
+                        ready: function () {
+                            avatarSave.disabled = false;
+                        }
+                    });
+                } catch (error) {
+                    showAvatarError('Could not prepare this image for cropping. Please choose another photo.');
+                }
+            };
+            avatarPreview.onerror = function () {
+                showAvatarError('This image could not be previewed. Choose a different image.');
+            };
+            avatarPreview.src = avatarObjectUrl;
+        });
+
+        avatarCancel.forEach(function (button) {
+            button.addEventListener('click', function () {
+                closeAvatarModal();
+            });
+        });
+
+        avatarSave.addEventListener('click', function () {
+            if (!avatarCropper || !avatarInput.files[0] || avatarSave.disabled) {
+                return;
+            }
+
+            avatarSave.disabled = true;
+            avatarError.hidden = true;
+            avatarError.textContent = '';
+            avatarSave.textContent = 'Uploading…';
+
+            try {
+                var canvas = avatarCropper.getCroppedCanvas({
+                    width: 150,
+                    height: 150,
+                    imageSmoothingEnabled: true,
+                    imageSmoothingQuality: 'high'
+                });
+
+                if (!canvas) {
+                    throw new Error('Could not crop this image. Please try again.');
+                }
+
+                canvas.toBlob(function (blob) {
+                    if (!blob) {
+                        showAvatarError('Could not prepare this image. Please try again.');
+                        avatarSave.disabled = false;
+                        avatarSave.textContent = 'Save Avatar';
+                        return;
+                    }
+
+                    var formData = new FormData(avatarForm);
+                    formData.set('avatar', blob, 'avatar.jpg');
+
+                    fetch(avatarForm.action, {
+                        method: 'POST',
+                        body: formData,
+                        credentials: 'same-origin',
+                        headers: { Accept: 'application/json' }
+                    }).then(function (response) {
+                        if (response.ok) {
+                            window.location.reload();
+                            return;
+                        }
+
+                        return response.json().then(function (payload) {
+                            var message = payload.errors && payload.errors.avatar
+                                ? payload.errors.avatar[0]
+                                : payload.message;
+                            throw new Error(message || 'Avatar upload failed. Please try again.');
+                        }, function () {
+                            throw new Error('Avatar upload failed (HTTP ' + response.status + '). Please try again.');
+                        });
+                    }).catch(function (error) {
+                        showAvatarError(error.message || 'Avatar upload failed. Please try again.');
+                        avatarSave.disabled = false;
+                        avatarSave.textContent = 'Save Avatar';
+                    });
+                }, 'image/jpeg', 0.9);
+            } catch (error) {
+                showAvatarError(error.message || 'Could not prepare this image. Please try again.');
+                avatarSave.disabled = false;
+                avatarSave.textContent = 'Save Avatar';
+            }
+        });
+
+        avatarForm.addEventListener('submit', function (event) {
+            event.preventDefault();
+        });
+
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && !avatarModal.hidden) {
+                closeAvatarModal();
+            }
+        });
+    }
+
     /* ---------- Context-aware card menus ---------- */
 
     function closeMoreMenus(except) {

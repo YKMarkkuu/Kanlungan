@@ -3,34 +3,65 @@
 @section('title', 'Me · Kanlungan')
 @section('nav', 'me')
 
+@section('head')
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css">
+@endsection
+
+@section('scripts')
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js" defer></script>
+@endsection
+
 @section('content')
     <div class="stack cm-profile">
         <header class="cm-header"><h1>Me</h1></header>
 
-        <div class="card stack">
-            <div class="cm-me__who">
-                <x-avatar :avatar-path="$user->avatar_path" :name="$display_name" class="cm-avatar--lg" />
-                <strong>Display name: {{ $display_name }}</strong>
+        <section class="card cm-profile-header" aria-label="Profile">
+            <x-avatar :avatar-path="$user->avatar_path" :name="$display_name" class="cm-avatar--xl" />
+            <div class="cm-profile-header__details">
+                <h2>{{ $display_name }}</h2>
+                <button type="button" class="btn btn--outline" data-profile-edit-toggle
+                        aria-expanded="{{ $errors->has('display_name') ? 'true' : 'false' }}"
+                        aria-controls="profile-name-form">Edit</button>
             </div>
+        </section>
 
-            <form method="POST" action="{{ route('profile.avatar') }}" class="stack" enctype="multipart/form-data">
+        <section class="card cm-profile-settings stack" aria-labelledby="profile-settings-title">
+            <h2 id="profile-settings-title">Profile Settings</h2>
+            <form method="POST" action="{{ route('profile.avatar') }}" class="cm-avatar-upload"
+                  enctype="multipart/form-data" data-avatar-upload>
                 @csrf
-                <label class="text-small text-muted" for="avatar">Profile picture</label>
-                <input class="input" type="file" id="avatar" name="avatar" accept="image/jpeg,image/png,image/webp" required>
+                <input class="cm-visually-hidden" type="file" id="avatar" name="avatar"
+                       accept="image/jpeg,image/png,image/webp" required data-avatar-input>
                 @error('avatar') <p class="field__error">{{ $message }}</p> @enderror
-                <button type="submit" class="btn btn--outline">Change Avatar</button>
+                <button type="button" class="btn btn--outline" data-avatar-choose>Change Avatar</button>
             </form>
 
-            <details class="cm-edit-name">
-                <summary class="link-btn">Edit name</summary>
-                <form method="POST" action="{{ route('community.me.name') }}" class="stack">
-                    @csrf
-                    <label class="text-small text-muted" for="display_name">Shown only on posts and comments where you turn anonymous off. Leave empty to stay Anonymous.</label>
-                    <input class="input" type="text" id="display_name" name="display_name" value="{{ $display_name === 'Anonymous' ? '' : $display_name }}" maxlength="40" placeholder="Anonymous">
-                    @error('display_name') <p class="field__error">{{ $message }}</p> @enderror
-                    <button type="submit" class="btn btn--primary">Save name</button>
-                </form>
-            </details>
+            <form method="POST" action="{{ route('community.me.name') }}"
+                  class="stack cm-profile-name-form" id="profile-name-form"
+                  @if (! $errors->has('display_name')) hidden @endif>
+                @csrf
+                <label class="text-small text-muted" for="display_name">Shown only on posts and comments where you turn anonymous off. Leave empty to stay Anonymous.</label>
+                <input class="input" type="text" id="display_name" name="display_name" value="{{ old('display_name', $display_name === 'Anonymous' ? '' : $display_name) }}" maxlength="40" placeholder="Anonymous">
+                @error('display_name') <p class="field__error">{{ $message }}</p> @enderror
+                <button type="submit" class="btn btn--primary">Save name</button>
+            </form>
+        </section>
+
+        <div class="cm-avatar-crop" id="avatar-crop" role="dialog" aria-modal="true"
+             aria-labelledby="avatar-crop-title" hidden data-avatar-crop>
+            <button type="button" class="cm-avatar-crop__backdrop" aria-label="Cancel avatar crop" data-avatar-cancel></button>
+            <section class="cm-avatar-crop__panel">
+                <h2 id="avatar-crop-title">Position your photo</h2>
+                <p class="text-small text-muted">Drag to position and pinch to zoom, then save your profile picture.</p>
+                <div class="cm-avatar-crop__stage">
+                    <img src="" alt="Avatar crop preview" data-avatar-preview>
+                </div>
+                <p class="field__error" role="alert" aria-live="polite" data-avatar-error hidden></p>
+                <div class="cm-avatar-crop__actions">
+                    <button type="button" class="btn btn--outline" data-avatar-cancel>Cancel</button>
+                    <button type="button" class="btn btn--primary" data-avatar-save>Save Avatar</button>
+                </div>
+            </section>
         </div>
 
         <div class="card cm-points">

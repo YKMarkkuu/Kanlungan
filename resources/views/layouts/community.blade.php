@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="{{ asset('css/base.css') }}">
     <link rel="stylesheet" href="{{ asset('css/components.css') }}">
     <link rel="stylesheet" href="{{ asset('css/community.css') }}">
+    @yield('head')
 </head>
 <body>
     {{-- Mobile back button is opt-in per page:
@@ -62,6 +63,7 @@
     </div>
 
     @include('components.report-sheet')
+    @yield('scripts')
 
     {{-- Photo lightbox. community.js fills the <img> and toggles [hidden]. --}}
     <div class="cm-lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Photo viewer" hidden>

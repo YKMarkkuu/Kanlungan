@@ -243,7 +243,11 @@ class CommunityFlowTest extends TestCase
 
         $this->actingAs($author)->get('/me')
             ->assertOk()
-            ->assertSee(asset($avatarPath));
+            ->assertSee(asset($avatarPath))
+            ->assertSee('Position your photo')
+            ->assertSee('Drag to position and pinch to zoom')
+            ->assertSee('cropper.min.js')
+            ->assertDontSee('avatar-crop-x');
 
         @unlink(public_path($avatarPath));
     }

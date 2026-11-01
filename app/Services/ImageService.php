@@ -88,13 +88,20 @@ class ImageService
         $image = $this->applyOrientation($image, $path, (string) $file->getMimeType());
         $width = imagesx($image);
         $height = imagesy($image);
+        if ($width < 1 || $height < 1) {
+            imagedestroy($image);
+
+            throw ValidationException::withMessages(['avatar' => 'That image has invalid dimensions.']);
+        }
+
+        // Crop to the largest centered square before resizing, preserving the cover ratio.
         $side = min($width, $height);
         $sourceX = (int) floor(($width - $side) / 2);
         $sourceY = (int) floor(($height - $side) / 2);
         $canvas = imagecreatetruecolor(self::AVATAR_SIZE, self::AVATAR_SIZE);
         imagefill($canvas, 0, 0, imagecolorallocate($canvas, 255, 255, 255));
 
-        imagecopyresampled(
+        $resampled = imagecopyresampled(
             $canvas,
             $image,
             0,
@@ -106,6 +113,13 @@ class ImageService
             $side,
             $side,
         );
+
+        if (! $resampled) {
+            imagedestroy($image);
+            imagedestroy($canvas);
+
+            throw new RuntimeException('Failed to resize the uploaded avatar.');
+        }
 
         $directory = public_path('uploads/avatars');
 
