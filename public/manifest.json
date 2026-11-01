@@ -1,0 +1,25 @@
+{
+    "name": "Kanlungan",
+    "short_name": "Kanlungan",
+    "description": "A verified, anonymous-optional safe space for OLFU Pampanga students.",
+    "start_url": "/",
+    "scope": "/",
+    "display": "standalone",
+    "orientation": "portrait",
+    "background_color": "#f5f3ee",
+    "theme_color": "#1a6b4a",
+    "icons": [
+        {
+            "src": "/images/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "/images/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any"
+        }
+    ]
+}

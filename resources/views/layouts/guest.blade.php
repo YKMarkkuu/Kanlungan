@@ -6,6 +6,13 @@
     <meta name="theme-color" content="#1a6b4a">
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
+    {{-- PWA --}}
+    <link rel="manifest" href="{{ asset('manifest.json') }}">
+    <link rel="apple-touch-icon" href="{{ asset('images/icon-192.png') }}">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Kanlungan">
+
     <title>@yield('title', 'Kanlungan')</title>
 
     <link rel="stylesheet" href="{{ asset('css/base.css') }}">
@@ -22,5 +29,14 @@
     </div>
 
     @yield('scripts')
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function () {
+                navigator.serviceWorker.register('/sw.js').catch(function (error) {
+                    console.error('Service worker registration failed:', error);
+                });
+            });
+        }
+    </script>
 </body>
 </html>
