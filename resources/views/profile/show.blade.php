@@ -75,7 +75,7 @@
                     <form method="POST" action="{{ route('block.destroy', $blockedUser->pivot->id) }}" class="cm-settings-item-form">
                         @csrf
                         <button type="submit" class="cm-settings-item cm-settings-item--row">
-                            <span>{{ $blockedUser->display_name ?: 'Anonymous account' }}</span>
+                            <span>Blocked on {{ $blockedUser->pivot->created_at->format('M j, Y') }}</span>
                             <span class="cm-settings-item--danger">Unblock</span>
                         </button>
                     </form>

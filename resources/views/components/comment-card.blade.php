@@ -5,7 +5,7 @@
 @php($repliesId = 'comment-replies-'.$comment['id'])
 
 <div class="cm-comment-wrapper {{ $reply ? 'cm-comment-wrapper--reply' : '' }}">
-    <div class="cm-comment {{ $reply ? 'cm-comment--reply' : '' }} {{ $comment['report'] ? 'cm-reported' : '' }} {{ $comment['removed'] ? 'cm-comment--removed' : '' }}" id="comment-{{ $comment['id'] }}">
+    <div class="cm-comment {{ $reply ? 'cm-comment--reply' : '' }} {{ ($comment['report'] && ! $comment['mine']) ? 'cm-reported' : '' }} {{ $comment['removed'] ? 'cm-comment--removed' : '' }}" id="comment-{{ $comment['id'] }}">
         <div class="cm-avatar" aria-hidden="true"></div>
         <div class="cm-comment__content">
             <div class="cm-comment__bubble">
@@ -21,7 +21,9 @@
             </div>
 
             @unless ($comment['removed'])
-                @include('components.report-banner', ['item' => $comment])
+                @if (! $comment['mine'])
+                    @include('components.report-banner', ['item' => $comment])
+                @endif
 
                 <div class="cm-comment__actions">
                     @if ($comment['mine'])

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Block;
 use App\Models\Comment;
 use App\Models\Post;
 use App\Models\Reaction;
@@ -15,9 +16,7 @@ use Illuminate\Validation\Rule;
 
 class PostController extends Controller
 {
-    public function __construct(private CommunityService $community, private ImageService $images)
-    {
-    }
+    public function __construct(private CommunityService $community, private ImageService $images) {}
 
     public function create()
     {
@@ -82,6 +81,11 @@ class PostController extends Controller
     public function comment(Request $request, int $id): RedirectResponse|JsonResponse
     {
         $post = Post::findOrFail($id);
+        abort_if(
+            Block::where('blocker_id', $request->user()->id)->where('blocked_id', $post->author_id)->exists(),
+            403,
+            'You have blocked this user.'
+        );
 
         $data = $request->validate([
             'body' => ['required', 'string', 'min:1', 'max:1000'],
@@ -124,6 +128,12 @@ class PostController extends Controller
     public function likePost(Request $request, int $id): RedirectResponse|JsonResponse
     {
         $post = Post::findOrFail($id);
+        abort_if(
+            Block::where('blocker_id', $request->user()->id)->where('blocked_id', $post->author_id)->exists(),
+            403,
+            'You have blocked this user.'
+        );
+
         $active = $this->community->toggleReaction($request->user()->id, $post, Reaction::LIKE);
 
         return $this->reactionResponse($request, $post, Reaction::LIKE, $active);
@@ -132,6 +142,12 @@ class PostController extends Controller
     public function likeComment(Request $request, int $id, int $commentId): RedirectResponse|JsonResponse
     {
         $comment = Comment::where('post_id', $id)->findOrFail($commentId);
+        abort_if(
+            Block::where('blocker_id', $request->user()->id)->where('blocked_id', $comment->author_id)->exists(),
+            403,
+            'You have blocked this user.'
+        );
+
         $active = $this->community->toggleReaction($request->user()->id, $comment, Reaction::LIKE);
 
         return $this->reactionResponse($request, $comment, Reaction::LIKE, $active);
@@ -140,6 +156,12 @@ class PostController extends Controller
     public function helpfulComment(Request $request, int $id, int $commentId): RedirectResponse|JsonResponse
     {
         $comment = Comment::where('post_id', $id)->findOrFail($commentId);
+        abort_if(
+            Block::where('blocker_id', $request->user()->id)->where('blocked_id', $comment->author_id)->exists(),
+            403,
+            'You have blocked this user.'
+        );
+
         $active = $this->community->toggleReaction($request->user()->id, $comment, Reaction::HELPFUL);
 
         return $this->reactionResponse($request, $comment, Reaction::HELPFUL, $active);

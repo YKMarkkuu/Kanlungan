@@ -1,6 +1,6 @@
 {{-- Red banner + vote controls under a reported post/comment. Expects $item (post/comment array). --}}
 @php($report = $item['report'])
-@if ($report)
+@if (! $item['mine'] && $report && ! ($report['is_reporter'] ?? false) && ! ($report['is_author'] ?? false))
     <div class="cm-report-banner" role="status">
         @if ($report['status'] === 'open')
             <p class="text-small"><strong>Reported: {{ $report['category'] }}</strong></p>

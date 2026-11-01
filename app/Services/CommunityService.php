@@ -2,8 +2,8 @@
 
 namespace App\Services;
 
-use App\Models\Comment;
 use App\Models\Block;
+use App\Models\Comment;
 use App\Models\Post;
 use App\Models\Reaction;
 use App\Models\Report;
@@ -11,7 +11,6 @@ use App\Support\Alias;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -33,8 +32,7 @@ class CommunityService
         private ReportService $reports,
         private PointService $points,
         private AlertService $alerts,
-    ) {
-    }
+    ) {}
 
     /**
      * Reported posts/comments that are still open or being voted on come first for EVERY student
@@ -46,9 +44,13 @@ class CommunityService
     {
         $this->reports->sweepDue();
 
-        $active = Report::query()->where('status', '!=', Report::RESOLVED)->get(['reportable_type', 'reportable_id']);
-        $pinnedPostIds = $active->where('reportable_type', Post::class)->pluck('reportable_id')->all();
-        $pinnedCommentIds = $active->where('reportable_type', Comment::class)->pluck('reportable_id')->all();
+        $activeTargets = Report::query()
+            ->where('status', '!=', Report::RESOLVED)
+            ->select('reportable_type', 'reportable_id')
+            ->distinct()
+            ->get();
+        $pinnedPostIds = $activeTargets->where('reportable_type', Post::class)->pluck('reportable_id')->all();
+        $pinnedCommentIds = $activeTargets->where('reportable_type', Comment::class)->pluck('reportable_id')->all();
 
         $pinnedPosts = $pinnedPostIds === [] ? collect() : $this->postQuery($viewerId)->whereIn('id', $pinnedPostIds)->whereNull('removed_at')->get();
         $pinnedComments = $pinnedCommentIds === [] ? collect() : $this->commentQuery($viewerId)
@@ -59,6 +61,14 @@ class CommunityService
         $postStates = $this->reports->statesFor($viewerId, Post::class, $pinnedPosts);
         $commentStates = $this->reports->statesFor($viewerId, Comment::class, $pinnedComments);
 
+        $reporterPostIds = $pinnedPosts
+            ->filter(fn (Post $post) => $postStates[$post->id]['is_reporter'] ?? false)
+            ->pluck('id')
+            ->all();
+        $pinnedPosts = $pinnedPosts->reject(fn (Post $post) => ($postStates[$post->id]['is_reporter'] ?? false) || ($postStates[$post->id]['is_author'] ?? false));
+        $pinnedComments = $pinnedComments->reject(fn (Comment $comment) => ($commentStates[$comment->id]['is_reporter'] ?? false) || ($commentStates[$comment->id]['is_author'] ?? false));
+        $visiblePinnedPostIds = $pinnedPosts->pluck('id')->all();
+
         $pinned = $pinnedPosts->map(fn (Post $p) => ['kind' => 'post', 'item' => $this->postArray($p, $viewerId, $postStates[$p->id] ?? null)])
             ->concat($pinnedComments->map(fn (Comment $c) => ['kind' => 'comment', 'item' => $this->commentArray($c, $viewerId, $commentStates[$c->id] ?? null)]))
             ->sortBy(fn (array $row) => [($row['item']['report']['status'] ?? null) === Report::VOTING ? 0 : 1, -$row['item']['id']])
@@ -67,7 +77,7 @@ class CommunityService
 
         $posts = $this->postQuery($viewerId)
             ->whereNull('removed_at')
-            ->whereNotIn('id', $pinnedPostIds)
+            ->whereNotIn('id', array_merge($visiblePinnedPostIds, $reporterPostIds))
             ->when($category !== null && in_array($category, Post::CATEGORIES, true), fn ($q) => $q->where('category', $category))
             ->latest()
             ->latest('id')
@@ -141,7 +151,12 @@ class CommunityService
      */
     public function comments(int $viewerId, int $postId): array
     {
-        $models = $this->commentQuery($viewerId)->where('post_id', $postId)->orderBy('created_at')->orderBy('id')->get();
+        $models = $this->commentQuery($viewerId)
+            ->where('post_id', $postId)
+            ->whereNotIn('author_id', $this->blockedIds($viewerId))
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get();
 
         $states = $this->reports->statesFor($viewerId, Comment::class, $models);
 
@@ -182,7 +197,6 @@ class CommunityService
     {
         return Comment::query()
             ->where('post_id', $postId)
-            ->whereNotIn('author_id', $this->blockedIds($viewerId))
             ->count();
     }
 
@@ -199,6 +213,10 @@ class CommunityService
 
     public function addComment(int $authorId, Post $post, string $body, bool $anonymous, ?int $parentId): Comment
     {
+        if (in_array((int) $post->author_id, $this->blockedIds($authorId), true)) {
+            throw ValidationException::withMessages(['report' => 'You cannot interact with this user.']);
+        }
+
         if ($post->removed_at !== null) {
             throw ValidationException::withMessages(['report' => 'This post was removed, so it cannot get new comments.']);
         }
@@ -253,6 +271,10 @@ class CommunityService
 
         if ($authorId === $userId) {
             throw ValidationException::withMessages(['report' => 'You cannot react to your own content.']);
+        }
+
+        if (in_array($authorId, $this->blockedIds($userId), true)) {
+            throw ValidationException::withMessages(['report' => 'You cannot interact with this user.']);
         }
 
         $existing = $reactable->reactions()->where('user_id', $userId)->where('type', $type)->first();
@@ -341,13 +363,10 @@ class CommunityService
 
     private function postQuery(int $viewerId)
     {
-        $blocked = $this->blockedIds($viewerId);
-
         return Post::query()
-            ->whereNotIn('author_id', $blocked)
             ->with('author:id,display_name')
             ->withCount([
-                'comments' => fn ($q) => $q->whereNotIn('author_id', $blocked),
+                'comments',
                 'reactions as likes_count' => fn ($q) => $q->where('type', Reaction::LIKE),
             ])
             ->withExists([
@@ -358,7 +377,6 @@ class CommunityService
     private function commentQuery(int $viewerId)
     {
         return Comment::query()
-            ->whereNotIn('author_id', $this->blockedIds($viewerId))
             ->with('author:id,display_name')
             ->withCount([
                 'reactions as likes_count' => fn ($q) => $q->where('type', Reaction::LIKE),

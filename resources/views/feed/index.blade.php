@@ -25,10 +25,11 @@
             @endforeach
         </nav>
 
-        @if (count($pinned) > 0)
+        @php($visiblePinned = array_values(array_filter($pinned, fn ($row) => ! $row['item']['mine'])))
+        @if (count($visiblePinned) > 0)
             <section class="stack" aria-label="Reported, needs your vote">
                 <p class="text-small cm-pinned-title"><strong>Reported · needs your vote</strong></p>
-                @foreach ($pinned as $row)
+                @foreach ($visiblePinned as $row)
                     @if ($row['kind'] === 'post')
                         @include('components.post-card', ['post' => $row['item']])
                     @else
@@ -43,7 +44,7 @@
         @forelse ($posts as $post)
             @include('components.post-card', ['post' => $post])
         @empty
-            @if (count($pinned) === 0)
+            @if (count($visiblePinned) === 0)
                 <div class="card cm-empty">
                     <p><strong>No posts here yet.</strong></p>
                     <p class="text-small text-muted">Be the first to post in this category.</p>

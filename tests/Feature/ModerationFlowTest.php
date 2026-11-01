@@ -59,6 +59,81 @@ class ModerationFlowTest extends TestCase
             ->assertSee('cm-reported');
     }
 
+    public function test_reporters_do_not_see_their_reported_posts_and_authors_do_not_see_the_banner(): void
+    {
+        [$author, $reporter, $viewer] = User::factory()->count(3)->create();
+        $post = $this->makePost($author, 'ONE-COPY-OF-REPORTED-POST');
+        $comment = Comment::create([
+            'post_id' => $post->id,
+            'author_id' => $author->id,
+            'body' => 'AUTHOR-REPORTED-COMMENT',
+            'is_anonymous' => true,
+        ]);
+
+        Report::create([
+            'reporter_id' => $reporter->id,
+            'reportable_type' => Post::class,
+            'reportable_id' => $post->id,
+            'category' => 'Spam',
+            'status' => Report::OPEN,
+        ]);
+        Report::create([
+            'reporter_id' => $reporter->id,
+            'reportable_type' => Comment::class,
+            'reportable_id' => $comment->id,
+            'category' => 'Spam',
+            'status' => Report::OPEN,
+        ]);
+
+        $reporterResponse = $this->actingAs($reporter)->get('/feed')->assertOk()
+            ->assertDontSee('ONE-COPY-OF-REPORTED-POST')
+            ->assertDontSee('cm-report-banner');
+
+        $authorResponse = $this->actingAs($author)->get('/feed')->assertOk()
+            ->assertSee('ONE-COPY-OF-REPORTED-POST')
+            ->assertDontSee('Reported · needs your vote')
+            ->assertDontSee('cm-report-banner');
+        $threadResponse = $this->actingAs($author)->get("/post/{$post->id}")
+            ->assertOk()
+            ->assertSee('ONE-COPY-OF-REPORTED-POST')
+            ->assertSee('AUTHOR-REPORTED-COMMENT')
+            ->assertDontSee('cm-report-banner');
+        preg_match('/<div class="cm-comment[^"]*"[^>]*id="comment-'.$comment->id.'"/', $threadResponse->getContent(), $commentWrapper);
+        $this->assertNotEmpty($commentWrapper);
+        $this->assertStringNotContainsString('cm-reported', $commentWrapper[0]);
+
+        $viewerResponse = $this->actingAs($viewer)->get('/feed')->assertOk()
+            ->assertSee('ONE-COPY-OF-REPORTED-POST')
+            ->assertSee('cm-report-banner');
+
+        $this->assertSame(0, substr_count($reporterResponse->getContent(), 'id="post-'.$post->id.'"'));
+        $this->assertSame(1, substr_count($authorResponse->getContent(), 'id="post-'.$post->id.'"'));
+        $this->assertSame(1, substr_count($viewerResponse->getContent(), 'id="post-'.$post->id.'"'));
+    }
+
+    public function test_multiple_active_reports_do_not_duplicate_a_post_in_the_feed(): void
+    {
+        [$author, $reporterOne, $reporterTwo, $viewer] = User::factory()->count(4)->create();
+        $post = $this->makePost($author, 'MULTI-REPORTED-POST');
+
+        foreach ([$reporterOne, $reporterTwo] as $reporter) {
+            Report::create([
+                'reporter_id' => $reporter->id,
+                'reportable_type' => Post::class,
+                'reportable_id' => $post->id,
+                'category' => 'Spam',
+                'status' => Report::OPEN,
+            ]);
+        }
+
+        $response = $this->actingAs($viewer)->get('/feed')
+            ->assertOk()
+            ->assertSee('MULTI-REPORTED-POST')
+            ->assertSee('cm-report-banner');
+
+        $this->assertSame(1, substr_count($response->getContent(), 'id="post-'.$post->id.'"'));
+    }
+
     public function test_agree_removes_content_and_refers_to_guidance_when_many_agree(): void
     {
         $author = User::factory()->create(['points' => 20]);

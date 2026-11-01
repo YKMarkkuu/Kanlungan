@@ -37,7 +37,7 @@ class BlockController extends Controller
             // A concurrent request created the same pair first; the unique index did its job.
         }
 
-        $message = 'Blocked. You will no longer see their posts or comments.';
+        $message = 'Blocked. You can still see their posts and comments, but you cannot interact with them.';
 
         // Blocking from a post page would send you back to a 404, so go to the feed.
         if ($type === 'comment') {
