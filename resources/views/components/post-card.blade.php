@@ -12,7 +12,7 @@
 @else
 <article class="card cm-post {{ $showReportStatus && $post['report'] ? 'cm-reported' : '' }}" id="post-{{ $post['id'] }}">
     <div class="cm-post__head">
-        <div class="cm-avatar" aria-hidden="true"></div>
+        <x-avatar :avatar-path="$post['avatar_path'] ?? null" :name="$post['author_alias']" />
         <strong class="cm-post__author">{{ $post['author_alias'] }}</strong>
         <span class="text-small text-muted" title="{{ $post['created_at']->format('F j, Y, g:i A') }}">{{ $post['time_ago'] }}</span>
     </div>

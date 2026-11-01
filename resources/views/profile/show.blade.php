@@ -9,9 +9,17 @@
 
         <div class="card stack">
             <div class="cm-me__who">
-                <div class="cm-avatar cm-avatar--lg" aria-hidden="true"></div>
+                <x-avatar :avatar-path="$user->avatar_path" :name="$display_name" class="cm-avatar--lg" />
                 <strong>Display name: {{ $display_name }}</strong>
             </div>
+
+            <form method="POST" action="{{ route('profile.avatar') }}" class="stack" enctype="multipart/form-data">
+                @csrf
+                <label class="text-small text-muted" for="avatar">Profile picture</label>
+                <input class="input" type="file" id="avatar" name="avatar" accept="image/jpeg,image/png,image/webp" required>
+                @error('avatar') <p class="field__error">{{ $message }}</p> @enderror
+                <button type="submit" class="btn btn--outline">Change Avatar</button>
+            </form>
 
             <details class="cm-edit-name">
                 <summary class="link-btn">Edit name</summary>

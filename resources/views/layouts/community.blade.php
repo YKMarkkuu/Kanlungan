@@ -56,7 +56,7 @@
                     @include('components.icon', ['name' => 'bell'])
                     @if ($unread > 0)<span class="cm-count" aria-hidden="true">{{ $unread }}</span>@endif
                 </a>
-                <a href="{{ route('community.me') }}" class="cm-nav__item {{ $tab === 'me' ? 'is-active' : '' }}" aria-label="Profile" @if ($tab === 'me') aria-current="page" @endif>@include('components.icon', ['name' => 'user'])</a>
+                <a href="{{ route('community.me') }}" class="cm-nav__item {{ $tab === 'me' ? 'is-active' : '' }}" aria-label="Profile" @if ($tab === 'me') aria-current="page" @endif><x-avatar :avatar-path="auth()->user()->avatar_path" :name="auth()->user()->display_name" class="cm-nav__avatar" /></a>
             </nav>
         @endif
     </div>

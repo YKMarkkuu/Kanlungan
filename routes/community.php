@@ -50,6 +50,7 @@ Route::middleware(['auth', EnforceRestrictions::class])->group(function () {
     // Profile: points + history
     Route::get('/me', [ProfileController::class, 'show'])->name('community.me');
 
+    Route::post('/profile/avatar', [ProfileController::class, 'updateAvatar'])->middleware('throttle:10,1')->name('profile.avatar');
     Route::get('/me/posts', [ProfileController::class, 'posts'])->name('community.me.posts');
     Route::get('/me/comments', [ProfileController::class, 'comments'])->name('community.me.comments');
     Route::post('/me/name', [ProfileController::class, 'updateName'])->name('community.me.name');

@@ -16,6 +16,8 @@ class ImageService
 {
     private const MAX_WIDTH = 1280;
 
+    private const AVATAR_SIZE = 150;
+
     public function storePostPhoto(UploadedFile $file): string
     {
         if (! extension_loaded('gd')) {
@@ -23,6 +25,11 @@ class ImageService
         }
 
         $path = $file->getRealPath();
+
+        if ($path === false) {
+            throw ValidationException::withMessages(['photo' => 'That file could not be read.']);
+        }
+
         $image = @imagecreatefromstring((string) file_get_contents($path));
 
         if ($image === false) {
@@ -58,6 +65,89 @@ class ImageService
         imagejpeg($canvas, $directory.DIRECTORY_SEPARATOR.$name, 82);
 
         return 'uploads/posts/'.$name;
+    }
+
+    public function storeAvatar(UploadedFile $file): string
+    {
+        if (! extension_loaded('gd')) {
+            throw ValidationException::withMessages(['avatar' => 'Photo uploads are not available on this server (PHP GD is missing).']);
+        }
+
+        $path = $file->getRealPath();
+
+        if ($path === false) {
+            throw ValidationException::withMessages(['avatar' => 'That file could not be read.']);
+        }
+
+        $image = @imagecreatefromstring((string) file_get_contents($path));
+
+        if ($image === false) {
+            throw ValidationException::withMessages(['avatar' => 'That file is not a valid image.']);
+        }
+
+        $image = $this->applyOrientation($image, $path, (string) $file->getMimeType());
+        $width = imagesx($image);
+        $height = imagesy($image);
+        $side = min($width, $height);
+        $sourceX = (int) floor(($width - $side) / 2);
+        $sourceY = (int) floor(($height - $side) / 2);
+        $canvas = imagecreatetruecolor(self::AVATAR_SIZE, self::AVATAR_SIZE);
+        imagefill($canvas, 0, 0, imagecolorallocate($canvas, 255, 255, 255));
+
+        imagecopyresampled(
+            $canvas,
+            $image,
+            0,
+            0,
+            $sourceX,
+            $sourceY,
+            self::AVATAR_SIZE,
+            self::AVATAR_SIZE,
+            $side,
+            $side,
+        );
+
+        $directory = public_path('uploads/avatars');
+
+        if (! is_dir($directory) && ! mkdir($directory, 0775, true) && ! is_dir($directory)) {
+            imagedestroy($image);
+            imagedestroy($canvas);
+
+            throw new RuntimeException('Failed to create the avatar uploads directory.');
+        }
+
+        $name = Str::uuid()->toString().'.jpg';
+        $destination = $directory.DIRECTORY_SEPARATOR.$name;
+        $saved = imagejpeg($canvas, $destination, 82);
+        imagedestroy($image);
+        imagedestroy($canvas);
+
+        if (! $saved) {
+            throw new RuntimeException('Failed to save the uploaded avatar.');
+        }
+
+        return 'uploads/avatars/'.$name;
+    }
+
+    public function deleteAvatar(?string $path): void
+    {
+        if ($path === null || $path === '') {
+            return;
+        }
+
+        if (! preg_match('~\Auploads/avatars/[A-Za-z0-9-]+\.jpg\z~D', $path)) {
+            throw new RuntimeException('Cannot delete an avatar outside the avatar uploads directory.');
+        }
+
+        $file = public_path($path);
+
+        if (! is_file($file)) {
+            return;
+        }
+
+        if (! unlink($file)) {
+            throw new RuntimeException("Failed to delete avatar: {$path}");
+        }
     }
 
     public function deletePhoto(?string $path): void

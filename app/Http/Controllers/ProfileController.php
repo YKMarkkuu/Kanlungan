@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\PointLog;
 use App\Services\CommunityService;
+use App\Services\ImageService;
 use App\Services\PointService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -25,6 +26,7 @@ class ProfileController extends Controller
         $points = (int) ($user->points ?? 0);
 
         return view('profile.show', [
+            'user' => $user,
             'role' => (string) $user->role,
             'display_name' => trim((string) $user->display_name) !== '' ? $user->display_name : 'Anonymous',
             'points' => $points,
@@ -32,6 +34,22 @@ class ProfileController extends Controller
             'history' => $history,
             'blockedUsers' => $user->blockedUsers()->orderByPivot('created_at', 'desc')->get(),
         ]);
+    }
+
+    public function updateAvatar(Request $request, ImageService $images): RedirectResponse
+    {
+        $data = $request->validate([
+            'avatar' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
+        ]);
+
+        $user = $request->user();
+        $oldAvatarPath = $user->avatar_path;
+        $newAvatarPath = $images->storeAvatar($data['avatar']);
+
+        $user->forceFill(['avatar_path' => $newAvatarPath])->save();
+        $images->deleteAvatar($oldAvatarPath);
+
+        return back()->with('report_status', 'Profile picture updated.');
     }
 
     public function updateName(Request $request): RedirectResponse

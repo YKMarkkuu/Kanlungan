@@ -387,7 +387,7 @@ class CommunityService
     private function postQuery(int $viewerId)
     {
         return Post::query()
-            ->with('author:id,display_name')
+            ->with('author:id,display_name,avatar_path')
             ->withCount([
                 'comments',
                 'reactions as likes_count' => fn ($q) => $q->where('type', Reaction::LIKE),
@@ -400,7 +400,7 @@ class CommunityService
     private function commentQuery(int $viewerId)
     {
         return Comment::query()
-            ->with('author:id,display_name')
+            ->with('author:id,display_name,avatar_path')
             ->withCount([
                 'reactions as likes_count' => fn ($q) => $q->where('type', Reaction::LIKE),
                 'reactions as helpful_count' => fn ($q) => $q->where('type', Reaction::HELPFUL),
@@ -418,6 +418,7 @@ class CommunityService
 
         return [
             'id' => $post->id,
+            'avatar_path' => ! $post->is_anonymous && ! $removed ? $post->author?->avatar_path : null,
             'author_alias' => $this->displayName($post->is_anonymous, $post->author?->display_name, $post->author_id, $post->id),
             'is_anonymous' => $post->is_anonymous,
             'category' => $post->category,
@@ -443,6 +444,7 @@ class CommunityService
             'id' => $comment->id,
             'post_id' => $comment->post_id,
             'parent_id' => $comment->parent_id,
+            'avatar_path' => ! $comment->is_anonymous && ! $removed ? $comment->author?->avatar_path : null,
             'created_at' => $comment->created_at,
             'post_excerpt' => $comment->relationLoaded('post') && $comment->post !== null ? Str::limit($comment->post->body, 70) : null,
             'author_alias' => $this->displayName($comment->is_anonymous, $comment->author?->display_name, $comment->author_id, $comment->post_id),

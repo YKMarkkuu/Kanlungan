@@ -1,7 +1,7 @@
 {{-- A reported COMMENT shown in the feed's "Needs your vote" section. Expects $comment. --}}
 <article class="card cm-post cm-reported" id="comment-{{ $comment['id'] }}">
     <div class="cm-post__head">
-        <div class="cm-avatar" aria-hidden="true"></div>
+        <x-avatar :avatar-path="$comment['avatar_path'] ?? null" :name="$comment['author_alias']" />
         <strong class="cm-post__author">{{ $comment['author_alias'] }}</strong>
         <span class="chip">Comment</span>
         <span class="text-small text-muted">{{ $comment['time_ago'] }}</span>

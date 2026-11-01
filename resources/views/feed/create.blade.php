@@ -16,7 +16,7 @@
 
         <div class="card cm-compose">
             <div class="cm-compose__row">
-                <div class="cm-avatar cm-compose__avatar" aria-hidden="true"></div>
+                <x-avatar :avatar-path="auth()->user()->avatar_path" :name="auth()->user()->display_name" class="cm-compose__avatar" />
 
                 <div class="cm-compose__main">
                     <p class="text-small text-muted cm-compose__as" id="anon-hint">You'll appear under a random alias (like {{ $alias }}) in this thread</p>

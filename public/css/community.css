@@ -150,11 +150,29 @@
 }
 
 .cm-avatar {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
     width: 28px;
     height: 28px;
+    overflow: hidden;
     border-radius: 50%;
     background-color: var(--surface-hover);
     border: 1px solid var(--border-default);
+}
+
+.cm-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+.cm-avatar > .icon {
+    width: 65%;
+    height: 65%;
+    color: var(--text-muted);
 }
 
 .cm-post__body {
@@ -679,6 +697,13 @@ a.cm-stat { color: inherit; text-decoration: none; display: inline-flex; align-i
 
 .cm-me__who { display: flex; align-items: center; gap: 12px; }
 .cm-avatar--lg { width: 48px; height: 48px; }
+.cm-nav__avatar {
+    width: 24px;
+    height: 24px;
+    border: 0;
+    background: transparent;
+}
+.cm-nav__avatar > .icon { width: 22px; height: 22px; }
 .cm-points__top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .cm-meter { height: 8px; border-radius: 4px; background: var(--surface-hover); overflow: hidden; margin-bottom: 8px; }
 .cm-meter__fill { height: 100%; background: var(--accent); }

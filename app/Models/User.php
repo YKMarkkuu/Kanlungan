@@ -24,6 +24,7 @@ class User extends Authenticatable
         'student_id',
         'campus',
         'display_name',
+        'avatar_path',
         'verified_at',
     ];
 

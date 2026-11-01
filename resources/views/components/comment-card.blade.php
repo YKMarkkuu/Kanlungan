@@ -7,7 +7,7 @@
 
 <div class="cm-comment-wrapper {{ $reply ? 'cm-comment-wrapper--reply' : '' }}">
     <div class="cm-comment {{ $reply ? 'cm-comment--reply' : '' }} {{ ($comment['report'] && ! $comment['mine']) ? 'cm-reported' : '' }} {{ $comment['removed'] ? 'cm-comment--removed' : '' }}" id="comment-{{ $comment['id'] }}">
-        <div class="cm-avatar" aria-hidden="true"></div>
+        <x-avatar :avatar-path="$comment['avatar_path'] ?? null" :name="$comment['author_alias']" />
         <div class="cm-comment__content">
             <div class="cm-comment__bubble">
                 @unless ($comment['removed'])

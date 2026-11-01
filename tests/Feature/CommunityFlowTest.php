@@ -7,8 +7,10 @@ use App\Models\Comment;
 use App\Models\Post;
 use App\Models\Report;
 use App\Models\User;
+use App\Services\CommunityService;
 use App\Services\ReportService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 
 /**
@@ -209,6 +211,41 @@ class CommunityFlowTest extends TestCase
             ]);
         $this->assertSame(1, Post::count());
         $response->assertSessionHas('status', 'Posted.');
+    }
+
+    public function test_avatar_upload_is_cropped_and_hidden_on_anonymous_content(): void
+    {
+        $author = User::factory()->create();
+
+        $this->actingAs($author)->post(route('profile.avatar'), [
+            'avatar' => UploadedFile::fake()->image('profile.png', 300, 200),
+        ])->assertRedirect()
+            ->assertSessionHas('report_status', 'Profile picture updated.');
+
+        $avatarPath = $author->fresh()->avatar_path;
+        $this->assertNotNull($avatarPath);
+        $this->assertFileExists(public_path($avatarPath));
+        $imageSize = getimagesize(public_path($avatarPath));
+        $this->assertSame([150, 150], [$imageSize[0], $imageSize[1]]);
+
+        $anonymousPost = $this->makePost($author);
+        $namedPost = Post::create([
+            'author_id' => $author->id,
+            'category' => 'Share',
+            'body' => 'Named avatar post',
+            'is_anonymous' => false,
+        ]);
+        $feed = app(CommunityService::class)->feed((int) $author->id);
+        $postsById = collect($feed['posts'])->keyBy('id');
+
+        $this->assertNull($postsById[$anonymousPost->id]['avatar_path']);
+        $this->assertSame($avatarPath, $postsById[$namedPost->id]['avatar_path']);
+
+        $this->actingAs($author)->get('/me')
+            ->assertOk()
+            ->assertSee(asset($avatarPath));
+
+        @unlink(public_path($avatarPath));
     }
 
     public function test_json_comment_creation_returns_renderable_card_and_count(): void
