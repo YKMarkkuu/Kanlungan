@@ -2,9 +2,11 @@
 
 namespace App\Providers;
 
-use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Support\ServiceProvider;
 use RuntimeException;
+use Symfony\Component\Mailer\Bridge\Brevo\Transport\BrevoApiTransport;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -21,6 +23,16 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Mail::extend('brevo', function (array $config) {
+            $apiKey = $config['key'] ?? config('services.brevo.key');
+
+            if (! is_string($apiKey) || trim($apiKey) === '') {
+                throw new RuntimeException('Set BREVO_API_KEY to use the Brevo mailer.');
+            }
+
+            return new BrevoApiTransport($apiKey);
+        });
+
         if (app()->environment('production')) {
             URL::forceScheme('https');
         }

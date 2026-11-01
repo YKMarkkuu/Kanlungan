@@ -14,6 +14,7 @@
                     @unless ($comment['removed'])
                         <strong class="cm-comment__author">{{ $comment['author_alias'] }}</strong>
                     @endunless
+                    {{-- The only timestamp for this comment. --}}
                     <time class="cm-comment__time" title="{{ $comment['created_at']->format('F j, Y, g:i A') }}">{{ $comment['time_ago'] }}</time>
                     @if ($canAccept)
                         <form method="POST" action="{{ route('comment.accept', [$comment['post_id'], $comment['id']]) }}">
@@ -43,8 +44,9 @@
                 @endif
 
                 <div class="cm-comment__actions">
+                    {{-- Left: Reply + View N replies, inline. --}}
                     <div class="cm-comment__actions-left">
-                        <button type="button" class="cm-comment__action-btn" data-reply-to="{{ $comment['id'] }}" data-reply-name="{{ $comment['author_alias'] }}" aria-label="Reply to comment" title="Reply to comment">Reply</button>
+                        <button type="button" class="cm-comment__action-btn" data-reply-to="{{ $comment['id'] }}" data-reply-name="{{ $comment['author_alias'] }}" aria-label="Reply to comment">Reply</button>
                         @if (count($replies) > 0)
                             <button type="button"
                                     class="cm-view-replies-btn"
@@ -55,21 +57,21 @@
                                 View {{ count($replies) }} {{ \Illuminate\Support\Str::plural('reply', count($replies)) }}
                             </button>
                         @endif
-                        <span class="cm-comment__time" title="{{ $comment['created_at']->format('F j, Y, g:i A') }}">{{ $comment['time_ago'] }}</span>
                     </div>
 
+                    {{-- Right: Like (icon + count) and the "..." menu. --}}
                     <div class="cm-comment__actions-right">
                         @if ($comment['mine'])
-                            <span class="cm-comment__action-count cm-comment__action-btn" aria-label="{{ $comment['likes'] }} likes" title="{{ $comment['likes'] }} likes">
-                                @include('components.icon', ['name' => 'like'])
-                                <span>Like</span><span class="cm-stat__count" data-hide-zero>{{ $comment['likes'] ?: '' }}</span>
-                            </span>
                             @if ($comment['helpful_count'])
                                 <span class="cm-comment__action-count" aria-label="{{ $comment['helpful_count'] }} helpful marks" title="{{ $comment['helpful_count'] }} helpful marks">
                                     @include('components.icon', ['name' => 'star'])
-                                    <span>Helpful</span><span class="cm-stat__count">{{ $comment['helpful_count'] }}</span>
+                                    <span class="cm-stat__count">{{ $comment['helpful_count'] }}</span>
                                 </span>
                             @endif
+                            <span class="cm-comment__action-count" aria-label="{{ $comment['likes'] }} likes" title="{{ $comment['likes'] }} likes">
+                                @include('components.icon', ['name' => 'like'])
+                                <span class="cm-stat__count">{{ $comment['likes'] }}</span>
+                            </span>
                         @else
                             <form method="POST" action="{{ route('comment.like', [$comment['post_id'], $comment['id']]) }}">
                                 @csrf
@@ -81,20 +83,7 @@
                                         aria-label="{{ $comment['liked'] ? 'Unlike' : 'Like' }} comment, {{ $comment['likes'] }} likes"
                                         title="{{ $comment['liked'] ? 'Unlike comment' : 'Like comment' }}">
                                     @include('components.icon', ['name' => 'like'])
-                                    <span>Like</span><span class="cm-stat__count" data-hide-zero>{{ $comment['likes'] ?: '' }}</span>
-                                </button>
-                            </form>
-                            <form method="POST" action="{{ route('comment.helpful', [$comment['post_id'], $comment['id']]) }}">
-                                @csrf
-                                <button type="submit"
-                                        class="cm-comment__action-btn cm-comment__reaction cm-comment__reaction--helpful {{ $comment['helpful_marked'] ? 'is-active' : '' }}"
-                                        data-react="helpful"
-                                        data-comment-id="{{ $comment['id'] }}"
-                                        aria-pressed="{{ $comment['helpful_marked'] ? 'true' : 'false' }}"
-                                        aria-label="{{ $comment['helpful_marked'] ? 'Remove helpful mark' : 'Mark helpful' }}, {{ $comment['helpful_count'] }} helpful marks"
-                                        title="{{ $comment['helpful_marked'] ? 'Remove helpful mark' : 'Mark helpful' }}">
-                                    @include('components.icon', ['name' => 'star'])
-                                    <span>Helpful</span><span class="cm-stat__count" data-hide-zero>{{ $comment['helpful_count'] ?: '' }}</span>
+                                    <span class="cm-stat__count" data-hide-zero>{{ $comment['likes'] ?: '' }}</span>
                                 </button>
                             </form>
                         @endif
@@ -115,6 +104,20 @@
                                         <button type="submit" class="cm-menu-item text-danger">Delete</button>
                                     </form>
                                 @else
+                                    <form method="POST" action="{{ route('comment.helpful', [$comment['post_id'], $comment['id']]) }}">
+                                        @csrf
+                                        <button type="submit"
+                                                class="cm-menu-item cm-comment__reaction {{ $comment['helpful_marked'] ? 'is-active' : '' }}"
+                                                data-react="helpful"
+                                                data-comment-id="{{ $comment['id'] }}"
+                                                aria-pressed="{{ $comment['helpful_marked'] ? 'true' : 'false' }}"
+                                                aria-label="{{ $comment['helpful_marked'] ? 'Remove helpful mark' : 'Mark helpful' }}, {{ $comment['helpful_count'] }} helpful marks"
+                                                title="{{ $comment['helpful_marked'] ? 'Remove helpful mark' : 'Mark helpful' }}">
+                                            @include('components.icon', ['name' => 'star'])
+                                            <span>Helpful</span>
+                                            <span class="cm-stat__count" data-hide-zero>{{ $comment['helpful_count'] ?: '' }}</span>
+                                        </button>
+                                    </form>
                                     @include('components.report-flag', ['type' => 'comment', 'item' => $comment, 'showLabel' => true])
                                     @include('components.block-button', ['type' => 'comment', 'item' => $comment, 'menuItem' => true])
                                 @endif
@@ -133,5 +136,4 @@
             @endforeach
         </div>
     @endif
-
 </div>

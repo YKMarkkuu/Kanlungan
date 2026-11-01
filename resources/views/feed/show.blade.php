@@ -25,7 +25,7 @@
         </div>
     </div>
 
-    {{-- Comment box pinned to the bottom (mockup screen 5). --}}
+    {{-- Comment box pinned to the bottom (mockup screen 5): [anon] [input] [send]. --}}
     <form method="POST" action="{{ route('post.comment', $post['id']) }}" class="cm-composer" id="comment-form" data-alias="{{ $alias }}">
         @csrf
         <input type="hidden" name="parent_id" id="parent-id" value="">
@@ -38,11 +38,13 @@
         @error('body') <p class="field__error">{{ $message }}</p> @enderror
         <p class="field__error" id="comment-error" role="alert" aria-live="polite" hidden></p>
 
+        {{-- community.js rewrites this text when the anonymous toggle changes. Keep the id. --}}
+        <p class="cm-composer__label" id="comment-hint">Commenting as {{ $alias }}</p>
+
         <div class="cm-composer__row">
-            <input class="input" type="text" name="body" id="comment-body" placeholder="Write a comment…" maxlength="1000" autocomplete="off" required>
             <button type="button" class="cm-icon-btn cm-anon-toggle is-on" id="anon-toggle" aria-pressed="true" aria-label="Comment anonymously" title="Anonymous">@include('components.icon', ['name' => 'mask'])</button>
-            <button type="submit" class="btn btn--primary cm-send">Send</button>
+            <input class="input" type="text" name="body" id="comment-body" placeholder="Write a comment…" maxlength="1000" autocomplete="off" required>
+            <button type="submit" class="btn btn--primary cm-composer__send" aria-label="Send comment" title="Send">@include('components.icon', ['name' => 'send'])</button>
         </div>
-        <p class="text-small text-muted" id="comment-hint">Commenting as {{ $alias }}</p>
     </form>
 @endsection

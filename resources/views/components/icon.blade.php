@@ -19,5 +19,6 @@
         @case('shield') <path d="M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6l-7-3Z" /> @break
         @case('scale') <path d="M12 3v18M5 6h14M7 6l-4 7h8L7 6Zm10 0-4 7h8l-4-7ZM8 21h8" /> @break
         @case('check') <path d="m5 12.5 4.5 4.5L19 7.5" /> @break
+        @case('send') <path d="M22 2 11 13" /><path d="M22 2 15 22l-4-9-9-4 20-7Z" /> @break
     @endswitch
 </svg>

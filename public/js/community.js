@@ -1057,7 +1057,8 @@
             container.className = 'cm-replies-container';
             container.id = containerId;
 
-            wrapper.appendChild(toggleBtn);
+            var actionsLeft = parentEl.querySelector('.cm-comment__actions-left');
+            (actionsLeft || wrapper).appendChild(toggleBtn);
             wrapper.appendChild(container);
 
             return container;
@@ -1122,11 +1123,11 @@
 
             commentSending = true;
             showInlineError(commentError, '');
-            setSending(commentSubmit, 'Sending\u2026');
+            commentSubmit.disabled = true;
 
             sendForm(commentForm).then(function (res) {
                 commentSending = false;
-                clearSending(commentSubmit);
+                commentSubmit.disabled = false;
 
                 if (res.ok && res.data.status === 'success') {
                     insertComment(res.data);
