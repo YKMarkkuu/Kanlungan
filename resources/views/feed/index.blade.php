@@ -5,7 +5,8 @@
 
 @section('content')
     <div class="stack">
-        <header class="cm-header">
+        {{-- Visible on desktop, visually hidden on mobile (see .cm-feed-title). Keeps the page heading for screen readers. --}}
+        <header class="cm-header cm-feed-title">
             <h1>Community</h1>
         </header>
 
@@ -13,7 +14,7 @@
             <div class="card cm-notice" role="status" aria-live="polite">{{ session('status') }}</div>
         @endif
 
-        <nav class="cm-chips" aria-label="Filter posts">
+        <nav class="cm-chips cm-chips--sticky" aria-label="Filter posts">
             <a href="{{ route('feed') }}" class="chip {{ $active === null ? 'chip--active' : '' }}">All</a>
             @foreach ($categories as $category)
                 <a href="{{ route('feed', ['category' => $category]) }}" class="chip {{ $active === $category ? 'chip--active' : '' }}">{{ $category }}</a>
@@ -30,9 +31,7 @@
             <div class="cm-skeleton cm-skeleton--post"></div>
         </div>
 
-        <p class="text-small text-muted">Sort: Newest</p>
-
-        <div id="feed-posts">
+        <div id="feed-posts" class="cm-feed-list">
             @forelse ($posts as $post)
                 @include('components.post-card', ['post' => $post, 'showReportStatus' => false])
             @empty

@@ -10,14 +10,16 @@
         @endif
     </article>
 @else
-<article class="card cm-post {{ $showReportStatus && $post['report'] ? 'cm-reported' : '' }}" id="post-{{ $post['id'] }}">
+@php($reported = $showReportStatus && $post['report'])
+<article class="card cm-post {{ $reported ? 'cm-reported' : 'cm-post--flat' }}" id="post-{{ $post['id'] }}">
     <div class="cm-post__head">
         <x-avatar :avatar-path="$post['avatar_path'] ?? null" :name="$post['author_alias']" />
-        <strong class="cm-post__author">{{ $post['author_alias'] }}</strong>
-        <span class="text-small text-muted" title="{{ $post['created_at']->format('F j, Y, g:i A') }}">{{ $post['time_ago'] }}</span>
+        <div class="cm-post__meta">
+            <strong class="cm-post__author">{{ $post['author_alias'] }}</strong>
+            <time class="cm-post__time" datetime="{{ $post['created_at']->toIso8601String() }}" title="{{ $post['created_at']->format('F j, Y, g:i A') }}">{{ $post['time_ago'] }}</time>
+            <span class="chip--tag">{{ $post['category'] }}</span>
+        </div>
     </div>
-
-    <span class="chip">{{ $post['category'] }}</span>
 
     {{-- Feed cards clamp to 6 lines; the thread page ($link = false) shows everything. --}}
     <div class="cm-post__text" @if ($link) data-clamp-wrap @endif>
