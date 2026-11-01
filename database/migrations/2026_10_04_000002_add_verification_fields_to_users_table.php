@@ -10,11 +10,9 @@ return new class extends Migration
     /**
      * Run the migrations.
      *
-     * NOTE: MySQL DDL is non-transactional (each statement auto-commits), so
-     * ordering matters for safe rollback. The password change is deliberately
-     * the LAST statement in up() and the FIRST statement in down(). If it
-     * fails on the way down (e.g. NULL passwords exist), nothing else has been
-     * touched yet and the schema is left intact.
+     * The password change is deliberately the LAST statement in up() and the
+     * FIRST statement in down(). If rollback fails because NULL passwords
+     * exist, nothing else has been touched yet and the schema remains intact.
      */
     public function up(): void
     {
@@ -26,10 +24,12 @@ return new class extends Migration
         });
 
         // Auth is OTP-only (see docs/AUTH.md): no password is ever set or checked,
-        // so users.password must accept NULL. Raw SQL is used because ->change()
-        // requires doctrine/dbal on Laravel 10, which this project does not install.
-        // MySQL-specific by design.
-        DB::statement('ALTER TABLE `users` MODIFY `password` VARCHAR(255) NULL');
+        // so users.password must accept NULL. Raw SQL avoids requiring doctrine/dbal.
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement('ALTER TABLE users ALTER COLUMN password DROP NOT NULL');
+        } else {
+            DB::statement('ALTER TABLE `users` MODIFY `password` VARCHAR(255) NULL');
+        }
     }
 
     /**
@@ -43,16 +43,20 @@ return new class extends Migration
     {
         // Idempotent: only alter if the column is currently nullable.
         $column = DB::selectOne(
-            'SELECT IS_NULLABLE AS is_nullable
-             FROM information_schema.COLUMNS
-             WHERE TABLE_SCHEMA = DATABASE()
-               AND TABLE_NAME = ?
-               AND COLUMN_NAME = ?',
+            'SELECT is_nullable
+             FROM information_schema.columns
+             WHERE table_schema = current_schema()
+               AND table_name = ?
+               AND column_name = ?',
             ['users', 'password']
         );
 
-        if ($column !== null && $column->is_nullable === 'YES') {
-            DB::statement('ALTER TABLE `users` MODIFY `password` VARCHAR(255) NOT NULL');
+        if ($column !== null && strtoupper($column->is_nullable) === 'YES') {
+            if (DB::getDriverName() === 'pgsql') {
+                DB::statement('ALTER TABLE users ALTER COLUMN password SET NOT NULL');
+            } else {
+                DB::statement('ALTER TABLE `users` MODIFY `password` VARCHAR(255) NOT NULL');
+            }
         }
 
         if (Schema::hasColumn('users', 'student_id')) {
