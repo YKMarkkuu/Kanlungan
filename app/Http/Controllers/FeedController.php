@@ -16,7 +16,7 @@ class FeedController extends Controller
         $feed = $community->feed($request->user()->id, $active);
 
         return view('feed.index', [
-            'pinned' => $feed['pinned'],
+            'hasPendingReports' => $feed['hasPendingReports'],
             'posts' => $feed['posts'],
             'categories' => Post::CATEGORIES,
             'active' => $active,

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Report;
+use App\Services\CommunityService;
 use App\Services\ReportService;
 use App\Support\VoteTally;
 use Illuminate\Http\RedirectResponse;
@@ -11,8 +12,16 @@ use Illuminate\Validation\Rule;
 
 class ReportController extends Controller
 {
-    public function __construct(private ReportService $reports)
+    public function __construct(
+        private ReportService $reports,
+        private CommunityService $community,
+    ) {}
+
+    public function index(Request $request)
     {
+        return view('reports.index', [
+            'reports' => $this->community->reportsForVoting((int) $request->user()->id),
+        ]);
     }
 
     public function store(Request $request, string $type, int $id): RedirectResponse

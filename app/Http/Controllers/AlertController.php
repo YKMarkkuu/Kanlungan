@@ -3,12 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\Alert;
+use App\Services\CommunityService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
 class AlertController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, CommunityService $community)
     {
         $alerts = Alert::where('user_id', $request->user()->id)->latest()->latest('id')->limit(50)->get()
             ->map(fn (Alert $a) => [
@@ -20,7 +21,10 @@ class AlertController extends Controller
                 'time' => $a->created_at?->diffForHumans(null, \Carbon\CarbonInterface::DIFF_ABSOLUTE, true),
             ]);
 
-        return view('alerts.index', ['alerts' => $alerts]);
+        return view('alerts.index', [
+            'alerts' => $alerts,
+            'reportedItems' => $community->reportsForVoting((int) $request->user()->id),
+        ]);
     }
 
     /** Tap an alert: mark it read, then open the post (or the notice with the reason). */

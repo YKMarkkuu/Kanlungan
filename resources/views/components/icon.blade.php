@@ -1,8 +1,10 @@
 {{-- Inline SVG icons (no icon fonts, no emoji). Usage: @include('components.icon', ['name' => 'flag']) --}}
 <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
     @switch($name)
+        @case('home') <path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1V10Z" /> @break
         @case('search') <circle cx="11" cy="11" r="6.5" /><path d="m16 16 4 4" /> @break
         @case('bell') <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16Z" /><path d="M10 20.5h4" /> @break
+        @case('user') <circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /> @break
         @case('plus') <path d="M12 5v14M5 12h14" /> @break
         @case('back') <path d="m15 5-7 7 7 7" /> @break
         @case('close') <path d="M6 6l12 12M18 6 6 18" /> @break
@@ -14,6 +16,7 @@
         @case('mask') <path d="M3 9c3-1 6-1 9 0s6 1 9 0v3a4 4 0 0 1-4 4h-2.5L12 14l-1.5 2H8a4 4 0 0 1-4-4V9Z" /> @break
         @case('clip') <path d="m20 11-8.5 8.5a5 5 0 0 1-7-7L13 4a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L14 7" /> @break
         @case('shield') <path d="M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6l-7-3Z" /> @break
+        @case('scale') <path d="M12 3v18M5 6h14M7 6l-4 7h8L7 6Zm10 0-4 7h8l-4-7ZM8 21h8" /> @break
         @case('check') <path d="m5 12.5 4.5 4.5L19 7.5" /> @break
     @endswitch
 </svg>

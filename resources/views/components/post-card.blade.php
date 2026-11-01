@@ -1,5 +1,6 @@
 {{-- Feed post card. Expects $post (see docs/FRONTEND.md "Feed post"). $link = make the body a link to the thread. --}}
 @php($link = $link ?? true)
+@php($showReportStatus = $showReportStatus ?? true)
 @if ($post['removed'])
     <article class="card cm-post cm-post--removed" id="post-{{ $post['id'] }}">
         <p class="cm-post__body text-muted">{{ $post['body'] }}</p>
@@ -8,7 +9,7 @@
         @endif
     </article>
 @else
-<article class="card cm-post {{ $post['report'] ? 'cm-reported' : '' }}" id="post-{{ $post['id'] }}">
+<article class="card cm-post {{ $showReportStatus && $post['report'] ? 'cm-reported' : '' }}" id="post-{{ $post['id'] }}">
     <div class="cm-post__head">
         <div class="cm-avatar" aria-hidden="true"></div>
         <strong class="cm-post__author">{{ $post['author_alias'] }}</strong>
@@ -38,7 +39,9 @@
              loading="lazy">
     @endif
 
-    @include('components.report-banner', ['item' => $post])
+    @if ($showReportStatus)
+        @include('components.report-banner', ['item' => $post])
+    @endif
 
     <div class="cm-post__foot text-small text-muted">
         {{-- Authors cannot like their own post: no button, just the count. --}}

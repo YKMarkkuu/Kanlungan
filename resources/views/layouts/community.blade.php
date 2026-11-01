@@ -48,13 +48,15 @@
         @if (trim($__env->yieldContent('hide-nav')) === '')
             @php($unread = auth()->check() ? \App\Models\Alert::unreadCount(auth()->id()) : 0)
             @php($tab = trim($__env->yieldContent('nav')))
-            <nav class="cm-nav" aria-label="Main">
-                <a href="{{ route('feed') }}" class="cm-nav__item {{ $tab === 'home' ? 'is-active' : '' }}">Home</a>
-                <a href="{{ route('search') }}" class="cm-nav__item {{ $tab === 'search' ? 'is-active' : '' }}">Search</a>
-                <a href="{{ route('alerts') }}" class="cm-nav__item {{ $tab === 'alerts' ? 'is-active' : '' }}">Alerts
-                    @if ($unread > 0)<span class="cm-count" aria-label="{{ $unread }} unread">{{ $unread }}</span>@endif
+            <nav class="cm-nav" aria-label="Main navigation">
+                <a href="{{ route('feed') }}" class="cm-nav__item {{ $tab === 'home' ? 'is-active' : '' }}" aria-label="Home" @if ($tab === 'home') aria-current="page" @endif>@include('components.icon', ['name' => 'home'])</a>
+                <a href="{{ route('search') }}" class="cm-nav__item {{ $tab === 'search' ? 'is-active' : '' }}" aria-label="Search" @if ($tab === 'search') aria-current="page" @endif>@include('components.icon', ['name' => 'search'])</a>
+                <a href="{{ route('post.create') }}" class="cm-nav__item cm-nav__item--create" aria-label="Create post">@include('components.icon', ['name' => 'plus'])</a>
+                <a href="{{ route('alerts') }}" class="cm-nav__item {{ $tab === 'alerts' ? 'is-active' : '' }}" aria-label="Activity{{ $unread > 0 ? ', '.$unread.' unread' : '' }}" @if ($tab === 'alerts') aria-current="page" @endif>
+                    @include('components.icon', ['name' => 'bell'])
+                    @if ($unread > 0)<span class="cm-count" aria-hidden="true">{{ $unread }}</span>@endif
                 </a>
-                <a href="{{ route('community.me') }}" class="cm-nav__item {{ $tab === 'me' ? 'is-active' : '' }}">Me</a>
+                <a href="{{ route('community.me') }}" class="cm-nav__item {{ $tab === 'me' ? 'is-active' : '' }}" aria-label="Profile" @if ($tab === 'me') aria-current="page" @endif>@include('components.icon', ['name' => 'user'])</a>
             </nav>
         @endif
     </div>

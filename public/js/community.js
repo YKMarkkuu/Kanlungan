@@ -14,6 +14,57 @@
         });
     };
 
+    /* ---------- Activity tabs ---------- */
+
+    document.addEventListener('click', function (event) {
+        var tab = event.target.closest('[data-activity-tab]');
+
+        if (!tab) {
+            return;
+        }
+
+        var activity = tab.closest('[data-activity]');
+
+        if (!activity) {
+            return;
+        }
+
+        var selected = tab.getAttribute('data-activity-tab');
+
+        activity.querySelectorAll('[data-activity-tab]').forEach(function (item) {
+            var isSelected = item === tab;
+            item.classList.toggle('is-active', isSelected);
+            item.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+            item.setAttribute('tabindex', isSelected ? '0' : '-1');
+        });
+
+        activity.querySelectorAll('[data-activity-panel]').forEach(function (panel) {
+            panel.hidden = panel.getAttribute('data-activity-panel') !== selected;
+        });
+    });
+
+    document.addEventListener('keydown', function (event) {
+        var tab = event.target.closest('[data-activity-tab]');
+
+        if (!tab || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) {
+            return;
+        }
+
+        var activity = tab.closest('[data-activity]');
+        var tabs = activity ? Array.prototype.slice.call(activity.querySelectorAll('[data-activity-tab]')) : [];
+        var currentIndex = tabs.indexOf(tab);
+
+        if (tabs.length < 2 || currentIndex < 0) {
+            return;
+        }
+
+        event.preventDefault();
+        var direction = event.key === 'ArrowRight' ? 1 : -1;
+        var nextTab = tabs[(currentIndex + direction + tabs.length) % tabs.length];
+        nextTab.focus();
+        nextTab.click();
+    });
+
     /* ---------- Shared helpers for AJAX forms (composer) ---------- */
 
     // Sends a form as multipart FormData. Resolves to { ok, status, data } or

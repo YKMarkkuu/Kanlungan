@@ -43,7 +43,7 @@ class ModerationFlowTest extends TestCase
         return $report->fresh();
     }
 
-    public function test_reported_post_and_comment_are_pinned_to_the_top_for_other_students(): void
+    public function test_active_reports_are_available_on_reports_page_and_not_pinned_in_feed(): void
     {
         [$author, $reporter, $viewer] = User::factory()->count(3)->create();
         $old = $this->makePost($author, 'OLD-REPORTED-POST');
@@ -54,9 +54,28 @@ class ModerationFlowTest extends TestCase
         $this->actingAs($reporter)->post("/report/comment/{$comment->id}", ['category' => 'Harassment']);
 
         $this->actingAs($viewer)->get('/feed')->assertOk()
-            ->assertSeeInOrder(['Reported · needs your vote', 'OLD-REPORTED-POST', 'NEWER-NORMAL-POST'])
+            ->assertSee('There are active community reports waiting for a verdict.')
+            ->assertSee(route('reports.index'))
+            ->assertSeeInOrder(['NEWER-NORMAL-POST', 'OLD-REPORTED-POST'])
+            ->assertDontSee('Reported · needs your vote')
+            ->assertDontSee('cm-report-banner');
+
+        $this->actingAs($viewer)->get(route('reports.index'))->assertOk()
+            ->assertSee('Community Verdicts')
+            ->assertSee('Help keep Kanlungan safe.')
+            ->assertSee(route('reports.index'))
+            ->assertSee('Verdicts')
+            ->assertSee('OLD-REPORTED-POST')
             ->assertSee('REPORTED-COMMENT-TEXT')
-            ->assertSee('cm-reported');
+            ->assertSee('cm-reported')
+            ->assertSee('Start voting');
+
+        $this->actingAs($viewer)->get(route('alerts'))->assertOk()
+            ->assertSee('My Notifications')
+            ->assertSee('Community Verdicts')
+            ->assertSee('activity-panel-verdicts')
+            ->assertSee('OLD-REPORTED-POST')
+            ->assertSee('REPORTED-COMMENT-TEXT');
     }
 
     public function test_reporters_do_not_see_their_reported_posts_and_authors_do_not_see_the_banner(): void
@@ -104,7 +123,18 @@ class ModerationFlowTest extends TestCase
 
         $viewerResponse = $this->actingAs($viewer)->get('/feed')->assertOk()
             ->assertSee('ONE-COPY-OF-REPORTED-POST')
+            ->assertDontSee('cm-report-banner')
+            ->assertSee('Go to Reports');
+        $this->actingAs($viewer)->get(route('reports.index'))
+            ->assertOk()
+            ->assertSee('ONE-COPY-OF-REPORTED-POST')
             ->assertSee('cm-report-banner');
+        $this->actingAs($reporter)->get(route('reports.index'))
+            ->assertOk()
+            ->assertDontSee('ONE-COPY-OF-REPORTED-POST');
+        $this->actingAs($author)->get(route('reports.index'))
+            ->assertOk()
+            ->assertDontSee('ONE-COPY-OF-REPORTED-POST');
 
         $this->assertSame(0, substr_count($reporterResponse->getContent(), 'id="post-'.$post->id.'"'));
         $this->assertSame(1, substr_count($authorResponse->getContent(), 'id="post-'.$post->id.'"'));
@@ -129,9 +159,38 @@ class ModerationFlowTest extends TestCase
         $response = $this->actingAs($viewer)->get('/feed')
             ->assertOk()
             ->assertSee('MULTI-REPORTED-POST')
-            ->assertSee('cm-report-banner');
+            ->assertDontSee('cm-report-banner');
 
         $this->assertSame(1, substr_count($response->getContent(), 'id="post-'.$post->id.'"'));
+        $reportsResponse = $this->actingAs($viewer)->get(route('reports.index'))
+            ->assertOk()
+            ->assertSee('MULTI-REPORTED-POST');
+        $this->assertSame(1, substr_count($reportsResponse->getContent(), 'id="post-'.$post->id.'"'));
+    }
+
+    public function test_reports_page_excludes_reports_already_voted_on(): void
+    {
+        [$author, $reporter, $viewer] = User::factory()->count(3)->create();
+        $post = $this->makePost($author, 'ALREADY-VOTED-POST');
+        $report = Report::create([
+            'reporter_id' => $reporter->id,
+            'reportable_type' => Post::class,
+            'reportable_id' => $post->id,
+            'category' => 'Spam',
+            'status' => Report::VOTING,
+            'voting_started_at' => now(),
+            'voting_ends_at' => now()->addDay(),
+        ]);
+        ReportVote::create([
+            'report_id' => $report->id,
+            'voter_id' => $viewer->id,
+            'choice' => 'agree',
+        ]);
+
+        $this->actingAs($viewer)->get(route('reports.index'))
+            ->assertOk()
+            ->assertDontSee('ALREADY-VOTED-POST')
+            ->assertSee('No reports need your verdict right now.');
     }
 
     public function test_agree_removes_content_and_refers_to_guidance_when_many_agree(): void

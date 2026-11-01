@@ -34,62 +34,85 @@ class CommunityService
         private AlertService $alerts,
     ) {}
 
-    /**
-     * Reported posts/comments that are still open or being voted on come first for EVERY student
-     * ("pinned"), then the normal feed, newest first.
-     *
-     * @return array{pinned: array<int, array{kind: string, item: array<string, mixed>}>, posts: array<int, array<string, mixed>>}
-     */
+    /** @return array{hasPendingReports: bool, posts: array<int, array<string, mixed>>} */
     public function feed(int $viewerId, ?string $category = null): array
     {
         $this->reports->sweepDue();
 
-        $activeTargets = Report::query()
-            ->where('status', '!=', Report::RESOLVED)
-            ->select('reportable_type', 'reportable_id')
-            ->distinct()
-            ->get();
-        $pinnedPostIds = $activeTargets->where('reportable_type', Post::class)->pluck('reportable_id')->all();
-        $pinnedCommentIds = $activeTargets->where('reportable_type', Comment::class)->pluck('reportable_id')->all();
-
-        $pinnedPosts = $pinnedPostIds === [] ? collect() : $this->postQuery($viewerId)->whereIn('id', $pinnedPostIds)->whereNull('removed_at')->get();
-        $pinnedComments = $pinnedCommentIds === [] ? collect() : $this->commentQuery($viewerId)
-            ->with('post:id,body,removed_at')
-            ->whereIn('id', $pinnedCommentIds)->whereNull('removed_at')->get()
-            ->filter(fn (Comment $c) => $c->post !== null && $c->post->removed_at === null);
-
-        $postStates = $this->reports->statesFor($viewerId, Post::class, $pinnedPosts);
-        $commentStates = $this->reports->statesFor($viewerId, Comment::class, $pinnedComments);
-
-        $reporterPostIds = $pinnedPosts
-            ->filter(fn (Post $post) => $postStates[$post->id]['is_reporter'] ?? false)
-            ->pluck('id')
-            ->all();
-        $pinnedPosts = $pinnedPosts->reject(fn (Post $post) => ($postStates[$post->id]['is_reporter'] ?? false) || ($postStates[$post->id]['is_author'] ?? false));
-        $pinnedComments = $pinnedComments->reject(fn (Comment $comment) => ($commentStates[$comment->id]['is_reporter'] ?? false) || ($commentStates[$comment->id]['is_author'] ?? false));
-        $visiblePinnedPostIds = $pinnedPosts->pluck('id')->all();
-
-        $pinned = $pinnedPosts->map(fn (Post $p) => ['kind' => 'post', 'item' => $this->postArray($p, $viewerId, $postStates[$p->id] ?? null)])
-            ->concat($pinnedComments->map(fn (Comment $c) => ['kind' => 'comment', 'item' => $this->commentArray($c, $viewerId, $commentStates[$c->id] ?? null)]))
-            ->sortBy(fn (array $row) => [($row['item']['report']['status'] ?? null) === Report::VOTING ? 0 : 1, -$row['item']['id']])
-            ->values()
+        $activeReports = Report::query()->whereIn('status', [Report::OPEN, Report::VOTING])->get(['reporter_id', 'reportable_type', 'reportable_id']);
+        $reporterPostIds = $activeReports
+            ->where('reportable_type', Post::class)
+            ->where('reporter_id', $viewerId)
+            ->pluck('reportable_id')
             ->all();
 
         $posts = $this->postQuery($viewerId)
             ->whereNull('removed_at')
-            ->whereNotIn('id', array_merge($visiblePinnedPostIds, $reporterPostIds))
+            ->whereNotIn('id', $reporterPostIds)
             ->when($category !== null && in_array($category, Post::CATEGORIES, true), fn ($q) => $q->where('category', $category))
             ->latest()
             ->latest('id')
             ->limit(self::FEED_LIMIT)
             ->get();
-
         $states = $this->reports->statesFor($viewerId, Post::class, $posts);
 
         return [
-            'pinned' => $pinned,
+            'hasPendingReports' => $activeReports->isNotEmpty(),
             'posts' => $posts->map(fn (Post $post) => $this->postArray($post, $viewerId, $states[$post->id] ?? null))->all(),
         ];
+    }
+
+    /**
+     * Active reports for which the viewer may start voting or cast a vote.
+     *
+     * @return array<int, array{kind: string, item: array<string, mixed>}>
+     */
+    public function reportsForVoting(int $viewerId): array
+    {
+        $this->reports->sweepDue();
+
+        $activeTargets = Report::query()
+            ->whereIn('status', [Report::OPEN, Report::VOTING])
+            ->select('reportable_type', 'reportable_id')
+            ->distinct()
+            ->get();
+        $postIds = $activeTargets->where('reportable_type', Post::class)->pluck('reportable_id')->all();
+        $commentIds = $activeTargets->where('reportable_type', Comment::class)->pluck('reportable_id')->all();
+
+        $posts = $postIds === [] ? collect() : $this->postQuery($viewerId)->whereIn('id', $postIds)->whereNull('removed_at')->get();
+        $comments = $commentIds === [] ? collect() : $this->commentQuery($viewerId)
+            ->with('post:id,body,removed_at')
+            ->whereIn('id', $commentIds)
+            ->whereNotIn('author_id', $this->blockedIds($viewerId))
+            ->whereNull('removed_at')
+            ->get()
+            ->filter(fn (Comment $comment) => $comment->post !== null && $comment->post->removed_at === null);
+
+        $postStates = $this->reports->statesFor($viewerId, Post::class, $posts);
+        $commentStates = $this->reports->statesFor($viewerId, Comment::class, $comments);
+
+        $postRows = $posts->map(fn (Post $post) => [
+            'kind' => 'post',
+            'item' => $this->postArray($post, $viewerId, $postStates[$post->id] ?? null),
+        ]);
+        $commentRows = $comments->map(fn (Comment $comment) => [
+            'kind' => 'comment',
+            'item' => $this->commentArray($comment, $viewerId, $commentStates[$comment->id] ?? null),
+        ]);
+
+        return $postRows->concat($commentRows)
+            ->filter(function (array $row) {
+                $report = $row['item']['report'];
+
+                return $report !== null
+                    && ! $report['is_author']
+                    && ! $report['is_reporter']
+                    && ! $report['has_voted']
+                    && ($report['can_start'] || $report['can_vote']);
+            })
+            ->sortBy(fn (array $row) => [($row['item']['report']['status'] ?? null) === Report::VOTING ? 0 : 1, -$row['item']['id']])
+            ->values()
+            ->all();
     }
 
     /** @return array<int, array<string, mixed>> */

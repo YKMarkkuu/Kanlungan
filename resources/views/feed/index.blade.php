@@ -25,33 +25,20 @@
             @endforeach
         </nav>
 
-        @php($visiblePinned = array_values(array_filter($pinned, fn ($row) => ! $row['item']['mine'])))
-        @if (count($visiblePinned) > 0)
-            <section class="stack" aria-label="Reported, needs your vote">
-                <p class="text-small cm-pinned-title"><strong>Reported · needs your vote</strong></p>
-                @foreach ($visiblePinned as $row)
-                    @if ($row['kind'] === 'post')
-                        @include('components.post-card', ['post' => $row['item']])
-                    @else
-                        @include('components.reported-comment-card', ['comment' => $row['item']])
-                    @endif
-                @endforeach
-            </section>
+        @if ($hasPendingReports)
+            <div class="card cm-notice">There are active community reports waiting for a verdict. <a href="{{ route('reports.index') }}">Go to Reports</a></div>
         @endif
 
         <p class="text-small text-muted">Sort: Newest</p>
 
         @forelse ($posts as $post)
-            @include('components.post-card', ['post' => $post])
+            @include('components.post-card', ['post' => $post, 'showReportStatus' => false])
         @empty
-            @if (count($visiblePinned) === 0)
-                <div class="card cm-empty">
-                    <p><strong>No posts here yet.</strong></p>
-                    <p class="text-small text-muted">Be the first to post in this category.</p>
-                </div>
-            @endif
+            <div class="card cm-empty">
+                <p><strong>No posts here yet.</strong></p>
+                <p class="text-small text-muted">Be the first to post in this category.</p>
+            </div>
         @endforelse
     </div>
 
-    <a href="{{ route('post.create') }}" class="cm-fab" aria-label="New post">@include('components.icon', ['name' => 'plus'])</a>
 @endsection
