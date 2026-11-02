@@ -589,11 +589,12 @@
     }
 
     document.querySelectorAll('[data-activity]').forEach(function (activity) {
-        var urlTab = new URLSearchParams(window.location.search).get('tab');
+        var urlTab = activity.getAttribute('data-query-tab');
         var sessionTab = activity.getAttribute('data-session-tab');
 
-        if (!selectActivityTab(activity, urlTab, true)) {
-            selectActivityTab(activity, sessionTab || 'notifications', true);
+        if (!selectActivityTab(activity, urlTab, false) &&
+            !selectActivityTab(activity, sessionTab, false)) {
+            selectActivityTab(activity, 'notifications', false);
         }
     });
 

@@ -22,7 +22,7 @@
         </nav>
 
         @if ($hasPendingReports)
-            <div class="card cm-notice">There are active community reports waiting for a verdict. <a href="{{ route('reports.index') }}">Go to Reports</a></div>
+            <div class="card cm-notice">There are active community reports waiting for a verdict. <a href="{{ route('alerts', ['tab' => 'verdicts']) }}">Go to Reports</a></div>
         @endif
 
         <div id="skeleton-loader" class="hidden" aria-hidden="true">

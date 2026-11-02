@@ -55,15 +55,15 @@ class ModerationFlowTest extends TestCase
 
         $this->actingAs($viewer)->get('/feed')->assertOk()
             ->assertSee('There are active community reports waiting for a verdict.')
-            ->assertSee(route('reports.index'))
+            ->assertSee(route('alerts', ['tab' => 'verdicts']))
             ->assertSeeInOrder(['NEWER-NORMAL-POST', 'OLD-REPORTED-POST'])
             ->assertDontSee('Reported · needs your vote')
             ->assertDontSee('cm-report-banner');
 
-        $this->actingAs($viewer)->get(route('reports.index'))->assertOk()
+        $this->actingAs($viewer)->get(route('alerts', ['tab' => 'verdicts']))->assertOk()
             ->assertSee('Community Verdicts')
             ->assertSee('Help keep Kanlungan safe.')
-            ->assertSee(route('reports.index'))
+            ->assertSee(route('alerts', ['tab' => 'verdicts']))
             ->assertSee('Verdicts')
             ->assertSee('OLD-REPORTED-POST')
             ->assertSee('REPORTED-COMMENT-TEXT')
@@ -125,14 +125,14 @@ class ModerationFlowTest extends TestCase
             ->assertSee('ONE-COPY-OF-REPORTED-POST')
             ->assertDontSee('cm-report-banner')
             ->assertSee('Go to Reports');
-        $this->actingAs($viewer)->get(route('reports.index'))
+        $this->actingAs($viewer)->get(route('alerts', ['tab' => 'verdicts']))
             ->assertOk()
             ->assertSee('ONE-COPY-OF-REPORTED-POST')
             ->assertSee('cm-report-banner');
-        $this->actingAs($reporter)->get(route('reports.index'))
+        $this->actingAs($reporter)->get(route('alerts', ['tab' => 'verdicts']))
             ->assertOk()
-            ->assertDontSee('ONE-COPY-OF-REPORTED-POST');
-        $this->actingAs($author)->get(route('reports.index'))
+            ->assertDontSee('id="post-'.$post->id.'"', false);
+        $this->actingAs($author)->get(route('alerts', ['tab' => 'verdicts']))
             ->assertOk()
             ->assertDontSee('ONE-COPY-OF-REPORTED-POST');
 
@@ -209,7 +209,7 @@ class ModerationFlowTest extends TestCase
             ->assertDontSee('cm-report-banner');
 
         $this->assertSame(1, substr_count($response->getContent(), 'id="post-'.$post->id.'"'));
-        $reportsResponse = $this->actingAs($viewer)->get(route('reports.index'))
+        $reportsResponse = $this->actingAs($viewer)->get(route('alerts', ['tab' => 'verdicts']))
             ->assertOk()
             ->assertSee('MULTI-REPORTED-POST');
         $this->assertSame(1, substr_count($reportsResponse->getContent(), 'id="post-'.$post->id.'"'));
@@ -234,7 +234,7 @@ class ModerationFlowTest extends TestCase
             'choice' => 'agree',
         ]);
 
-        $this->actingAs($viewer)->get(route('reports.index'))
+        $this->actingAs($viewer)->get(route('alerts', ['tab' => 'verdicts']))
             ->assertOk()
             ->assertDontSee('ALREADY-VOTED-POST')
             ->assertSee('No reports need your verdict right now.');

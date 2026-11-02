@@ -65,6 +65,18 @@ class CommunityFlowTest extends TestCase
             ->assertSee('Mark all as read');
     }
 
+    public function test_legacy_reports_page_redirects_to_the_activity_verdicts_tab(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->get('/reports')
+            ->assertRedirect(route('alerts', ['tab' => 'verdicts']));
+
+        $this->get(route('alerts', ['tab' => 'verdicts']))
+            ->assertOk()
+            ->assertSee('data-query-tab="verdicts"', false);
+    }
+
     public function test_blocking_an_author_keeps_content_visible_but_prevents_interactions(): void
     {
         [$viewer, $blockedAuthor, $otherAuthor] = User::factory()->count(3)->create();

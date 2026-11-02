@@ -43,7 +43,7 @@ Route::middleware(['auth', EnforceRestrictions::class])->group(function () {
     Route::post('/post/{id}/comments/{commentId}/helpful', [PostController::class, 'helpfulComment'])->whereNumber(['id', 'commentId'])->middleware('throttle:60,1')->name('comment.helpful');
 
     // Reports + community vote
-    Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
+    Route::get('/reports', fn () => redirect()->route('alerts', ['tab' => 'verdicts']))->name('reports.index');
     Route::post('/report/{type}/{id}', [ReportController::class, 'store'])->whereIn('type', ['post', 'comment'])->whereNumber('id')->middleware('throttle:10,1')->name('report.store');
     Route::post('/reports/{report}/start', [ReportController::class, 'start'])->whereNumber('report')->middleware('throttle:20,1')->name('report.start');
     Route::post('/reports/{report}/vote', [ReportController::class, 'vote'])->whereNumber('report')->middleware('throttle:30,1')->name('report.vote');

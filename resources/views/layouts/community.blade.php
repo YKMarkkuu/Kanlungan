@@ -69,7 +69,7 @@
                 <a href="{{ route('feed') }}" class="cm-nav__item {{ $tab === 'home' ? 'is-active' : '' }}" aria-label="Home" @if ($tab === 'home') aria-current="page" @endif>@include('components.icon', ['name' => 'home'])</a>
                 <a href="{{ route('search') }}" class="cm-nav__item {{ $tab === 'search' ? 'is-active' : '' }}" aria-label="Search" @if ($tab === 'search') aria-current="page" @endif>@include('components.icon', ['name' => 'search'])</a>
                 <a href="{{ route('post.create') }}" class="cm-nav__item cm-nav__item--create" aria-label="Create post">@include('components.icon', ['name' => 'plus'])</a>
-                <a href="{{ route('alerts') }}" class="cm-nav__item {{ $tab === 'alerts' ? 'is-active' : '' }}" data-alert-activity-link aria-label="Activity{{ $unread > 0 ? ', '.$unread.' unread' : '' }}" @if ($tab === 'alerts') aria-current="page" @endif>
+                <a href="{{ route('alerts', ['tab' => 'verdicts']) }}" class="cm-nav__item {{ $tab === 'alerts' ? 'is-active' : '' }}" data-alert-activity-link aria-label="Activity{{ $unread > 0 ? ', '.$unread.' unread' : '' }}" @if ($tab === 'alerts') aria-current="page" @endif>
                     @include('components.icon', ['name' => 'bell'])
                     <span class="cm-count" data-unread-badge aria-hidden="true" @if ($unread === 0) hidden @endif>{{ $unread }}</span>
                 </a>
