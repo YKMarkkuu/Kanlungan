@@ -2,69 +2,126 @@
 
 namespace App\Services;
 
+use App\Models\Post;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
 /**
- * Photos on posts. Every upload is decoded and re-encoded as a plain JPEG (max 1280px wide), which
+ * Photos on posts. Every upload is decoded and re-encoded as a plain JPEG (max 1600px on either edge), which
  * removes EXIF data such as GPS location and the camera, so an "anonymous" post cannot leak it.
  * Saved under public/uploads/posts (no storage:link needed).
  */
 class ImageService
 {
-    private const MAX_WIDTH = 1280;
+    private const MAX_EDGE = 1600;
+
+    /** getimagesize() reads only the header, so this check happens before GD allocates ~4 bytes per pixel. */
+    private const MAX_SOURCE_PIXELS = 24_000_000;
 
     private const AVATAR_SIZE = 150;
 
-    public function storePostPhoto(UploadedFile $file): string
+    /**
+     * Decode, auto-rotate, shrink so the longest side is at most 1600px, flatten onto white and
+     * re-encode as a progressive JPEG. Re-encoding drops EXIF (GPS, camera model).
+     *
+     * @return array{path: string, width: int, height: int}
+     */
+    public function storePostPhoto(UploadedFile $file): array
     {
         if (! extension_loaded('gd')) {
-            throw ValidationException::withMessages(['photo' => 'Photos are not available on this server (PHP GD is missing).']);
+            throw ValidationException::withMessages(['photos' => 'Photos are not available on this server (PHP GD is missing).']);
         }
 
-        $path = $file->getRealPath();
+        $source = $file->getRealPath();
 
-        if ($path === false) {
-            throw ValidationException::withMessages(['photo' => 'That file could not be read.']);
+        if ($source === false) {
+            throw ValidationException::withMessages(['photos' => 'That file could not be read.']);
         }
 
-        $image = @imagecreatefromstring((string) file_get_contents($path));
+        $info = @getimagesize($source);
+
+        if ($info === false) {
+            throw ValidationException::withMessages(['photos' => 'That file is not a valid image.']);
+        }
+
+        if ($info[0] * $info[1] > self::MAX_SOURCE_PIXELS) {
+            throw ValidationException::withMessages(['photos' => 'That photo has too many pixels to process. Try a smaller one.']);
+        }
+
+        $image = @imagecreatefromstring((string) file_get_contents($source));
 
         if ($image === false) {
-            throw ValidationException::withMessages(['photo' => 'That file is not a valid image.']);
+            throw ValidationException::withMessages(['photos' => 'That file is not a valid image.']);
         }
 
-        $image = $this->applyOrientation($image, $path, (string) $file->getMimeType());
+        $image = $this->applyOrientation($image, $source, (string) $file->getMimeType());
 
         $width = imagesx($image);
         $height = imagesy($image);
+        $longest = max($width, $height);
 
-        if ($width > self::MAX_WIDTH) {
-            $scaled = imagescale($image, self::MAX_WIDTH);
-            if ($scaled !== false) {
-                $image = $scaled;
-                $width = imagesx($image);
-                $height = imagesy($image);
-            }
+        $targetW = $width;
+        $targetH = $height;
+
+        if ($longest > self::MAX_EDGE) {
+            $ratio = self::MAX_EDGE / $longest;
+            $targetW = max(1, (int) round($width * $ratio));
+            $targetH = max(1, (int) round($height * $ratio));
         }
 
-        // Flatten onto white so transparent PNGs do not turn black.
-        $canvas = imagecreatetruecolor($width, $height);
+        // One allocation: scale and flatten in a single step (transparent PNGs would otherwise turn black).
+        $canvas = imagecreatetruecolor($targetW, $targetH);
         imagefill($canvas, 0, 0, imagecolorallocate($canvas, 255, 255, 255));
-        imagecopy($canvas, $image, 0, 0, 0, 0, $width, $height);
+        imagecopyresampled($canvas, $image, 0, 0, 0, 0, $targetW, $targetH, $width, $height);
+        unset($image);
 
         $directory = public_path('uploads/posts');
 
-        if (! is_dir($directory)) {
-            mkdir($directory, 0775, true);
+        if (! is_dir($directory) && ! mkdir($directory, 0775, true) && ! is_dir($directory)) {
+            throw new RuntimeException('Failed to create the post uploads directory.');
         }
 
-        $name = Str::uuid()->toString().'.jpg';
-        imagejpeg($canvas, $directory.DIRECTORY_SEPARATOR.$name, 82);
+        imageinterlace($canvas, true);
 
-        return 'uploads/posts/'.$name;
+        $name = Str::uuid()->toString().'.jpg';
+        $saved = imagejpeg($canvas, $directory.DIRECTORY_SEPARATOR.$name, 82);
+        unset($canvas);
+
+        if (! $saved) {
+            throw new RuntimeException('Failed to save the uploaded photo.');
+        }
+
+        return ['path' => 'uploads/posts/'.$name, 'width' => $targetW, 'height' => $targetH];
+    }
+
+    /** Deletes every photo file of a post and its rows. Used for author delete, community vote and moderator removal. */
+    public function deletePostImages(Post $post): void
+    {
+        $paths = $post->images()->pluck('path')->all();
+
+        $this->deletePaths($paths);
+
+        $post->images()->delete();
+        $post->unsetRelation('images');
+    }
+
+    /**
+     * Best-effort cleanup of files by path. One bad path must not stop the rest, so each failure
+     * is reported and skipped. Also used to undo a half-finished upload.
+     *
+     * @param  array<int, string>  $paths
+     */
+    public function deletePaths(array $paths): void
+    {
+        foreach ($paths as $path) {
+            try {
+                $this->deletePhoto($path);
+            } catch (RuntimeException $e) {
+                report($e);
+            }
+        }
     }
 
     public function storeAvatar(UploadedFile $file): string

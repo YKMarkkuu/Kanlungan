@@ -11,7 +11,9 @@ class Post extends Model
 {
     public const CATEGORIES = ['Ask', 'Share', 'Help', 'Vent', 'Academic'];
 
-    protected $fillable = ['author_id', 'category', 'body', 'is_anonymous', 'image_path', 'removed_at', 'removed_by'];
+    public const MAX_PHOTOS = 3;
+
+    protected $fillable = ['author_id', 'category', 'body', 'is_anonymous', 'removed_at', 'removed_by'];
 
     protected $casts = ['is_anonymous' => 'boolean', 'removed_at' => 'datetime'];
 
@@ -23,6 +25,11 @@ class Post extends Model
     public function comments(): HasMany
     {
         return $this->hasMany(Comment::class);
+    }
+
+    public function images(): HasMany
+    {
+        return $this->hasMany(PostImage::class)->orderBy('position');
     }
 
     public function reactions(): MorphMany

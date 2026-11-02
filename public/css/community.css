@@ -2290,3 +2290,289 @@ a.cm-stat { color: inherit; text-decoration: none; display: inline-flex; align-i
 .cm-main--composer {
     padding-bottom: calc(120px + env(safe-area-inset-bottom, 0px));
 }
+
+/* ==========================================================================
+   iOS-style motion, canvas composer, smoothness pass
+   Animations use transform + opacity only (compositor, 60fps). fill-mode is
+   "backwards", never "both": a retained transform would create a stacking
+   context on every card and trap the "..." dropdowns under the next card.
+   ========================================================================== */
+
+@keyframes cm-slide-up {
+    from { opacity: 0; transform: translate3d(0, 16px, 0); }
+    to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes cm-fade      { from { opacity: 0; } to { opacity: 1; } }
+@keyframes cm-fade-out  { from { opacity: 1; } to { opacity: 0; } }
+@keyframes cm-sheet-up   { from { transform: translate3d(0, 100%, 0); } to { transform: translate3d(0, 0, 0); } }
+@keyframes cm-sheet-down { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(0, 100%, 0); } }
+@keyframes cm-pop-in {
+    from { opacity: 0; transform: scale(0.94) translate3d(0, -4px, 0); }
+    to   { opacity: 1; transform: scale(1) translate3d(0, 0, 0); }
+}
+
+.cm-animate-in {
+    animation: cm-slide-up var(--dur-spring) var(--ease-spring) backwards;
+    animation-delay: var(--cm-delay, 0ms);
+}
+.cm-animate-fade {
+    animation: cm-fade var(--dur-fast) var(--ease-ios) backwards;
+    animation-delay: var(--cm-delay, 0ms);
+}
+
+/* ---------- Feed: first 6 cards cascade in (50ms apart) on page load only.
+   Cards appended by "Load more" are child 16+, so they never animate. ---------- */
+.cm-feed-list > .cm-post:nth-child(-n+6) {
+    animation: cm-slide-up var(--dur-spring) var(--ease-spring) backwards;
+}
+.cm-feed-list > .cm-post:nth-child(2) { animation-delay: 50ms; }
+.cm-feed-list > .cm-post:nth-child(3) { animation-delay: 100ms; }
+.cm-feed-list > .cm-post:nth-child(4) { animation-delay: 150ms; }
+.cm-feed-list > .cm-post:nth-child(5) { animation-delay: 200ms; }
+.cm-feed-list > .cm-post:nth-child(6) { animation-delay: 250ms; }
+
+/* ---------- Replies: display none -> block restarts this each time they open ---------- */
+.cm-replies-container:not(.hidden) {
+    animation: cm-fade var(--dur-fast) var(--ease-ios) backwards;
+}
+.cm-comment { scroll-margin-block: 80px 140px; } /* keeps a new comment above the fixed composer */
+
+/* ---------- Report sheet: slides up, slides down on close (.is-closing set by JS) ---------- */
+.cm-sheet__backdrop { animation: cm-fade var(--dur-base) var(--ease-ios) backwards; }
+.cm-sheet__panel    { animation: cm-sheet-up var(--dur-base) var(--ease-ios) backwards; }
+.cm-sheet.is-closing .cm-sheet__backdrop { animation: cm-fade-out var(--dur-fast) var(--ease-ios) forwards; }
+.cm-sheet.is-closing .cm-sheet__panel    { animation: cm-sheet-down 240ms var(--ease-ios) forwards; }
+
+/* ---------- Menus, notification dropdown, lightbox ---------- */
+.cm-more-menu__dropdown:not(.hidden),
+.cm-notification-dropdown:not(.hidden) {
+    transform-origin: top right;
+    animation: cm-pop-in var(--dur-fast) var(--ease-spring) backwards;
+}
+.cm-comment__actions .cm-more-menu__dropdown { transform-origin: bottom right; }
+.cm-lightbox:not([hidden]) { animation: cm-fade var(--dur-base) var(--ease-ios) backwards; }
+
+/* ---------- Create Post: blank canvas ---------- */
+.cm-main--compose { padding-bottom: calc(112px + env(safe-area-inset-bottom, 0px)); }
+html:has(.cm-main--compose) { scroll-padding-bottom: 130px; } /* caret never hides under the bar */
+
+.cm-compose-form { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+
+/* One swipeable row, edge to edge */
+.cm-chips--compose {
+    flex-wrap: nowrap;
+    min-width: 0;
+    margin: 0 calc(var(--cm-gutter) * -1);
+    padding: 2px var(--cm-gutter);
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+.cm-chips--compose::-webkit-scrollbar { display: none; }
+.cm-chips--compose > label { flex: none; }
+
+.cm-compose.cm-compose--canvas {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    overflow: visible;
+}
+.cm-compose--canvas .cm-compose__row { padding: 8px 0 0; }
+.cm-compose--canvas .cm-compose__input {
+    min-height: 50vh;
+    min-height: 50dvh;
+    font-size: 18px;
+    line-height: 1.5;
+    overflow: hidden; /* JS grows it; the page scrolls, not the box */
+}
+
+/* Bottom action bar: tools left, count + Post right (thumb reach) */
+.cm-compose-form > .cm-compose__bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: var(--cm-kb, 0px); /* set by JS while the keyboard is open */
+    z-index: 50;
+    gap: 8px;
+    padding: 8px max(var(--cm-gutter), calc((100vw - 600px) / 2 + var(--cm-gutter)))
+             calc(8px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--border-subtle);
+    background-color: var(--surface-bg);
+}
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+    .cm-compose-form > .cm-compose__bar {
+        background-color: color-mix(in srgb, var(--surface-bg) 86%, transparent);
+        -webkit-backdrop-filter: blur(16px) saturate(1.4);
+        backdrop-filter: blur(16px) saturate(1.4);
+    }
+}
+.cm-compose-form.is-keyboard > .cm-compose__bar { padding-bottom: 8px; } /* no home indicator under the keyboard */
+.cm-compose__count { margin-left: auto; font-variant-numeric: tabular-nums; }
+.cm-compose-form > .cm-compose__bar .cm-compose__post { margin-left: 0; }
+
+/* ---------- Press feedback: instant on touch, springy on release ---------- */
+.btn, .chip, .cm-action-btn, .cm-icon-btn, .cm-menu-item, .cm-nav__item, .link-btn,
+.cm-comment__action-btn, .cm-view-replies-btn, .cm-block-btn, .cm-anon-badge__pill {
+    -webkit-tap-highlight-color: transparent;
+    transition:
+        background-color var(--dur-fast) var(--ease-ios),
+        border-color var(--dur-fast) var(--ease-ios),
+        color var(--dur-fast) var(--ease-ios),
+        transform var(--dur-fast) var(--ease-spring);
+}
+.btn:active:not(:disabled),
+.cm-action-btn:active:not(:disabled),
+.cm-icon-btn:active:not(:disabled),
+.cm-menu-item:active:not(:disabled),
+.cm-comment__action-btn:active:not(:disabled),
+.cm-view-replies-btn:active,
+.cm-block-btn:active,
+.cm-chips label:active .chip,
+.cm-anon-badge:active .cm-anon-badge__pill { transform: scale(0.96); transition-duration: 0s; }
+.cm-nav__item:active { transform: scale(0.9); transition-duration: 0s; }
+.link-btn:active { opacity: 0.6; transition-duration: 0s; }
+
+/* ---------- Scroll feel ---------- */
+.cm-chips,
+.cm-notification-dropdown__list,
+.cm-sheet__panel,
+.cm-avatar-crop__panel { -webkit-overflow-scrolling: touch; }
+.cm-chips { overscroll-behavior-x: contain; }
+.cm-notification-dropdown__list,
+.cm-sheet__panel,
+.cm-avatar-crop__panel { overscroll-behavior: contain; }
+
+/* ---------- Reduced motion: no movement, no scale ---------- */
+@media (prefers-reduced-motion: reduce) {
+    .cm-animate-in, .cm-animate-fade, .cm-replies-container,
+    .cm-feed-list > .cm-post, .cm-sheet__backdrop, .cm-sheet__panel,
+    .cm-more-menu__dropdown, .cm-notification-dropdown, .cm-lightbox { animation: none !important; }
+    .btn:active, .cm-action-btn:active, .cm-icon-btn:active, .cm-nav__item:active,
+    .cm-chips label:active .chip { transform: none; }
+}
+
+/* ==========================================================================
+   Photo grid (post card + composer preview) and swipeable lightbox
+   ========================================================================== */
+
+.cm-photos {
+    --cm-ar: 1.333;
+    display: grid;
+    gap: 2px;
+    max-height: 480px;
+    overflow: hidden;
+    aspect-ratio: 4 / 3;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    background: var(--border-default);
+}
+
+.cm-photos > * { min-width: 0; min-height: 0; }
+
+.cm-photos--1 { grid-template-columns: 1fr; aspect-ratio: var(--cm-ar); }
+.cm-photos--2 { grid-template-columns: 1fr 1fr; }
+
+/* 3 photos: one large on the left (2/3 width), two stacked on the right (1/3). */
+.cm-photos--3 { grid-template-columns: 2fr 1fr; grid-template-rows: 1fr 1fr; }
+.cm-photos--3 > :first-child { grid-row: 1 / span 2; }
+
+.cm-photos__item {
+    position: relative;
+    overflow: hidden;
+    background: var(--surface-hover);
+    border-radius: 0;
+}
+
+/* Beats .cm-post__img (and its mobile max-height) and .cm-compose__preview img. */
+.cm-photos .cm-post__img,
+.cm-photos .cm-photos__img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+    object-fit: cover;
+}
+
+/* Composer preview: the grid draws its own border. */
+.cm-compose__preview {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    overflow: visible;
+}
+
+/* Once there are photos, the huge canvas textarea gives room back so previews are visible. */
+.cm-compose__main:has(.cm-photos) .cm-compose__input { min-height: 120px; }
+
+.cm-photos__remove {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(30, 30, 30, 0.72);
+    color: #fff;
+    cursor: pointer;
+}
+.cm-photos__remove::after { content: ""; position: absolute; inset: -8px; }
+.cm-photos__remove .icon { width: 16px; height: 16px; }
+.cm-photos__remove:active { transform: scale(0.9); }
+
+/* ---------- Lightbox: swipe + counter + arrows ---------- */
+.cm-lightbox { touch-action: none; }
+
+.cm-lightbox__img {
+    will-change: transform;
+    -webkit-user-drag: none;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.cm-lightbox__count {
+    position: absolute;
+    top: calc(20px + env(safe-area-inset-top, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+    color: #fff;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.cm-lightbox__nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    cursor: pointer;
+}
+.cm-lightbox__nav--prev { left: 8px; }
+.cm-lightbox__nav--next { right: 8px; }
+.cm-lightbox__nav--next .icon { transform: scaleX(-1); }
+.cm-lightbox__nav:hover { background: rgba(255, 255, 255, 0.22); }
+.cm-lightbox__nav[hidden],
+.cm-lightbox__count[hidden] { display: none; }
+
+@media (hover: none) {
+    .cm-lightbox__nav { display: none; }
+}

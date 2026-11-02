@@ -81,10 +81,12 @@
     @include('components.report-sheet')
     @yield('scripts')
 
-    {{-- Photo lightbox. community.js fills the <img> and toggles [hidden]. --}}
     <div class="cm-lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Photo viewer" hidden>
         <button type="button" class="cm-lightbox__close" id="lightbox-close" aria-label="Close photo">@include('components.icon', ['name' => 'close'])</button>
+        <span class="cm-lightbox__count" id="lightbox-count" aria-live="polite" hidden></span>
+        <button type="button" class="cm-lightbox__nav cm-lightbox__nav--prev" id="lightbox-prev" data-lightbox-nav aria-label="Previous photo" hidden>@include('components.icon', ['name' => 'back'])</button>
         <img class="cm-lightbox__img" id="lightbox-img" src="" alt="">
+        <button type="button" class="cm-lightbox__nav cm-lightbox__nav--next" id="lightbox-next" data-lightbox-nav aria-label="Next photo" hidden>@include('components.icon', ['name' => 'back'])</button>
     </div>
 
     <script src="{{ asset('js/community.js') }}" defer></script>

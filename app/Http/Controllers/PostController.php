@@ -13,6 +13,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class PostController extends Controller
 {
@@ -32,15 +33,46 @@ class PostController extends Controller
         $data = $request->validate([
             'category' => ['required', Rule::in(Post::CATEGORIES)],
             'body' => ['required', 'string', 'min:3', 'max:2000'],
-            'photo' => ['nullable', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096', 'dimensions:max_width=2000,max_height=2000'],
-        ], ['photo.max' => 'The photo must be 4 MB or smaller.', 'photo.image' => 'Please choose a JPG, PNG or WebP photo.']);
+            'photos' => ['nullable', 'array', 'max:'.Post::MAX_PHOTOS],
+            'photos.*' => ['file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
+            // TEMPORARY: the old single-photo field, until the new composer UI ships. Remove then.
+            'photo' => ['nullable', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
+        ], [
+            'photos.max' => 'You can only upload up to '.Post::MAX_PHOTOS.' photos.',
+            'photos.*.max' => 'Each photo must be 4 MB or smaller.',
+            'photos.*.image' => 'Please choose JPG, PNG or WebP photos.',
+            'photos.*.mimes' => 'Please choose JPG, PNG or WebP photos.',
+            'photo.max' => 'The photo must be 4 MB or smaller.',
+            'photo.image' => 'Please choose a JPG, PNG or WebP photo.',
+        ]);
 
         // Anonymous is on by default; a missing value means "anonymous".
         $anonymous = $request->input('anonymous', '1') === '1';
 
-        $imagePath = $request->hasFile('photo') ? $this->images->storePostPhoto($request->file('photo')) : null;
+        // No 'dimensions' rule any more: big camera photos are shrunk on the server instead of rejected.
+        $files = array_values(array_filter([
+            ...($request->file('photos') ?? []),
+            $request->file('photo'),
+        ]));
 
-        $this->community->createPost($request->user()->id, $data['category'], trim($data['body']), $anonymous, $imagePath);
+        if (count($files) > Post::MAX_PHOTOS) {
+            throw ValidationException::withMessages(['photos' => 'You can only upload up to '.Post::MAX_PHOTOS.' photos.']);
+        }
+
+        $stored = [];
+
+        try {
+            foreach ($files as $file) {
+                $stored[] = $this->images->storePostPhoto($file);
+            }
+
+            $this->community->createPost($request->user()->id, $data['category'], trim($data['body']), $anonymous, $stored);
+        } catch (\Throwable $e) {
+            // Any failure (bad file 2 of 3, DB error) must not leave orphan files on disk.
+            $this->images->deletePaths(array_column($stored, 'path'));
+
+            throw $e;
+        }
 
         if ($request->expectsJson()) {
             $request->session()->flash('status', 'Posted.');
@@ -72,7 +104,7 @@ class PostController extends Controller
 
         if ($post->removed_at === null) {
             $post->forceFill(['removed_at' => now(), 'removed_by' => 'author'])->save();
-            $this->images->deletePhoto($post->image_path);
+            $this->images->deletePostImages($post);
         }
 
         return redirect()->route('feed')->with('status', 'Post deleted.');

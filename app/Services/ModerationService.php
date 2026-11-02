@@ -169,7 +169,7 @@ class ModerationService
                     $target?->forceFill(['removed_at' => now(), 'removed_by' => 'moderator'])->save();
 
                     if ($target instanceof \App\Models\Post) {
-                        $this->images->deletePhoto($target->image_path);
+                        $this->images->deletePostImages($target);
                     }
 
                     $this->alerts->notify($subjectUserId, 'notice', 'Notice from moderators', "Your {$kind} was removed by moderators. Reason: {$reason}");

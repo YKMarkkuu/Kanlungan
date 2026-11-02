@@ -11,6 +11,7 @@ use App\Support\Alias;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -220,15 +221,28 @@ class CommunityService
             ->count();
     }
 
-    public function createPost(int $authorId, string $category, string $body, bool $anonymous, ?string $imagePath = null): Post
+    /** @param  array<int, array{path: string, width: int, height: int}>  $images */
+    public function createPost(int $authorId, string $category, string $body, bool $anonymous, array $images = []): Post
     {
-        return Post::create([
-            'author_id' => $authorId,
-            'category' => $category,
-            'body' => $body,
-            'is_anonymous' => $anonymous,
-            'image_path' => $imagePath,
-        ]);
+        return DB::transaction(function () use ($authorId, $category, $body, $anonymous, $images) {
+            $post = Post::create([
+                'author_id' => $authorId,
+                'category' => $category,
+                'body' => $body,
+                'is_anonymous' => $anonymous,
+            ]);
+
+            foreach (array_values($images) as $position => $image) {
+                $post->images()->create([
+                    'path' => $image['path'],
+                    'position' => $position,
+                    'width' => $image['width'],
+                    'height' => $image['height'],
+                ]);
+            }
+
+            return $post;
+        });
     }
 
     public function addComment(int $authorId, Post $post, string $body, bool $anonymous, ?int $parentId): Comment
@@ -384,7 +398,7 @@ class CommunityService
     private function postQuery(int $viewerId)
     {
         return Post::query()
-            ->with('author:id,display_name,avatar_path')
+            ->with(['author:id,display_name,avatar_path', 'images'])
             ->withCount([
                 'comments',
                 'reactions as likes_count' => fn ($q) => $q->where('type', Reaction::LIKE),
@@ -412,6 +426,9 @@ class CommunityService
     private function postArray(Post $post, int $viewerId, ?array $report): array
     {
         $removed = $post->removed_at !== null;
+        $images = $removed ? [] : $post->images
+            ->map(fn ($image) => ['path' => $image->path, 'width' => $image->width, 'height' => $image->height])
+            ->all();
 
         return [
             'id' => $post->id,
@@ -421,7 +438,8 @@ class CommunityService
             'category' => $post->category,
             'created_at' => $post->created_at,
             'body' => $removed ? $this->tombstone('post', $post->removed_by) : $post->body,
-            'image' => $removed || $post->image_path === null ? null : $post->image_path,
+            'images' => $images,
+            'image' => $images[0]['path'] ?? null, // TEMPORARY: lets the current post-card keep working. Remove with the Blade update.
             'removed' => $removed,
             'mine' => (int) $post->author_id === $viewerId,
             'report' => $removed ? null : $report,

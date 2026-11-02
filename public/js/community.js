@@ -199,6 +199,7 @@
                         aspectRatio: 1,
                         viewMode: 1,
                         dragMode: 'move',
+                        cropBoxMovable: false,
                         guides: false,
                         center: true,
                         highlight: false,
@@ -583,24 +584,29 @@
 
     /* ---------- Shared helpers for AJAX forms (composer) ---------- */
 
-    // Sends a form as multipart FormData. Resolves to { ok, status, data } or
-    // { networkError: true }.
-    function sendForm(form) {
+    // Sends a form as multipart FormData. `prepare(data)` can edit the payload first.
+    // Resolves to { ok, status, data } or { networkError: true }.
+    function sendForm(form, prepare) {
         var headers = {
             'Accept': 'application/json',
             'X-Requested-With': 'XMLHttpRequest'
         };
         var token = reactCsrf();
+        var payload = new FormData(form);
 
         if (token) {
             headers['X-CSRF-TOKEN'] = token;
+        }
+
+        if (prepare) {
+            prepare(payload);
         }
 
         return fetch(form.action, {
             method: 'POST',
             credentials: 'same-origin',
             headers: headers,
-            body: new FormData(form)
+            body: payload
         }).then(function (response) {
             return response.json().then(function (data) {
                 return data;
@@ -643,7 +649,7 @@
 
     function composerFailure(res, errorEl) {
         var errors = res.data && res.data.errors;
-        var fields = ['body', 'category', 'photo', 'parent_id', 'report'];
+        var fields = ['body', 'category', 'photos', 'photos.0', 'photos.1', 'photos.2', 'photo', 'parent_id', 'report'];
         var message = '';
         var i;
 
@@ -697,6 +703,8 @@
         var charCount = document.getElementById('char-count');
         var alias = postForm.getAttribute('data-alias');
         var postSubmitting = false;
+        var photoItems = [];   // { id, blob, url, name, width, height, pending }
+        var photosBusy = 0;    // photos still being resized
 
         var syncCharCount = function () {
             if (!charCount) {
@@ -710,7 +718,7 @@
         };
 
         var syncPostBtn = function () {
-            postBtn.disabled = postSubmitting || body.value.trim().length < 3;
+            postBtn.disabled = postSubmitting || photosBusy > 0 || body.value.trim().length < 3;
         };
 
         var syncAnon = function () {
@@ -719,19 +727,12 @@
                 : 'Your display name will be shown on this post';
         };
 
-        /* -- Auto-expanding textarea -- */
-
-        var TEXTAREA_MAX_HEIGHT = 360; // px; past this the textarea scrolls instead of growing
+        /* -- Auto-expanding textarea: no cap, the page scrolls instead -- */
 
         var autoGrow = function () {
-            // Reset first so the box can also shrink when text is deleted.
-            // min-height from CSS still applies, so it never gets smaller than the default.
             body.style.height = 'auto';
-
-            var needed = body.scrollHeight;
-
-            body.style.height = Math.min(needed, TEXTAREA_MAX_HEIGHT) + 'px';
-            body.style.overflowY = needed > TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden';
+            body.style.height = body.scrollHeight + 'px';
+            body.style.overflowY = 'hidden';
         };
 
         body.addEventListener('input', function () {
@@ -760,7 +761,15 @@
             showInlineError(postError, '');
             setSending(postBtn, 'Posting\u2026');
 
-            sendForm(postForm).then(function (res) {
+            sendForm(postForm, function (data) {
+                // Replace the raw picks with the resized blobs.
+                data.delete('photos[]');
+                photoItems.forEach(function (item) {
+                    if (item.blob) {
+                        data.append('photos[]', item.blob, item.name);
+                    }
+                });
+            }).then(function (res) {
                 if (res.ok && res.data.status === 'success') {
                     window.location.href = res.data.redirect || '/feed';
                     return;
@@ -773,24 +782,24 @@
             });
         });
 
-        /* -- Photo preview -- */
+        /* -- Photos: pick up to 3, shrink to 1600px in the browser, preview as a grid -- */
 
         var photoInput = document.getElementById('photo');
         var photoName = document.getElementById('photo-name');
+        var photoLabel = document.querySelector('label[for="photo"]');
         var previewBox = document.getElementById('image-preview-container');
 
         if (photoInput && previewBox) {
-            // Mirrors the server rules in PostController::store().
+            // Mirrors PostController::store() (type and count). Size is checked AFTER shrinking.
             var ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-            var MAX_BYTES = 4 * 1024 * 1024;
-            var MAX_DIMENSION = 2000;
-            var DEFAULT_LABEL = 'Add photo';
+            var MAX_PHOTOS = 3;
+            var MAX_EDGE = 1600;
+            var MAX_SOURCE_BYTES = 25 * 1024 * 1024;
+            var MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
+            var DEFAULT_LABEL = 'Add photos (max 3)';
 
             var photoError = null;
-
-            // Bumped on every change/remove so a slow FileReader from an
-            // earlier pick can never overwrite a newer one.
-            var previewToken = 0;
+            var nextPhotoId = 1;
 
             var showPhotoError = function (message) {
                 if (!photoError) {
@@ -811,26 +820,6 @@
                 }
             };
 
-            var emptyPreview = function () {
-                while (previewBox.firstChild) {
-                    previewBox.removeChild(previewBox.firstChild);
-                }
-            };
-
-            // Clears the file input (so nothing is uploaded) and hides the preview.
-            var resetPhoto = function () {
-                previewToken += 1;
-                photoInput.value = '';
-                emptyPreview();
-                previewBox.classList.add('hidden');
-                clearPhotoError();
-
-                if (photoName) {
-                    photoName.textContent = DEFAULT_LABEL;
-                }
-            };
-
-            // Inline SVG (no icon font, no emoji), same path as the "close" icon.
             var buildCloseIcon = function () {
                 var ns = 'http://www.w3.org/2000/svg';
                 var svg = document.createElementNS(ns, 'svg');
@@ -850,103 +839,277 @@
                 return svg;
             };
 
-            var showPreview = function (dataUrl, fileName, token) {
-                var img = document.createElement('img');
+            /* ---- resize ---- */
 
-                img.alt = 'Selected photo preview';
+            var loadImage = function (file) {
+                return new Promise(function (resolve, reject) {
+                    var url = URL.createObjectURL(file);
+                    var img = new Image();
 
-                img.onload = function () {
-                    if (token !== previewToken) {
-                        return;
-                    }
-
-                    // The server rejects anything over 2000px on a side; say so now.
-                    if (img.naturalWidth > MAX_DIMENSION || img.naturalHeight > MAX_DIMENSION) {
-                        resetPhoto();
-                        showPhotoError('That photo is larger than ' + MAX_DIMENSION + ' \u00d7 ' + MAX_DIMENSION + ' pixels. Choose a smaller one.');
-                        return;
-                    }
-
-                    var remove = document.createElement('button');
-
-                    remove.type = 'button';
-                    remove.className = 'cm-compose__preview-remove';
-                    remove.setAttribute('aria-label', 'Remove photo');
-                    remove.appendChild(buildCloseIcon());
-                    remove.addEventListener('click', function () {
-                        resetPhoto();
-                        body.focus();
-                    });
-
-                    emptyPreview();
-                    previewBox.appendChild(img);
-                    previewBox.appendChild(remove);
-                    previewBox.classList.remove('hidden');
-
-                    if (photoName) {
-                        photoName.textContent = fileName;
-                    }
-                };
-
-                img.onerror = function () {
-                    if (token !== previewToken) {
-                        return;
-                    }
-
-                    resetPhoto();
-                    showPhotoError('That file could not be read as an image.');
-                };
-
-                img.src = dataUrl;
+                    img.onload = function () { resolve({ img: img, url: url }); };
+                    img.onerror = function () {
+                        URL.revokeObjectURL(url);
+                        reject(new Error('read'));
+                    };
+                    img.src = url;
+                });
             };
 
-            photoInput.addEventListener('change', function () {
-                var file = photoInput.files && photoInput.files[0];
+            var canvasToBlob = function (canvas, quality) {
+                return new Promise(function (resolve) {
+                    canvas.toBlob(resolve, 'image/jpeg', quality);
+                });
+            };
 
-                // User opened the picker and cancelled, or the selection was cleared.
-                if (!file) {
-                    resetPhoto();
+            // Resolves to { blob, name, width, height }. Photos that are already small are sent untouched.
+            var preparePhoto = function (file) {
+                return loadImage(file).then(function (loaded) {
+                    var img = loaded.img;
+                    var width = img.naturalWidth;
+                    var height = img.naturalHeight;
+
+                    if (width * height > 24000000) {
+                        URL.revokeObjectURL(loaded.url);
+                        throw new Error('pixels');
+                    }
+
+                    var scale = Math.min(1, MAX_EDGE / Math.max(width, height));
+
+                    if (scale === 1 && file.size <= MAX_UPLOAD_BYTES) {
+                        URL.revokeObjectURL(loaded.url);
+                        return { blob: file, name: file.name, width: width, height: height };
+                    }
+
+                    var targetW = Math.max(1, Math.round(width * scale));
+                    var targetH = Math.max(1, Math.round(height * scale));
+                    var canvas = document.createElement('canvas');
+
+                    canvas.width = targetW;
+                    canvas.height = targetH;
+
+                    var ctx = canvas.getContext('2d');
+
+                    if (!ctx) {
+                        URL.revokeObjectURL(loaded.url);
+                        throw new Error('read');
+                    }
+
+                    ctx.fillStyle = '#ffffff'; // transparent PNGs would turn black as JPEG
+                    ctx.fillRect(0, 0, targetW, targetH);
+                    ctx.imageSmoothingQuality = 'high';
+                    ctx.drawImage(img, 0, 0, targetW, targetH);
+                    URL.revokeObjectURL(loaded.url);
+
+                    return canvasToBlob(canvas, 0.85).then(function (blob) {
+                        if (blob && blob.size > MAX_UPLOAD_BYTES) {
+                            return canvasToBlob(canvas, 0.7);
+                        }
+
+                        return blob;
+                    }).then(function (blob) {
+                        canvas.width = 0; // frees the pixel buffer sooner on iOS
+                        canvas.height = 0;
+
+                        if (!blob || blob.size > MAX_UPLOAD_BYTES) {
+                            throw new Error('size');
+                        }
+
+                        return { blob: blob, name: 'photo-' + Date.now() + '-' + nextPhotoId + '.jpg', width: targetW, height: targetH };
+                    });
+                });
+            };
+
+            /* ---- preview grid ---- */
+
+            var render = function () {
+                var count = photoItems.length;
+
+                while (previewBox.firstChild) {
+                    previewBox.removeChild(previewBox.firstChild);
+                }
+
+                if (count === 0) {
+                    previewBox.classList.add('hidden');
+                } else {
+                    var grid = document.createElement('div');
+                    grid.className = 'cm-photos cm-photos--' + count;
+
+                    if (count === 1 && photoItems[0].width && photoItems[0].height) {
+                        // Same clamp as post-card.blade.php.
+                        var ratio = Math.max(0.8, Math.min(1.91, photoItems[0].width / photoItems[0].height));
+                        grid.style.setProperty('--cm-ar', ratio.toFixed(3));
+                    }
+
+                    photoItems.forEach(function (item, index) {
+                        var tile = document.createElement('div');
+                        tile.className = 'cm-photos__item' + (item.pending ? ' cm-skeleton' : '');
+
+                        if (!item.pending) {
+                            var img = document.createElement('img');
+                            img.className = 'cm-photos__img';
+                            img.src = item.url;
+                            img.alt = 'Selected photo ' + (index + 1) + ' of ' + count;
+
+                            var remove = document.createElement('button');
+                            remove.type = 'button';
+                            remove.className = 'cm-photos__remove';
+                            remove.setAttribute('aria-label', 'Remove photo ' + (index + 1));
+                            remove.appendChild(buildCloseIcon());
+                            remove.addEventListener('click', function () {
+                                removePhoto(item);
+                                body.focus();
+                            });
+
+                            tile.appendChild(img);
+                            tile.appendChild(remove);
+                        }
+
+                        grid.appendChild(tile);
+                    });
+
+                    previewBox.appendChild(grid);
+                    previewBox.classList.remove('hidden');
+                }
+
+                photoInput.disabled = count >= MAX_PHOTOS;
+
+                if (photoLabel) {
+                    photoLabel.classList.toggle('is-disabled', count >= MAX_PHOTOS);
+                }
+
+                if (photoName) {
+                    photoName.textContent = count === 0 ? DEFAULT_LABEL : count + ' of ' + MAX_PHOTOS + ' photos';
+                }
+
+                autoGrow(); // the textarea gives room back once photos appear
+            };
+
+            var removePhoto = function (item) {
+                var index = photoItems.indexOf(item);
+
+                if (index === -1) {
                     return;
                 }
+
+                if (item.url) {
+                    URL.revokeObjectURL(item.url);
+                }
+
+                photoItems.splice(index, 1);
+                clearPhotoError();
+                render();
+                syncPostBtn();
+            };
+
+            var addPhotos = function (files) {
+                var message = '';
+                var room = MAX_PHOTOS - photoItems.length;
 
                 clearPhotoError();
 
-                if (ALLOWED_TYPES.indexOf(file.type) === -1) {
-                    resetPhoto();
-                    showPhotoError('Please choose a JPG, PNG or WebP photo.');
-                    return;
+                if (files.length > room) {
+                    message = 'You can only upload up to ' + MAX_PHOTOS + ' photos.';
+                    files = files.slice(0, Math.max(0, room));
                 }
 
-                if (file.size > MAX_BYTES) {
-                    resetPhoto();
-                    showPhotoError('The photo must be 4 MB or smaller.');
-                    return;
+                files = files.filter(function (file) {
+                    if (ALLOWED_TYPES.indexOf(file.type) === -1) {
+                        message = 'Please choose JPG, PNG or WebP photos.';
+                        return false;
+                    }
+
+                    if (file.size > MAX_SOURCE_BYTES) {
+                        message = 'That photo is too large. Choose one under 25 MB.';
+                        return false;
+                    }
+
+                    return true;
+                });
+
+                files.forEach(function (file) {
+                    var item = { id: nextPhotoId++, blob: null, url: null, name: '', width: 0, height: 0, pending: true };
+
+                    photoItems.push(item);
+                    photosBusy += 1;
+
+                    preparePhoto(file).then(function (result) {
+                        if (photoItems.indexOf(item) === -1) {
+                            return;
+                        }
+
+                        item.blob = result.blob;
+                        item.name = result.name;
+                        item.width = result.width;
+                        item.height = result.height;
+                        item.url = URL.createObjectURL(result.blob);
+                        item.pending = false;
+                    }, function (error) {
+                        var index = photoItems.indexOf(item);
+
+                        if (index !== -1) {
+                            photoItems.splice(index, 1);
+                        }
+
+                        showPhotoError(error && error.message === 'size'
+                            ? 'That photo is still over 4 MB after shrinking. Try another one.'
+                            : error && error.message === 'pixels'
+                                ? 'That photo has too many pixels to process. Try a smaller one.'
+                                : 'That file could not be read as an image.');
+                    }).then(function () {
+                        photosBusy -= 1;
+                        render();
+                        syncPostBtn();
+                    });
+                });
+
+                if (message) {
+                    showPhotoError(message);
                 }
 
-                previewToken += 1;
+                render();
+                syncPostBtn();
+            };
 
-                var token = previewToken;
-                var reader = new FileReader();
+            photoInput.addEventListener('change', function () {
+                var files = photoInput.files ? Array.prototype.slice.call(photoInput.files) : [];
 
-                reader.onload = function () {
-                    if (token !== previewToken) {
-                        return;
-                    }
+                // Clear the input so picking the same file again still fires "change".
+                // The real list lives in photoItems.
+                photoInput.value = '';
 
-                    showPreview(String(reader.result), file.name, token);
-                };
-
-                reader.onerror = function () {
-                    if (token !== previewToken) {
-                        return;
-                    }
-
-                    resetPhoto();
-                    showPhotoError('That file could not be read. Try another photo.');
-                };
-
-                reader.readAsDataURL(file);
+                if (files.length > 0) {
+                    addPhotos(files);
+                }
             });
+        }
+
+        /* -- Tap anywhere on the canvas to focus the textarea -- */
+
+        var canvas = postForm.querySelector('.cm-compose--canvas');
+
+        if (canvas) {
+            canvas.addEventListener('click', function (event) {
+                if (event.target === canvas || event.target.classList.contains('cm-compose__main') || event.target.classList.contains('cm-compose__row')) {
+                    body.focus();
+                }
+            });
+        }
+
+        /* -- Lift the action bar above the iOS keyboard -- */
+
+        if (window.visualViewport) {
+            var vv = window.visualViewport;
+
+            var syncKeyboard = function () {
+                var offset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+                var open = offset > 80; // ignore URL-bar resize noise
+
+                postForm.style.setProperty('--cm-kb', open ? offset + 'px' : '0px');
+                postForm.classList.toggle('is-keyboard', open);
+            };
+
+            vv.addEventListener('resize', syncKeyboard);
+            vv.addEventListener('scroll', syncKeyboard);
         }
 
         syncPostBtn();
@@ -1105,7 +1268,13 @@
             var added = document.getElementById('comment-' + data.comment_id);
 
             if (added) {
-                added.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                var addedWrap = added.closest('.cm-comment-wrapper');
+
+                if (addedWrap) {
+                    addedWrap.classList.add('cm-animate-in');
+                }
+
+                added.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }
         };
 
@@ -1337,14 +1506,38 @@
     if (sheet) {
         var reportForm = document.getElementById('report-form');
         var reportTitle = document.getElementById('report-title');
+        var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+        var sheetCloseTimer = null;
 
-        var closeSheet = function () {
+        var finishCloseSheet = function () {
+            clearTimeout(sheetCloseTimer);
+            sheetCloseTimer = null;
+            sheet.classList.remove('is-closing');
             sheet.hidden = true;
             reportForm.reset();
         };
 
+        // Plays the slide-down (240ms, matches the CSS), then hides the sheet.
+        var closeSheet = function () {
+            if (sheet.hidden || sheetCloseTimer !== null) {
+                return;
+            }
+
+            if (reduceMotion.matches) {
+                finishCloseSheet();
+                return;
+            }
+
+            sheet.classList.add('is-closing');
+            sheetCloseTimer = setTimeout(finishCloseSheet, 240);
+        };
+
         document.querySelectorAll('[data-report-open]').forEach(function (button) {
             button.addEventListener('click', function () {
+                clearTimeout(sheetCloseTimer);
+                sheetCloseTimer = null;
+                sheet.classList.remove('is-closing');
+
                 reportForm.action = button.getAttribute('data-report-action');
                 reportTitle.textContent = 'Report this ' + button.getAttribute('data-report-kind');
                 sheet.hidden = false;
@@ -1403,27 +1596,91 @@
     window.addEventListener('load', syncAllSeeMore);
     window.addEventListener('resize', syncAllSeeMore);
 
-    /* ---------- Feed polish: photo lightbox ---------- */
+    /* ---------- Feed polish: photo lightbox (swipe through a post's photos) ---------- */
 
     var lightbox = document.getElementById('lightbox');
 
     if (lightbox) {
         var lightboxImg = document.getElementById('lightbox-img');
         var lightboxClose = document.getElementById('lightbox-close');
+        var lightboxCount = document.getElementById('lightbox-count');
+        var lightboxPrev = document.getElementById('lightbox-prev');
+        var lightboxNext = document.getElementById('lightbox-next');
         var lightboxOpener = null;
+        var lightboxItems = [];
+        var lightboxIndex = 0;
+        var lightboxMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+        var swipe = { x: 0, dx: 0, active: false };
+        var lightboxAnimation = null;
+
+        var lightboxSrc = function (img) {
+            return img.getAttribute('data-lightbox-src') || img.src;
+        };
+
+        // direction: +1 = came from the right (next), -1 = came from the left (previous), none = just opened.
+        var showLightbox = function (index, direction) {
+            var img = lightboxItems[index];
+            var multi = lightboxItems.length > 1;
+
+            lightboxIndex = index;
+            lightboxImg.style.transition = 'none';
+            lightboxImg.style.transform = '';
+            lightboxImg.src = lightboxSrc(img);
+            lightboxImg.alt = img.alt || '';
+
+            lightboxCount.hidden = !multi;
+            lightboxCount.textContent = (index + 1) + ' / ' + lightboxItems.length;
+            lightboxPrev.hidden = !multi || index === 0;
+            lightboxNext.hidden = !multi || index === lightboxItems.length - 1;
+
+            if (lightboxAnimation) {
+                lightboxAnimation.cancel();
+                lightboxAnimation = null;
+            }
+
+            if (direction && lightboxImg.animate && !lightboxMotion.matches) {
+                lightboxAnimation = lightboxImg.animate([
+                    { transform: 'translate3d(' + (direction * 48) + 'px, 0, 0)', opacity: 0 },
+                    { transform: 'translate3d(0, 0, 0)', opacity: 1 }
+                ], { duration: 240, easing: 'cubic-bezier(0.32, 0.72, 0, 1)' });
+            }
+
+            // Warm the neighbours so the next swipe is instant.
+            [index - 1, index + 1].forEach(function (i) {
+                if (lightboxItems[i]) {
+                    new Image().src = lightboxSrc(lightboxItems[i]);
+                }
+            });
+        };
+
+        var step = function (delta) {
+            var next = lightboxIndex + delta;
+
+            if (next >= 0 && next < lightboxItems.length) {
+                showLightbox(next, delta);
+            }
+        };
 
         var openLightbox = function (img) {
+            var grid = img.closest('.cm-photos');
+
             lightboxOpener = img;
-            lightboxImg.src = img.getAttribute('data-lightbox-src') || img.src;
-            lightboxImg.alt = img.alt || '';
+            lightboxItems = grid ? Array.prototype.slice.call(grid.querySelectorAll('.cm-post__img')) : [img];
             lightbox.hidden = false;
             document.body.classList.add('cm-no-scroll');
+            showLightbox(Math.max(0, lightboxItems.indexOf(img)), 0);
             lightboxClose.focus();
         };
 
         var closeLightbox = function () {
             lightbox.hidden = true;
             lightboxImg.removeAttribute('src');
+            lightboxItems = [];
+            swipe.active = false;
+            if (lightboxAnimation) {
+                lightboxAnimation.cancel();
+                lightboxAnimation = null;
+            }
             document.body.classList.remove('cm-no-scroll');
 
             if (lightboxOpener && lightboxOpener.focus) {
@@ -1443,15 +1700,84 @@
         });
 
         lightbox.addEventListener('click', function (event) {
-            if (event.target !== lightboxImg) {
+            if (event.target.closest('[data-lightbox-nav]')) {
+                return;
+            }
+
+            if (event.target === lightbox) {
                 closeLightbox();
             }
         });
 
+        lightboxClose.addEventListener('click', closeLightbox);
+        lightboxPrev.addEventListener('click', function () { step(-1); });
+        lightboxNext.addEventListener('click', function () { step(1); });
+
         document.addEventListener('keydown', function (event) {
-            if (event.key === 'Escape' && !lightbox.hidden) {
+            if (lightbox.hidden) {
+                return;
+            }
+
+            if (event.key === 'Escape') {
                 closeLightbox();
+            } else if (event.key === 'ArrowLeft') {
+                step(-1);
+            } else if (event.key === 'ArrowRight') {
+                step(1);
             }
         });
+
+        /* ---- swipe: the photo follows the finger, then snaps or advances ---- */
+
+        lightbox.addEventListener('touchstart', function (event) {
+            if (event.touches.length !== 1 || lightboxItems.length < 2) {
+                swipe.active = false;
+                return;
+            }
+
+            swipe.x = event.touches[0].clientX;
+            swipe.dx = 0;
+            swipe.active = true;
+            lightboxImg.style.transition = 'none';
+        }, { passive: true });
+
+        lightbox.addEventListener('touchmove', function (event) {
+            if (!swipe.active) {
+                return;
+            }
+
+            var dx = event.touches[0].clientX - swipe.x;
+            var atEdge = (dx > 0 && lightboxIndex === 0) || (dx < 0 && lightboxIndex === lightboxItems.length - 1);
+
+            swipe.dx = dx;
+            lightboxImg.style.transform = 'translate3d(' + (atEdge ? dx * 0.3 : dx) + 'px, 0, 0)'; // rubber-band at the ends
+        }, { passive: true });
+
+        var endSwipe = function () {
+            if (!swipe.active) {
+                return;
+            }
+
+            var dx = swipe.dx;
+
+            swipe.active = false;
+            swipe.dx = 0;
+
+            if (dx <= -60 && lightboxIndex < lightboxItems.length - 1) {
+                step(1);
+                return;
+            }
+
+            if (dx >= 60 && lightboxIndex > 0) {
+                step(-1);
+                return;
+            }
+
+            lightboxImg.style.transition = 'transform 220ms cubic-bezier(0.32, 0.72, 0, 1)';
+            lightboxImg.style.transform = '';
+        };
+
+        lightbox.addEventListener('touchend', endSwipe, { passive: true });
+        lightbox.addEventListener('touchcancel', endSwipe, { passive: true });
     }
 })();

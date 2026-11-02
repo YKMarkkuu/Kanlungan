@@ -34,12 +34,21 @@
         @endif
     </div>
 
-    @if ($post['image'])
-        <img class="cm-post__img"
-             src="{{ asset($post['image']) }}"
-             data-lightbox-src="{{ asset($post['image']) }}"
-             alt="Photo attached to this post"
-             loading="lazy">
+    @php($photos = array_slice($post['images'] ?? [], 0, 3))
+    @php($photoCount = count($photos))
+    @php($first = $photos[0] ?? null)
+    @php($ratio = ($first && ($first['width'] ?? 0) > 0 && ($first['height'] ?? 0) > 0) ? max(0.8, min(1.91, $first['width'] / $first['height'])) : 1.333)
+    @php($photoStyle = $photoCount === 1 ? '--cm-ar: '.number_format($ratio, 3, '.', '') : '')
+    @if ($photoCount > 0)
+        <div class="cm-photos cm-photos--{{ $photoCount }}" style="{{ $photoStyle }}">
+            @foreach ($photos as $index => $photo)
+                <img class="cm-post__img"
+                     src="{{ asset($photo['path']) }}"
+                     data-lightbox-src="{{ asset($photo['path']) }}"
+                     alt="Photo {{ $index + 1 }} of {{ $photoCount }} attached to this post"
+                     loading="lazy">
+            @endforeach
+        </div>
     @endif
 
     @if ($showReportStatus)

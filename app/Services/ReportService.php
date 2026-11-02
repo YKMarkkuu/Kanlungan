@@ -231,7 +231,7 @@ class ReportService
                 $target->forceFill(['removed_at' => now(), 'removed_by' => 'community'])->save();
 
                 if ($target instanceof Post) {
-                    $this->images->deletePhoto($target->image_path);
+                    $this->images->deletePostImages($target);
                 }
             }
 
