@@ -1,7 +1,7 @@
 /* Kanlungan service worker.
-   Caches ONLY static assets (the app shell). It never caches HTML pages,
-   JSON responses, or /uploads/: those contain private, session-bound, or
-   deletable content (anonymous posts, avatars, removed photos). */
+   Caches ONLY static assets (the app shell). It never intercepts navigations,
+   HTML pages, JSON responses, or /uploads/: those contain private,
+   session-bound, or deletable content (anonymous posts, avatars, removed photos). */
 
 var CACHE = 'kanlungan-shell-v1';
 
@@ -15,18 +15,6 @@ var SHELL = [
     '/images/icon-192.png',
     '/images/icon-512.png'
 ];
-
-var OFFLINE_HTML =
-    '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">' +
-    '<meta name="viewport" content="width=device-width, initial-scale=1">' +
-    '<meta name="theme-color" content="#1a6b4a"><title>Offline · Kanlungan</title></head>' +
-    '<body style="margin:0;background:#f5f3ee;color:#1e1e1e;font-family:system-ui,Segoe UI,Tahoma,sans-serif;">' +
-    '<div style="max-width:420px;margin:0 auto;padding:64px 16px;">' +
-    '<h1 style="font-size:22px;margin:0 0 8px;">You\u2019re offline</h1>' +
-    '<p style="margin:0 0 16px;color:#6a6a6a;">Kanlungan needs a connection to load posts. Check your internet and try again.</p>' +
-    '<button onclick="location.reload()" style="min-height:44px;padding:10px 16px;border:1px solid #1a6b4a;' +
-    'border-radius:8px;background:#1a6b4a;color:#fff;font:inherit;font-weight:600;">Try again</button>' +
-    '</div></body></html>';
 
 self.addEventListener('install', function (event) {
     event.waitUntil(
@@ -65,6 +53,11 @@ function isStaticAsset(url) {
 self.addEventListener('fetch', function (event) {
     var request = event.request;
 
+    // Let the browser handle back/forward and other document navigations directly.
+    if (request.mode === 'navigate') {
+        return;
+    }
+
     // Never touch writes (likes, comments, logout, OTP...).
     if (request.method !== 'GET') {
         return;
@@ -96,17 +89,5 @@ self.addEventListener('fetch', function (event) {
             })
         );
         return;
-    }
-
-    // Page loads: always network (fresh, session-aware). Offline notice only on failure.
-    if (request.mode === 'navigate') {
-        event.respondWith(
-            fetch(request).catch(function () {
-                return new Response(OFFLINE_HTML, {
-                    status: 503,
-                    headers: { 'Content-Type': 'text/html; charset=utf-8' }
-                });
-            })
-        );
     }
 });

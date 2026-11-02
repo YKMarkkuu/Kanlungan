@@ -49,8 +49,14 @@ class CommunityFlowTest extends TestCase
             ->assertOk()
             ->assertJson(['count' => 6]);
 
-        $this->get('/feed')
-            ->assertOk()
+        $feedResponse = $this->get('/feed')->assertOk();
+
+        $this->assertStringContainsString('no-cache', $feedResponse->headers->get('Cache-Control'));
+        $this->assertStringContainsString('no-store', $feedResponse->headers->get('Cache-Control'));
+        $this->assertStringContainsString('must-revalidate', $feedResponse->headers->get('Cache-Control'));
+        $feedResponse
+            ->assertHeader('Pragma', 'no-cache')
+            ->assertHeader('Expires', '0')
             ->assertSee('Viewer notification 6')
             ->assertSee('Viewer notification 2')
             ->assertDontSee('Viewer notification 1')
@@ -153,7 +159,11 @@ class CommunityFlowTest extends TestCase
 
         $this->actingAs($user)->post("/post/{$post->id}/comments", ['body' => 'first!', 'anonymous' => '1'])->assertRedirect("/post/{$post->id}");
         $this->assertSame(1, Comment::count());
-        $this->actingAs($user)->get("/post/{$post->id}")->assertOk()->assertSee('first!')->assertDontSee($user->email);
+        $this->actingAs($user)->get("/post/{$post->id}")
+            ->assertOk()
+            ->assertSee('first!')
+            ->assertSee('<textarea class="input" name="body" id="comment-body"', false)
+            ->assertDontSee($user->email);
     }
 
     public function test_post_and_comment_cards_include_full_timestamp_titles(): void
@@ -494,6 +504,44 @@ class CommunityFlowTest extends TestCase
         $this->actingAs($voter)->post("/reports/{$report->id}/vote", ['choice' => 'agree']);
         $this->actingAs($voter)->post("/reports/{$report->id}/vote", ['choice' => 'agree'])->assertSessionHasErrors('report');
         $this->assertSame(1, $report->votes()->count());
+    }
+
+    public function test_report_vote_json_request_returns_success_without_redirecting(): void
+    {
+        $author = User::factory()->create();
+        $reporter = User::factory()->create();
+        $starter = User::factory()->create();
+        $voter = User::factory()->create();
+        $post = $this->makePost($author);
+
+        $this->actingAs($reporter)->post("/report/post/{$post->id}", ['category' => 'Spam']);
+        $report = Report::firstOrFail();
+        $this->actingAs($starter)->post("/reports/{$report->id}/start");
+
+        $this->actingAs($voter)->postJson("/reports/{$report->id}/vote", ['choice' => 'agree'])
+            ->assertOk()
+            ->assertJson(['status' => 'success', 'message' => 'Vote recorded.']);
+
+        $this->assertSame(1, $report->votes()->count());
+    }
+
+    public function test_report_vote_redirect_flashes_verdicts_tab(): void
+    {
+        $author = User::factory()->create();
+        $reporter = User::factory()->create();
+        $starter = User::factory()->create();
+        $voter = User::factory()->create();
+        $post = $this->makePost($author);
+
+        $this->actingAs($reporter)->post("/report/post/{$post->id}", ['category' => 'Spam']);
+        $report = Report::firstOrFail();
+        $this->actingAs($starter)->post("/reports/{$report->id}/start");
+
+        $this->actingAs($voter)
+            ->from('/alerts?tab=verdicts')
+            ->post("/reports/{$report->id}/vote", ['choice' => 'agree', 'tab' => 'verdicts'])
+            ->assertRedirect('/alerts?tab=verdicts')
+            ->assertSessionHas('tab', 'verdicts');
     }
 
     public function test_cannot_report_own_post(): void

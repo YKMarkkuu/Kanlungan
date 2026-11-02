@@ -1988,7 +1988,11 @@ a.cm-stat { color: inherit; text-decoration: none; display: inline-flex; align-i
 
 /* ---------- Layout ---------- */
 
-.cm-comment-list > * + * { margin-top: 12px; }
+.cm-comment-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
 
 .cm-comment-wrapper { margin: 0; }
 
@@ -2033,6 +2037,11 @@ a.cm-stat { color: inherit; text-decoration: none; display: inline-flex; align-i
     border: 0;
     border-radius: 14px;
     background: var(--surface-hover);
+}
+
+.cm-comment--removed .cm-comment__bubble {
+    border: 1px dashed var(--border-default);
+    background: var(--surface-card);
 }
 
 .cm-comment__head {
@@ -2270,13 +2279,17 @@ a.cm-stat { color: inherit; text-decoration: none; display: inline-flex; align-i
 
 .cm-composer__row {
     display: flex;
-    align-items: center;
+    align-items: flex-end;
     gap: 8px;
 }
 
 .cm-composer__row .input {
     flex: 1 1 auto;
     min-width: 0;
+    min-height: 44px;
+    max-height: none;
+    overflow-y: hidden;
+    resize: none;
     background-color: var(--surface-card);
     color: var(--text-primary);
 }
@@ -2698,7 +2711,13 @@ html:has(.cm-main--compose) { scroll-padding-bottom: 130px; } /* caret never hid
     margin-right: 4px;
 }
 
-.cm-post--meme { box-shadow: inset 3px 0 0 var(--accent); }
+.cm-post--meme .chip--tag {
+    background-color: var(--surface-hover);
+}
+
+.cm-post--meme .chip--tag .icon {
+    color: var(--accent);
+}
 
 .cm-collapse {
     display: grid;

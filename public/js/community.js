@@ -19,6 +19,19 @@
     var notificationToggle = document.querySelector('[data-notification-toggle]');
     var notificationDropdown = document.querySelector('[data-notification-dropdown]');
 
+    document.addEventListener('click', function (event) {
+        var link = event.target.closest('a.cm-notification-dropdown__item, a.cm-alert');
+
+        if (!link || event.defaultPrevented || event.button !== 0 ||
+            event.metaKey || event.ctrlKey || event.shiftKey || event.altKey ||
+            (link.target && link.target !== '_self')) {
+            return;
+        }
+
+        event.preventDefault();
+        window.location.href = link.href;
+    });
+
     if (notificationToggle && notificationDropdown) {
         function closeNotificationDropdown() {
             notificationDropdown.classList.add('hidden');
@@ -46,7 +59,7 @@
         var unreadCountUrl = notificationToggle.getAttribute('data-unread-count-url');
         var renderedUnreadCount = Number(notificationToggle.getAttribute('data-unread-count'));
 
-        window.setInterval(function () {
+        function refreshUnreadCount() {
             fetch(unreadCountUrl, {
                 method: 'GET',
                 credentials: 'same-origin',
@@ -81,7 +94,14 @@
             }).catch(function (error) {
                 console.error(error);
             });
-        }, 30000);
+        }
+
+        window.setInterval(refreshUnreadCount, 30000);
+        window.addEventListener('pageshow', function (event) {
+            if (event.persisted) {
+                refreshUnreadCount();
+            }
+        });
     }
 
     /* ---------- Profile avatar preview and crop ---------- */
@@ -533,6 +553,50 @@
 
     /* ---------- Activity tabs ---------- */
 
+    function selectActivityTab(activity, selected, updateUrl) {
+        var tabs = activity.querySelectorAll('[data-activity-tab]');
+        var panels = activity.querySelectorAll('[data-activity-panel]');
+        var validTab = false;
+
+        tabs.forEach(function (tab) {
+            if (tab.getAttribute('data-activity-tab') === selected) {
+                validTab = true;
+            }
+        });
+
+        if (!validTab) {
+            return false;
+        }
+
+        tabs.forEach(function (tab) {
+            var isSelected = tab.getAttribute('data-activity-tab') === selected;
+            tab.classList.toggle('is-active', isSelected);
+            tab.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+            tab.setAttribute('tabindex', isSelected ? '0' : '-1');
+        });
+
+        panels.forEach(function (panel) {
+            panel.hidden = panel.getAttribute('data-activity-panel') !== selected;
+        });
+
+        if (updateUrl && window.history && window.history.replaceState) {
+            var url = new URL(window.location.href);
+            url.searchParams.set('tab', selected);
+            window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+        }
+
+        return true;
+    }
+
+    document.querySelectorAll('[data-activity]').forEach(function (activity) {
+        var urlTab = new URLSearchParams(window.location.search).get('tab');
+        var sessionTab = activity.getAttribute('data-session-tab');
+
+        if (!selectActivityTab(activity, urlTab, true)) {
+            selectActivityTab(activity, sessionTab || 'notifications', true);
+        }
+    });
+
     document.addEventListener('click', function (event) {
         var tab = event.target.closest('[data-activity-tab]');
 
@@ -546,18 +610,7 @@
             return;
         }
 
-        var selected = tab.getAttribute('data-activity-tab');
-
-        activity.querySelectorAll('[data-activity-tab]').forEach(function (item) {
-            var isSelected = item === tab;
-            item.classList.toggle('is-active', isSelected);
-            item.setAttribute('aria-selected', isSelected ? 'true' : 'false');
-            item.setAttribute('tabindex', isSelected ? '0' : '-1');
-        });
-
-        activity.querySelectorAll('[data-activity-panel]').forEach(function (panel) {
-            panel.hidden = panel.getAttribute('data-activity-panel') !== selected;
-        });
+        selectActivityTab(activity, tab.getAttribute('data-activity-tab'), true);
     });
 
     document.addEventListener('keydown', function (event) {
@@ -623,6 +676,73 @@
             return { networkError: true };
         });
     }
+
+    document.addEventListener('submit', function (event) {
+        var form = event.target.closest('form[data-report-vote]');
+
+        if (!form) {
+            return;
+        }
+
+        event.preventDefault();
+
+        if (form.dataset.sending === 'true') {
+            return;
+        }
+
+        var submitter = event.submitter;
+        var feedback = document.createElement('p');
+        feedback.className = 'text-small text-muted';
+        feedback.setAttribute('role', 'status');
+        feedback.setAttribute('aria-live', 'polite');
+        feedback.textContent = 'Vote recorded.';
+        form.hidden = true;
+        form.dataset.sending = 'true';
+        form.parentNode.insertBefore(feedback, form.nextSibling);
+
+        sendForm(form, function (payload) {
+            if (submitter && submitter.name) {
+                payload.set(submitter.name, submitter.value);
+            }
+            payload.set('tab', 'verdicts');
+        }).then(function (result) {
+            if (result.ok && result.data.status === 'success') {
+                form.remove();
+                feedback.textContent = result.data.message || 'Vote recorded.';
+                return;
+            }
+
+            form.hidden = false;
+            delete form.dataset.sending;
+            feedback.remove();
+
+            if (result.networkError) {
+                showReactError('Could not reach server. Your vote was not recorded.');
+                return;
+            }
+
+            if (result.status === 401) {
+                window.location.href = '/';
+                return;
+            }
+
+            if (result.status === 419) {
+                showReactError('Your session expired. Refresh the page and try again.');
+                return;
+            }
+
+            if (result.status === 429) {
+                showReactError('You are going too fast. Try again in a moment.');
+                return;
+            }
+
+            var errors = result.data.errors;
+            var message = result.data.message ||
+                (errors && errors.report && errors.report[0]) ||
+                'Your vote could not be recorded. Please try again.';
+            showReactError(message);
+        });
+    });
 
     function showInlineError(el, message) {
         if (!el) {
@@ -1373,6 +1493,16 @@
         var replyCancel = document.getElementById('reply-cancel');
         var commentBody = document.getElementById('comment-body');
 
+        var autoGrowComment = function () {
+            commentBody.style.height = 'auto';
+            commentBody.style.height = commentBody.scrollHeight + 'px';
+            commentBody.style.overflowY = 'hidden';
+        };
+
+        commentBody.addEventListener('input', autoGrowComment);
+        window.addEventListener('resize', autoGrowComment);
+        autoGrowComment();
+
         toggle.addEventListener('click', function () {
             var on = anonField.value !== '1';
 
@@ -1520,6 +1650,7 @@
                 if (res.ok && res.data.status === 'success') {
                     insertComment(res.data);
                     commentBody.value = '';
+                    autoGrowComment();
                     clearReply();
                     commentBody.focus();
                     return;

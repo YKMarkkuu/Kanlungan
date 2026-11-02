@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\OtpController;
+use App\Http\Middleware\PreventAuthenticatedResponseCaching;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -25,8 +26,10 @@ Route::post('/auth/verify-code', [OtpController::class, 'verifyCode'])->middlewa
 Route::post('/auth/register',    [OtpController::class, 'register'])->middleware('throttle:otp-register')->name('auth.register');
 
 Route::post('/auth/login',  [LoginController::class, 'login'])->middleware('throttle:otp-verify')->name('auth.login');
-Route::post('/auth/logout', [LoginController::class, 'logout'])->middleware('auth')->name('auth.logout');
 
-Route::get('/home', fn () => redirect()->route('feed'))->middleware('auth')->name('home');
+Route::middleware(['auth', PreventAuthenticatedResponseCaching::class])->group(function () {
+    Route::post('/auth/logout', [LoginController::class, 'logout'])->name('auth.logout');
+    Route::get('/home', fn () => redirect()->route('feed'))->name('home');
 
-require __DIR__.'/community.php';
+    require __DIR__.'/community.php';
+});

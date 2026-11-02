@@ -26,7 +26,9 @@ class AppServiceProvider extends ServiceProvider
         Mail::extend('brevo', function (array $config) {
             $apiKey = $config['key'] ?? config('services.brevo.key');
 
-            if (! is_string($apiKey) || trim($apiKey) === '') {
+            if (app()->environment('production') &&
+                config('mail.default') === 'brevo' &&
+                (! is_string($apiKey) || trim($apiKey) === '')) {
                 throw new RuntimeException('Set BREVO_API_KEY to use the Brevo mailer.');
             }
 

@@ -25,7 +25,7 @@
         </div>
     </div>
 
-    {{-- Comment box pinned to the bottom (mockup screen 5): [anon] [input] [send]. --}}
+    {{-- Comment box pinned to the bottom (mockup screen 5): [anon] [textarea] [send]. --}}
     <form method="POST" action="{{ route('post.comment', $post['id']) }}" class="cm-composer" id="comment-form" data-alias="{{ $alias }}">
         @csrf
         <input type="hidden" name="parent_id" id="parent-id" value="">
@@ -43,7 +43,7 @@
 
         <div class="cm-composer__row">
             <button type="button" class="cm-icon-btn cm-anon-toggle is-on" id="anon-toggle" aria-pressed="true" aria-label="Comment anonymously" title="Anonymous">@include('components.icon', ['name' => 'mask'])</button>
-            <input class="input" type="text" name="body" id="comment-body" placeholder="Write a comment…" maxlength="1000" autocomplete="off" required>
+            <textarea class="input" name="body" id="comment-body" placeholder="Write a comment…" maxlength="1000" rows="1" autocomplete="off" required></textarea>
             <button type="submit" class="btn btn--primary cm-composer__send" aria-label="Send comment" title="Send">@include('components.icon', ['name' => 'send'])</button>
         </div>
     </form>

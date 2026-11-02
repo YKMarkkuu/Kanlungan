@@ -4,7 +4,7 @@
 @section('nav', 'alerts')
 
 @section('content')
-    <div class="stack" data-activity>
+    <div class="stack" data-activity data-session-tab="{{ session('tab', old('tab', '')) }}">
         <header class="cm-header">
             <h1>Activity</h1>
             @if ($alerts->contains('unread', true))

@@ -6,6 +6,7 @@ use App\Models\Report;
 use App\Services\CommunityService;
 use App\Services\ReportService;
 use App\Support\VoteTally;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -43,12 +44,23 @@ class ReportController extends Controller
         return back()->with('report_status', 'Voting started.');
     }
 
-    public function vote(Request $request, int $report): RedirectResponse
+    public function vote(Request $request, int $report): JsonResponse|RedirectResponse
     {
         $data = $request->validate(['choice' => ['required', Rule::in(VoteTally::CHOICES)]]);
 
         $this->reports->vote($request->user()->id, $report, $data['choice']);
 
-        return back()->with('report_status', 'Vote recorded.');
+        if ($request->expectsJson()) {
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Vote recorded.',
+            ]);
+        }
+
+        $tab = in_array($request->input('tab'), ['notifications', 'verdicts', 'reports'], true)
+            ? $request->input('tab')
+            : 'verdicts';
+
+        return back()->with('tab', $tab)->with('report_status', 'Vote recorded.');
     }
 }

@@ -28,8 +28,9 @@
                 <span class="text-muted">{{ $report['votes'] }}/{{ $report['quorum'] }} votes · ends in {{ $report['ends_in'] }}</span>
             </p>
             @if ($report['can_vote'])
-                <form method="POST" action="{{ route('report.vote', $report['id']) }}" class="cm-report-banner__votes">
+                <form method="POST" action="{{ route('report.vote', $report['id']) }}" class="cm-report-banner__votes" data-report-vote>
                     @csrf
+                    <input type="hidden" name="tab" value="verdicts">
                     <button type="submit" name="choice" value="agree" class="btn">Agree</button>
                     <button type="submit" name="choice" value="false_report" class="btn">False report</button>
                     <button type="submit" name="choice" value="wrong_tag" class="btn">Wrong tag</button>
