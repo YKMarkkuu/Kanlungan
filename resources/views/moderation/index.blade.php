@@ -62,7 +62,9 @@
                     <p class="text-small text-muted">
                         {{ ucfirst($card['kind']) }}
                         @if ($card['removed']) · removed @endif
-                        @if ($card['status'] !== 'resolved') · vote still {{ $card['status'] }} @else · vote result: {{ str_replace('_', ' ', $card['outcome']) }} @endif
+                        @if ($card['status'] !== 'escalated')
+                            @if ($card['status'] !== 'resolved') · vote still {{ $card['status'] }} @else · vote result: {{ str_replace('_', ' ', $card['outcome']) }} @endif
+                        @endif
                         @if ($card['referred']) · referred to Guidance @endif
                         · {{ $card['time'] }}
                     </p>

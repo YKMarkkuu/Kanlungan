@@ -173,6 +173,25 @@ class ModerationFlowTest extends TestCase
             ]);
         }
 
+        $escalatedPost = $this->makePost($author, 'MY-ESCALATED-REPORT-PREVIEW');
+        Report::create([
+            'reporter_id' => $reporter->id,
+            'reportable_type' => Post::class,
+            'reportable_id' => $escalatedPost->id,
+            'category' => 'Threats',
+            'status' => Report::ESCALATED,
+            'mod_status' => 'pending',
+            'mod_subject' => 'content',
+        ]);
+        Report::create([
+            'reporter_id' => $reporter->id,
+            'reportable_type' => Post::class,
+            'reportable_id' => $this->makePost($author, 'MY-MOD-REVIEWED-PREVIEW')->id,
+            'category' => 'Threats',
+            'status' => Report::RESOLVED,
+            'outcome' => 'moderator_reviewed',
+        ]);
+
         $this->actingAs($reporter)->get(route('alerts'))
             ->assertOk()
             ->assertSee('My Reports')
@@ -180,10 +199,14 @@ class ModerationFlowTest extends TestCase
             ->assertSee('MY-OPEN-REPORT-PREVIEW')
             ->assertSee('MY-VOTING-REPORT-PREVIEW')
             ->assertSee('MY-MOD-REMOVED-PREVIEW')
+            ->assertSee('MY-ESCALATED-REPORT-PREVIEW')
+            ->assertSee('MY-MOD-REVIEWED-PREVIEW')
             ->assertSee('MY-DISMISSED-COMMENT-PREVIEW')
             ->assertSee('Awaiting community review')
             ->assertSee('Voting in progress')
             ->assertSee('Removed by Moderator')
+            ->assertSee('Under moderator review')
+            ->assertSee('Reviewed by Moderator')
             ->assertSee('Dismissed / No Violation')
             ->assertDontSee('Secret Author Identity');
     }
@@ -360,7 +383,7 @@ class ModerationFlowTest extends TestCase
         $reporter = User::factory()->create(['points' => 10]);
         $post = $this->makePost($author, 'MISINFO-POST');
 
-        $report = $this->reportAndVote($post, $reporter, 'Self-harm', ['wrong_tag', 'wrong_tag', 'wrong_tag', 'agree', 'false_report']);
+        $report = $this->reportAndVote($post, $reporter, 'Misinformation', ['wrong_tag', 'wrong_tag', 'wrong_tag', 'agree', 'false_report']);
 
         $this->assertSame('wrong_tag', $report->outcome);
         $this->assertNotNull($post->fresh()->removed_at);
@@ -391,8 +414,26 @@ class ModerationFlowTest extends TestCase
         $post = $this->makePost($author, 'WORRYING-POST');
 
         $this->actingAs($reporter)->post("/report/post/{$post->id}", ['category' => 'Self-harm', 'details' => 'sounds serious']);
+        $report = Report::latest('id')->firstOrFail();
+        $this->assertSame(Report::ESCALATED, $report->status);
+        $this->assertSame('pending', $report->mod_status);
+        $this->assertSame('content', $report->mod_subject);
+        $this->assertTrue(Alert::where('user_id', $reporter->id)->where('title', 'Your report is under moderator review')->exists());
+        $this->assertTrue(Alert::where('user_id', $mod->id)->where('title', 'Urgent report needs review')->exists());
+
+        $this->actingAs(User::factory()->create())->get('/feed')
+            ->assertSee('WORRYING-POST')
+            ->assertDontSee('cm-report-banner');
+        $this->actingAs(User::factory()->create())->get(route('alerts', ['tab' => 'verdicts']))
+            ->assertDontSee('WORRYING-POST');
+
+        $this->actingAs(User::factory()->create())->post("/reports/{$report->id}/start")
+            ->assertSessionHasErrors('report');
+        $this->actingAs(User::factory()->create())->post("/reports/{$report->id}/vote", ['choice' => 'agree'])
+            ->assertSessionHasErrors('report');
 
         $this->actingAs($mod)->get('/moderation')->assertOk()->assertSee('WORRYING-POST')->assertSee('Critical')->assertSee('sounds serious')->assertSee('Refer to Guidance');
+        $this->actingAs($mod)->get('/moderation')->assertDontSee('vote still escalated');
         $this->actingAs($mod)->get('/moderation?severity=medium')->assertDontSee('WORRYING-POST');
     }
 
@@ -419,7 +460,7 @@ class ModerationFlowTest extends TestCase
             'reportable_type' => Post::class,
             'reportable_id' => $post->id,
             'category' => 'Threats',
-            'status' => 'open',
+            'status' => Report::ESCALATED,
             'mod_status' => 'pending',
             'mod_subject' => 'content',
         ]);
@@ -442,11 +483,9 @@ class ModerationFlowTest extends TestCase
             'reportable_type' => Post::class,
             'reportable_id' => $post->id,
             'category' => 'Threats',
-            'status' => 'voting',
+            'status' => Report::ESCALATED,
             'mod_status' => 'pending',
             'mod_subject' => 'content',
-            'voting_started_at' => now()->subHour(),
-            'voting_ends_at' => now()->addHours(23),
         ]);
 
         foreach ($voters as $voter) {
@@ -459,7 +498,7 @@ class ModerationFlowTest extends TestCase
 
         $report = $report->fresh();
         $this->assertSame(Report::RESOLVED, $report->status);
-        $this->assertSame('moderator_cleared', $report->outcome);
+        $this->assertSame('moderator_reviewed', $report->outcome);
         $this->assertNotNull($report->resolved_at);
         $this->assertTrue($report->voting_ends_at->equalTo($report->resolved_at));
         $this->assertSame(10, $author->fresh()->points);
@@ -472,7 +511,7 @@ class ModerationFlowTest extends TestCase
         $resolve = new \ReflectionMethod(ReportService::class, 'resolve');
         $resolve->invoke(app(ReportService::class), $staleReport);
 
-        $this->assertSame('moderator_cleared', $report->fresh()->outcome);
+        $this->assertSame('moderator_reviewed', $report->fresh()->outcome);
         $this->assertSame(10, $author->fresh()->points);
         $this->assertNull($post->fresh()->removed_at);
     }
@@ -515,7 +554,13 @@ class ModerationFlowTest extends TestCase
 
         $this->actingAs($reporter)->post("/report/post/{$post->id}", ['category' => 'Spam']);
         $report = Report::firstOrFail();
-        $report->update(['mod_status' => 'pending', 'mod_subject' => 'content']);
+        $report->update([
+            'status' => Report::VOTING,
+            'voting_started_at' => now()->subHour(),
+            'voting_ends_at' => now()->addHours(23),
+            'mod_status' => 'pending',
+            'mod_subject' => 'content',
+        ]);
 
         $this->actingAs($moderator)->get('/moderation')
             ->assertOk()
@@ -530,7 +575,25 @@ class ModerationFlowTest extends TestCase
         ])->assertSessionHasNoErrors();
 
         $this->assertSame('Self-harm', $report->fresh()->category);
+        $this->assertSame(Report::ESCALATED, $report->fresh()->status);
+        $this->assertSame('pending', $report->fresh()->mod_status);
+        $this->assertNull($report->fresh()->voting_started_at);
+        $this->assertNull($report->fresh()->voting_ends_at);
         $this->assertTrue(Alert::where('user_id', $guidance->id)->where('body', 'A post reported for Self-harm was referred to Guidance.')->exists());
+
+        $this->actingAs($moderator)->post("/moderation/{$report->id}", [
+            'action' => 'remove',
+            'reason' => 'Connect the student with support',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame(Report::RESOLVED, $report->fresh()->status);
+        $this->assertSame('moderator_reviewed', $report->fresh()->outcome);
+        $this->assertSame(0, $author->fresh()->points);
+        $supportAlert = Alert::where('user_id', $author->id)->where('title', 'Support is available')->first();
+        $this->assertNotNull($supportAlert);
+        $this->assertSame(route('page.help'), $supportAlert->url);
+        $this->assertStringContainsString('You are not in trouble', $supportAlert->body);
+        $this->actingAs($reporter)->get(route('alerts'))->assertSee('Reviewed by Moderator');
     }
 
     public function test_admin_can_unmask_reporter_or_content_author_and_the_action_is_logged(): void
@@ -605,7 +668,7 @@ class ModerationFlowTest extends TestCase
             'reportable_type' => Post::class,
             'reportable_id' => $mutedPost->id,
             'category' => 'Threats',
-            'status' => 'open',
+            'status' => Report::ESCALATED,
             'mod_status' => 'pending',
             'mod_subject' => 'content',
         ]);
@@ -614,7 +677,7 @@ class ModerationFlowTest extends TestCase
             'reportable_type' => Post::class,
             'reportable_id' => $bannedPost->id,
             'category' => 'Threats',
-            'status' => 'open',
+            'status' => Report::ESCALATED,
             'mod_status' => 'pending',
             'mod_subject' => 'content',
         ]);

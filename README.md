@@ -29,7 +29,8 @@ Kanlungan is a web app (PWA) where enrolled OLFU Pampanga students can ask for h
 
 - A **verified** space — only OLFU Pampanga students can sign up and post.
 - **Anonymous-optional** — you choose per post/comment whether to show your name.
-- **Moderated** — reports go through a human review queue, not straight to guidance.
+- **Moderated** — community voting handles standard reports; self-harm and threat reports go directly to moderators.
+- **Purposeful points** — Helpful reactions and accepted answers earn points only on Ask, Help, and Academic posts. Helpful points are capped at 50 per day (Asia/Manila); Likes are cosmetic.
 - **Accountable** — anonymous to peers, but the system still records the author for safety and legal reasons. Unmasking requires an admin/DPO with a logged reason.
 - **Local-first** — built for the OLFU Pampanga campus community.
 

@@ -205,11 +205,7 @@ class PostController extends Controller
     public function comment(Request $request, int $id): RedirectResponse|JsonResponse
     {
         $post = Post::findOrFail($id);
-        abort_if(
-            Block::where('blocker_id', $request->user()->id)->where('blocked_id', $post->author_id)->exists(),
-            403,
-            'You have blocked this user.'
-        );
+        abort_if(Block::existsBetween((int) $request->user()->id, (int) $post->author_id), 403, 'You cannot interact with this user.');
 
         $data = $request->validate([
             'body' => ['required', 'string', 'min:1', 'max:1000'],
@@ -252,11 +248,7 @@ class PostController extends Controller
     public function likePost(Request $request, int $id): RedirectResponse|JsonResponse
     {
         $post = Post::findOrFail($id);
-        abort_if(
-            Block::where('blocker_id', $request->user()->id)->where('blocked_id', $post->author_id)->exists(),
-            403,
-            'You have blocked this user.'
-        );
+        abort_if(Block::existsBetween((int) $request->user()->id, (int) $post->author_id), 403, 'You cannot interact with this user.');
 
         $active = $this->community->toggleReaction($request->user()->id, $post, Reaction::LIKE);
 
@@ -266,11 +258,7 @@ class PostController extends Controller
     public function likeComment(Request $request, int $id, int $commentId): RedirectResponse|JsonResponse
     {
         $comment = Comment::where('post_id', $id)->findOrFail($commentId);
-        abort_if(
-            Block::where('blocker_id', $request->user()->id)->where('blocked_id', $comment->author_id)->exists(),
-            403,
-            'You have blocked this user.'
-        );
+        abort_if(Block::existsBetween((int) $request->user()->id, (int) $comment->author_id), 403, 'You cannot interact with this user.');
 
         $active = $this->community->toggleReaction($request->user()->id, $comment, Reaction::LIKE);
 
@@ -280,11 +268,7 @@ class PostController extends Controller
     public function helpfulComment(Request $request, int $id, int $commentId): RedirectResponse|JsonResponse
     {
         $comment = Comment::where('post_id', $id)->findOrFail($commentId);
-        abort_if(
-            Block::where('blocker_id', $request->user()->id)->where('blocked_id', $comment->author_id)->exists(),
-            403,
-            'You have blocked this user.'
-        );
+        abort_if(Block::existsBetween((int) $request->user()->id, (int) $comment->author_id), 403, 'You cannot interact with this user.');
 
         $active = $this->community->toggleReaction($request->user()->id, $comment, Reaction::HELPFUL);
 

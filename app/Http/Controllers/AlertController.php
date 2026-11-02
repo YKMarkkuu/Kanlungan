@@ -50,9 +50,15 @@ class AlertController extends Controller
                 default => null,
             };
 
-            if ($target?->removed_by === 'moderator') {
+            if ($report->outcome === 'moderator_reviewed') {
+                $status = 'Reviewed by Moderator';
+                $statusClass = 'neutral';
+            } elseif ($target?->removed_by === 'moderator') {
                 $status = 'Removed by Moderator';
                 $statusClass = 'removed';
+            } elseif ($report->status === Report::ESCALATED) {
+                $status = 'Under moderator review';
+                $statusClass = 'pending';
             } elseif ($report->status !== Report::RESOLVED) {
                 $status = $report->status === Report::VOTING ? 'Voting in progress' : 'Awaiting community review';
                 $statusClass = 'pending';

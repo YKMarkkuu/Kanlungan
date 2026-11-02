@@ -32,6 +32,8 @@ class Report extends Model
 
     public const VOTING = 'voting';
 
+    public const ESCALATED = 'escalated';
+
     public const RESOLVED = 'resolved';
 
     protected $fillable = [

@@ -26,9 +26,6 @@ use Illuminate\Validation\ValidationException;
  */
 class CommunityService
 {
-    /** @var array<int, array<int, int>> */
-    private array $blockedCache = [];
-
     public function __construct(
         private ReportService $reports,
         private PointService $points,
@@ -83,7 +80,6 @@ class CommunityService
         $comments = $commentIds === [] ? collect() : $this->commentQuery($viewerId)
             ->with('post:id,body,removed_at')
             ->whereIn('id', $commentIds)
-            ->whereNotIn('author_id', $this->blockedIds($viewerId))
             ->whereNull('removed_at')
             ->get()
             ->filter(fn (Comment $comment) => $comment->post !== null && $comment->post->removed_at === null);
@@ -176,7 +172,6 @@ class CommunityService
     {
         $models = $this->commentQuery($viewerId)
             ->where('post_id', $postId)
-            ->whereNotIn('author_id', $this->blockedIds($viewerId))
             ->orderBy('created_at')
             ->orderBy('id')
             ->get();
@@ -271,7 +266,7 @@ class CommunityService
 
     public function addComment(int $authorId, Post $post, string $body, bool $anonymous, ?int $parentId): Comment
     {
-        if (in_array((int) $post->author_id, $this->blockedIds($authorId), true)) {
+        if (Block::existsBetween($authorId, (int) $post->author_id)) {
             throw ValidationException::withMessages(['report' => 'You cannot interact with this user.']);
         }
 
@@ -286,6 +281,10 @@ class CommunityService
             $found = Comment::where('post_id', $post->id)->find($parentId);
             $parent = $found === null ? null : ($found->parent_id === null ? $found : Comment::find($found->parent_id));
             $parentId = $parent?->id;
+
+            if ($parent !== null && Block::existsBetween($authorId, (int) $parent->author_id)) {
+                throw ValidationException::withMessages(['report' => 'You cannot interact with this user.']);
+            }
         }
 
         $comment = Comment::create([
@@ -319,7 +318,7 @@ class CommunityService
     /**
      * Switch a reaction on if the user has not given it, off if they have.
      * Returns true when the reaction is ON after the call, false when it is OFF.
-     * The author earns points for it (and loses them again if it is taken back).
+     * Helpful reactions on eligible comments earn points; Likes are cosmetic.
      * Nobody may react to their own post/comment: the guard below throws before
      * anything is saved, so self-reactions can never inflate the visible counts.
      */
@@ -331,81 +330,75 @@ class CommunityService
             throw ValidationException::withMessages(['report' => 'You cannot react to your own content.']);
         }
 
-        if (in_array($authorId, $this->blockedIds($userId), true)) {
+        if (Block::existsBetween($userId, $authorId)) {
             throw ValidationException::withMessages(['report' => 'You cannot interact with this user.']);
         }
 
-        // Marketplace is transactional, not community support: reactions register, points do not.
-        // Both directions use this flag so un-liking never deducts points that were never given.
-        $parentPost = $reactable instanceof Post ? $reactable : ($reactable instanceof Comment ? $reactable->post : null);
-        $awardsPoints = $parentPost?->category !== Post::MARKETPLACE;
+        return DB::transaction(function () use ($userId, $reactable, $authorId, $type) {
+            $existing = $reactable->reactions()->where('user_id', $userId)->where('type', $type)->first();
+            $isHelpfulComment = $type === Reaction::HELPFUL && $reactable instanceof Comment;
 
-        $existing = $reactable->reactions()->where('user_id', $userId)->where('type', $type)->first();
-        $amount = $type === Reaction::HELPFUL ? PointService::HELPFUL_RECEIVED : PointService::LIKE_RECEIVED;
-        $name = $type === Reaction::HELPFUL ? 'helpful' : 'like';
+            if ($existing !== null) {
+                $deleted = $reactable->reactions()->whereKey($existing->getKey())->delete();
 
-        if ($existing !== null) {
-            $existing->delete();
+                if ($deleted > 0 && $isHelpfulComment) {
+                    $this->points->reverse($authorId, 'helpful_removed', $reactable);
+                }
 
-            if ($awardsPoints) {
-                $this->points->award($authorId, -$amount, $name.'_removed', $reactable);
+                return false;
             }
 
-            return false;
-        }
+            $reaction = $reactable->reactions()->createOrFirst(['user_id' => $userId, 'type' => $type]);
 
-        try {
-            $reactable->reactions()->create(['user_id' => $userId, 'type' => $type]);
-        } catch (QueryException $e) {
-            // A concurrent request may have created this reaction first.
-            if (! $reactable->reactions()->where('user_id', $userId)->where('type', $type)->exists()) {
-                throw $e;
+            if (! $reaction->wasRecentlyCreated) {
+                return true;
+            }
+
+            if ($isHelpfulComment) {
+                $this->points->awardHelpful($authorId, $reactable);
+                $this->alerts->notify($authorId, 'helpful', 'Your answer was marked helpful', '"'.Str::limit($reactable->body, 40).'"', route('post.show', $reactable->post_id).'#comment-'.$reactable->id);
             }
 
             return true;
-        }
-
-        if ($awardsPoints) {
-            $this->points->award($authorId, $amount, $name.'_received', $reactable);
-        }
-
-        if ($type === Reaction::HELPFUL && $reactable instanceof Comment) {
-            $title = $awardsPoints ? "Your answer was marked helpful +{$amount}" : 'Your answer was marked helpful';
-            $this->alerts->notify($authorId, 'helpful', $title, '"'.Str::limit($reactable->body, 40).'"', route('post.show', $reactable->post_id).'#comment-'.$reactable->id);
-        }
-
-        return true;
+        });
     }
 
     /**
      * The post author picks (or un-picks) the "Accepted" answer. One per post.
-     * The comment's author earns ACCEPTED_RECEIVED points (nothing if it is their own comment).
+     * The comment's author earns ACCEPTED_RECEIVED points only for eligible post categories.
      */
     public function toggleAccepted(int $userId, Post $post, Comment $comment): void
     {
-        if ((int) $post->author_id !== $userId) {
-            throw ValidationException::withMessages(['report' => 'Only the author of the post can accept an answer.']);
-        }
+        DB::transaction(function () use ($userId, $post, $comment) {
+            $post = Post::query()->lockForUpdate()->findOrFail($post->id);
+            $comment = Comment::query()->lockForUpdate()->findOrFail($comment->id);
 
-        if ((int) $comment->post_id !== (int) $post->id || $comment->parent_id !== null || $comment->removed_at !== null) {
-            throw ValidationException::withMessages(['report' => 'That comment cannot be accepted.']);
-        }
+            if ((int) $post->author_id !== $userId) {
+                throw ValidationException::withMessages(['report' => 'Only the author of the post can accept an answer.']);
+            }
 
-        if ((int) $comment->author_id === $userId) {
-            throw ValidationException::withMessages(['report' => 'You cannot accept your own comment.']);
-        }
+            if ((int) $comment->post_id !== (int) $post->id || $comment->parent_id !== null || $comment->removed_at !== null) {
+                throw ValidationException::withMessages(['report' => 'That comment cannot be accepted.']);
+            }
 
-        if ($comment->is_accepted) {
-            $this->setAccepted($comment, false);
+            if ((int) $comment->author_id === $userId) {
+                throw ValidationException::withMessages(['report' => 'You cannot accept your own comment.']);
+            }
 
-            return;
-        }
+            $awardsPoints = $this->points->awardsPoints($post);
 
-        foreach (Comment::where('post_id', $post->id)->where('is_accepted', true)->get() as $previous) {
-            $this->setAccepted($previous, false);
-        }
+            if ($comment->is_accepted) {
+                $this->setAccepted($comment, false, $awardsPoints);
 
-        $this->setAccepted($comment, true);
+                return;
+            }
+
+            foreach (Comment::query()->where('post_id', $post->id)->where('is_accepted', true)->lockForUpdate()->get() as $previous) {
+                $this->setAccepted($previous, false, $awardsPoints);
+            }
+
+            $this->setAccepted($comment, true, $awardsPoints);
+        });
     }
 
     /**
@@ -456,23 +449,21 @@ class CommunityService
 
     /* ---------- internals ---------- */
 
-    /** @return array<int, int> ids of users the viewer has blocked */
-    private function blockedIds(int $viewerId): array
-    {
-        return $this->blockedCache[$viewerId] ??= Block::where('blocker_id', $viewerId)
-            ->pluck('blocked_id')
-            ->map(fn ($id) => (int) $id)
-            ->all();
-    }
-
-    private function setAccepted(Comment $comment, bool $accepted): void
+    private function setAccepted(Comment $comment, bool $accepted, bool $awardsPoints): void
     {
         $comment->forceFill(['is_accepted' => $accepted])->save();
 
-        $this->points->award((int) $comment->author_id, $accepted ? PointService::ACCEPTED_RECEIVED : -PointService::ACCEPTED_RECEIVED, $accepted ? 'accepted_received' : 'accepted_removed', $comment);
+        if ($accepted) {
+            if ($awardsPoints) {
+                $this->points->award((int) $comment->author_id, PointService::ACCEPTED_RECEIVED, 'accepted_received', $comment);
+            }
+        } else {
+            $this->points->reverse((int) $comment->author_id, 'accepted_removed', $comment);
+        }
 
         if ($accepted) {
-            $this->alerts->notify((int) $comment->author_id, 'helpful', 'Your answer was marked helpful +'.PointService::ACCEPTED_RECEIVED, '"'.Str::limit($comment->body, 40).'"', route('post.show', $comment->post_id).'#comment-'.$comment->id);
+            $title = 'Your answer was marked helpful'.($awardsPoints ? ' +'.PointService::ACCEPTED_RECEIVED : '');
+            $this->alerts->notify((int) $comment->author_id, 'helpful', $title, '"'.Str::limit($comment->body, 40).'"', route('post.show', $comment->post_id).'#comment-'.$comment->id);
         }
     }
 

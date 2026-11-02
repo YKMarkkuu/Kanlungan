@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Comment;
+use App\Models\Block;
 use App\Models\Post;
 use App\Models\Report;
 use App\Models\ReportVote;
@@ -14,7 +15,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Report -> red glow + pinned to the top for everyone -> community vote -> outcome.
+ * Standard reports enter community voting; critical safety reports go directly
+ * to moderator review and never enter the public vote flow.
  *
  * Voters pick: Agree | False report | Wrong tag. The vote closes at QUORUM votes, or after
  * VOTING_HOURS if at least MIN_VOTES voted. Plurality wins; a tie or too few votes = no consensus.
@@ -62,6 +64,10 @@ class ReportService
             throw $this->error('You cannot report your own post or comment.');
         }
 
+        if (Block::existsBetween($reporterId, (int) $target->author_id)) {
+            throw $this->error('You cannot interact with this user.');
+        }
+
         $alreadyActive = Report::where('reportable_type', $class)
             ->where('reportable_id', $id)
             ->where('status', '!=', Report::RESOLVED)
@@ -71,27 +77,50 @@ class ReportService
             throw $this->error('This has already been reported.');
         }
 
+        $critical = in_array($category, Report::CRITICAL, true);
+
         try {
-            return Report::create([
+            $report = Report::create([
                 'reporter_id' => $reporterId,
                 'reportable_type' => $class,
                 'reportable_id' => $id,
                 'category' => $category,
                 'details' => $details !== null && trim($details) !== '' ? trim($details) : null,
-                'status' => Report::OPEN,
-                // Critical reports (self-harm, threats) reach the moderators right away, not only after the vote.
-                'mod_status' => Report::severityFor($category) === 'critical' ? 'pending' : null,
-                'mod_subject' => Report::severityFor($category) === 'critical' ? 'content' : null,
+                'status' => $critical ? Report::ESCALATED : Report::OPEN,
+                'mod_status' => $critical ? 'pending' : null,
+                'mod_subject' => $critical ? 'content' : null,
             ]);
         } catch (QueryException $e) {
             throw $this->error('You already reported this.');
         }
+
+        if ($critical) {
+            $this->alerts->notifyRoles(
+                ['moderator', 'admin'],
+                'notice',
+                'Urgent report needs review',
+                "A {$category} report needs moderator review.",
+                route('moderation')
+            );
+            $this->alerts->notify(
+                $reporterId,
+                'report',
+                'Your report is under moderator review',
+                'A moderator will review this report directly. It will not be sent to a community vote.'
+            );
+        }
+
+        return $report;
     }
 
     public function startVoting(int $userId, int $reportId): void
     {
         DB::transaction(function () use ($userId, $reportId) {
             $report = Report::lockForUpdate()->findOrFail($reportId);
+
+            if (in_array($report->category, Report::CRITICAL, true)) {
+                throw $this->error('Safety reports are handled by moderators and cannot be voted on.');
+            }
 
             if ($report->status !== Report::OPEN) {
                 throw $this->error('Voting has already started for this report.');
@@ -115,6 +144,10 @@ class ReportService
 
         DB::transaction(function () use ($userId, $reportId, $choice) {
             $report = Report::lockForUpdate()->findOrFail($reportId);
+
+            if (in_array($report->category, Report::CRITICAL, true)) {
+                throw $this->error('Safety reports are handled by moderators and cannot be voted on.');
+            }
 
             if ($report->status !== Report::VOTING) {
                 throw $this->error('Voting is not open for this report.');
@@ -144,7 +177,10 @@ class ReportService
     /** Close every vote whose time is up. Called on feed/post load and by `reports:resolve-due`. */
     public function sweepDue(): int
     {
-        $ids = Report::where('status', Report::VOTING)->where('voting_ends_at', '<=', now())->pluck('id');
+        $ids = Report::where('status', Report::VOTING)
+            ->whereNotIn('category', Report::CRITICAL)
+            ->where('voting_ends_at', '<=', now())
+            ->pluck('id');
 
         foreach ($ids as $id) {
             DB::transaction(function () use ($id) {
@@ -176,7 +212,7 @@ class ReportService
         $reports = Report::query()
             ->where('reportable_type', $class)
             ->whereIn('reportable_id', $targets->pluck('id'))
-            ->where('status', '!=', Report::RESOLVED)
+            ->whereIn('status', [Report::OPEN, Report::VOTING])
             ->withCount('votes')
             ->withExists(['votes as has_voted' => fn ($q) => $q->where('voter_id', $viewerId)])
             ->get()
@@ -212,7 +248,9 @@ class ReportService
     /** Must be called inside a transaction with the report row locked. */
     private function resolve(Report $report): void
     {
-        if ($report->status === Report::RESOLVED || $report->outcome === 'moderator_cleared') {
+        if ($report->status !== Report::VOTING
+            || $report->outcome === 'moderator_cleared'
+            || in_array($report->category, Report::CRITICAL, true)) {
             return;
         }
 

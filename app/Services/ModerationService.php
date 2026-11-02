@@ -148,6 +148,17 @@ class ModerationService
                 $report->save();
             }
 
+            if (in_array($report->category, Report::CRITICAL, true)
+                && in_array($report->status, [Report::OPEN, Report::VOTING], true)) {
+                $report->forceFill([
+                    'status' => Report::ESCALATED,
+                    'mod_status' => 'pending',
+                    'mod_subject' => 'content',
+                    'voting_started_at' => null,
+                    'voting_ends_at' => null,
+                ])->save();
+            }
+
             $target = $report->reportable;
             $subjectUserId = $report->mod_subject === 'reporter' ? (int) $report->reporter_id : (int) $target?->author_id;
             $kind = $target instanceof \App\Models\Post ? 'post' : 'comment';
@@ -172,7 +183,17 @@ class ModerationService
                         $this->images->deletePostImages($target);
                     }
 
-                    $this->alerts->notify($subjectUserId, 'notice', 'Notice from moderators', "Your {$kind} was removed by moderators. Reason: {$reason}");
+                    $selfHarm = $report->category === 'Self-harm';
+                    $message = $selfHarm
+                        ? 'We removed your content because it may involve self-harm. You are not in trouble, and you do not have to handle this alone. Please see the Help page for support resources.'
+                        : "Your {$kind} was removed by moderators. Reason: {$reason}";
+                    $this->alerts->notify(
+                        $subjectUserId,
+                        'notice',
+                        $selfHarm ? 'Support is available' : 'Notice from moderators',
+                        $message,
+                        $selfHarm ? route('page.help') : null
+                    );
                     $changes['mod_status'] = 'reviewed';
                     break;
 
@@ -220,6 +241,13 @@ class ModerationService
                 case 'handled':
                     $changes['guidance_handled_at'] = now();
                     break;
+            }
+
+            if ($report->status === Report::ESCALATED && ($changes['mod_status'] ?? null) === 'reviewed') {
+                $changes['status'] = Report::RESOLVED;
+                $changes['outcome'] = 'moderator_reviewed';
+                $changes['resolved_at'] = now();
+                $changes['voting_ends_at'] = $changes['resolved_at'];
             }
 
             // Tell the reporter once a moderator has closed the case (not for a referral or a guidance note).

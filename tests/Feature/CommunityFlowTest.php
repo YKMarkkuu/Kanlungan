@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Alert;
 use App\Models\Block;
 use App\Models\Comment;
+use App\Models\PointLog;
 use App\Models\Post;
 use App\Models\Report;
 use App\Models\User;
@@ -100,34 +101,35 @@ class CommunityFlowTest extends TestCase
 
         $this->actingAs($viewer)->post("/block/post/{$blockedPost->id}")
             ->assertRedirect(route('feed'))
-            ->assertSessionHas('report_status', 'Blocked. You can still see their posts and comments, but you cannot interact with them.');
+            ->assertSessionHas('report_status', 'Blocked. You will no longer be able to interact with each other. Their posts and comments will still appear to protect anonymity.');
 
         $this->assertSame(1, Block::where('blocker_id', $viewer->id)->where('blocked_id', $blockedAuthor->id)->count());
         $this->actingAs($viewer)->get(route('feed'))
             ->assertOk()
             ->assertSee($blockedPost->body)
             ->assertSee($visiblePost->body)
+            ->assertDontSee('Private Blocked Name')
             ->assertSee('data-comments-count>2</span>', false);
         $this->actingAs($viewer)->get("/post/{$blockedPost->id}")->assertOk();
         $this->actingAs($viewer)->get("/post/{$visiblePost->id}")
             ->assertOk()
-            ->assertDontSee('hidden blocked comment')
+            ->assertSee('hidden blocked comment')
             ->assertSee('visible comment');
         $this->actingAs($viewer)->postJson("/post/{$blockedPost->id}/comments", [
             'body' => 'comment on a blocked author post',
             'anonymous' => '1',
         ])->assertForbidden()
-            ->assertSeeText('You have blocked this user.');
+            ->assertSeeText('You cannot interact with this user.');
         $this->actingAs($viewer)->post("/post/{$blockedPost->id}/like")
             ->assertForbidden()
-            ->assertSeeText('You have blocked this user.');
+            ->assertSeeText('You cannot interact with this user.');
         $blockedComment = Comment::where('body', 'hidden blocked comment')->firstOrFail();
         $this->actingAs($viewer)->post("/post/{$visiblePost->id}/comments/{$blockedComment->id}/like")
             ->assertForbidden()
-            ->assertSeeText('You have blocked this user.');
+            ->assertSeeText('You cannot interact with this user.');
         $this->actingAs($viewer)->post("/post/{$visiblePost->id}/comments/{$blockedComment->id}/helpful")
             ->assertForbidden()
-            ->assertSeeText('You have blocked this user.');
+            ->assertSeeText('You cannot interact with this user.');
         $this->actingAs($viewer)->postJson("/post/{$visiblePost->id}/comments", [
             'body' => 'new visible comment',
             'anonymous' => '1',
@@ -141,6 +143,50 @@ class CommunityFlowTest extends TestCase
             ->assertSee('Blocked on '.$block->created_at->format('M j, Y'))
             ->assertDontSee('Private Blocked Name')
             ->assertDontSee($blockedAuthor->email);
+    }
+
+    public function test_blocking_prevents_interactions_in_both_directions_without_hiding_content(): void
+    {
+        [$blocker, $blocked] = User::factory()->count(2)->create();
+        $blockerPost = $this->makePost($blocker);
+        $blockedPost = $this->makePost($blocked);
+        $blockedComment = Comment::create([
+            'post_id' => $blockerPost->id,
+            'author_id' => $blocked->id,
+            'body' => 'Visible despite block',
+            'is_anonymous' => true,
+        ]);
+        Block::create(['blocker_id' => $blocker->id, 'blocked_id' => $blocked->id]);
+
+        $this->actingAs($blocker)->get(route('feed'))
+            ->assertOk()
+            ->assertSee($blockerPost->body)
+            ->assertSee($blockedPost->body);
+        $this->actingAs($blocker)->get("/post/{$blockerPost->id}")
+            ->assertOk()
+            ->assertSee('Visible despite block');
+
+        foreach ([
+            [$blocked, $blockerPost],
+            [$blocker, $blockedPost],
+        ] as [$actor, $targetPost]) {
+            $this->actingAs($actor)->postJson("/post/{$targetPost->id}/comments", [
+                'body' => 'Blocked comment attempt',
+                'anonymous' => '1',
+            ])->assertForbidden();
+
+            $this->actingAs($actor)->post("/post/{$targetPost->id}/like")
+                ->assertForbidden();
+
+            $this->actingAs($actor)->post("/report/post/{$targetPost->id}", ['category' => 'Spam'])
+                ->assertSessionHasErrors('report');
+        }
+
+        $this->actingAs($blocker)->post("/post/{$blockerPost->id}/comments/{$blockedComment->id}/like")
+            ->assertForbidden();
+
+        $this->assertSame(0, Report::count());
+        $this->assertSame(0, Comment::where('body', 'Blocked comment attempt')->count());
     }
 
     public function test_block_routes_prevent_self_blocking_and_only_allow_the_blocker_to_unblock(): void
@@ -377,6 +423,7 @@ class CommunityFlowTest extends TestCase
     {
         [$author, $replyAuthor, $viewer] = User::factory()->count(3)->create();
         $post = $this->makePost($author);
+        $post->update(['category' => 'Ask']);
         $parent = Comment::create([
             'post_id' => $post->id,
             'author_id' => $author->id,
@@ -403,20 +450,86 @@ class CommunityFlowTest extends TestCase
 
         $this->assertSame(1, $reply->reactions()->where('type', 'helpful')->count());
         $this->assertSame(3, $replyAuthor->fresh()->points);
+
+        $this->actingAs($viewer)->post("/post/{$post->id}/comments/{$reply->id}/helpful")->assertRedirect();
+        $this->assertSame(0, $replyAuthor->fresh()->points);
     }
 
-    public function test_like_toggles_and_gives_author_points(): void
+    public function test_like_toggles_without_affecting_points(): void
     {
         [$author, $fan] = User::factory()->count(2)->create();
         $post = $this->makePost($author);
 
         $this->actingAs($fan)->post("/post/{$post->id}/like");
         $this->assertSame(1, $post->reactions()->count());
-        $this->assertSame(1, $author->fresh()->points);
+        $this->assertSame(0, $author->fresh()->points);
+        $this->assertSame(0, PointLog::where('user_id', $author->id)->count());
 
         $this->actingAs($fan)->post("/post/{$post->id}/like");
         $this->assertSame(0, $post->reactions()->count());
         $this->assertSame(0, $author->fresh()->points);
+    }
+
+    public function test_helpful_points_are_capped_and_unmarking_reverses_only_the_paid_amount(): void
+    {
+        [$author, $viewer] = User::factory()->count(2)->create(['points' => 49]);
+        $post = $this->makePost($author);
+        $post->update(['category' => 'Academic']);
+        $comment = Comment::create([
+            'post_id' => $post->id,
+            'author_id' => $author->id,
+            'body' => 'Helpful answer',
+            'is_anonymous' => true,
+        ]);
+        PointLog::create([
+            'user_id' => $author->id,
+            'amount' => 49,
+            'reason' => 'helpful_received',
+            'source_type' => Comment::class,
+            'source_id' => $comment->id + 1,
+        ]);
+
+        $this->actingAs($viewer)->post("/post/{$post->id}/comments/{$comment->id}/helpful")->assertRedirect();
+        $this->assertSame(50, $author->fresh()->points);
+        $this->assertSame(1, PointLog::where('user_id', $author->id)->where('reason', 'helpful_received')->where('source_id', $comment->id)->value('amount'));
+
+        $this->actingAs($viewer)->post("/post/{$post->id}/comments/{$comment->id}/helpful")->assertRedirect();
+        app(\App\Services\PointService::class)->reverse($author->id, 'helpful_removed', $comment);
+        $this->assertSame(49, $author->fresh()->points);
+        $this->assertSame(-1, PointLog::where('user_id', $author->id)->where('reason', 'helpful_removed')->where('source_id', $comment->id)->value('amount'));
+    }
+
+    public function test_helpful_reactions_on_non_eligible_categories_do_not_award_points(): void
+    {
+        [$author, $viewer] = User::factory()->count(2)->create();
+        $post = $this->makePost($author);
+        $comment = Comment::create([
+            'post_id' => $post->id,
+            'author_id' => $author->id,
+            'body' => 'A shared thought',
+            'is_anonymous' => true,
+        ]);
+
+        $this->actingAs($viewer)->post("/post/{$post->id}/comments/{$comment->id}/helpful")->assertRedirect();
+        $this->assertSame(0, $author->fresh()->points);
+        $this->assertSame(0, PointLog::where('user_id', $author->id)->count());
+    }
+
+    public function test_accepted_answer_remains_visible_without_points_outside_eligible_categories(): void
+    {
+        [$author, $answerer] = User::factory()->count(2)->create();
+        $post = $this->makePost($author);
+        $comment = Comment::create([
+            'post_id' => $post->id,
+            'author_id' => $answerer->id,
+            'body' => 'A useful shared answer',
+            'is_anonymous' => true,
+        ]);
+
+        $this->actingAs($author)->post("/post/{$post->id}/comments/{$comment->id}/accept")->assertRedirect();
+        $this->assertTrue($comment->fresh()->is_accepted);
+        $this->assertSame(0, $answerer->fresh()->points);
+        $this->assertTrue(Alert::where('user_id', $answerer->id)->where('title', 'Your answer was marked helpful')->exists());
     }
 
     public function test_json_like_response_returns_the_current_state_and_count(): void
@@ -489,7 +602,7 @@ class CommunityFlowTest extends TestCase
         $voters = User::factory()->count(5)->create();
         $post = $this->makePost($author);
 
-        $this->actingAs($reporter)->post("/report/post/{$post->id}", ['category' => 'Threats']);
+        $this->actingAs($reporter)->post("/report/post/{$post->id}", ['category' => 'Spam']);
         $report = Report::firstOrFail();
         $this->actingAs($voters[0])->post("/reports/{$report->id}/start");
         foreach ($voters as $voter) {
