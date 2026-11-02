@@ -60,4 +60,10 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(User::class, 'blocks', 'blocked_id', 'blocker_id')->withTimestamps();
     }
+
+    /** Posts this user has saved; this relationship is never exposed to other users. */
+    public function bookmarkedPosts(): BelongsToMany
+    {
+        return $this->belongsToMany(Post::class, 'bookmarks')->withTimestamps();
+    }
 }

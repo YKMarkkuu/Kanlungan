@@ -92,6 +92,7 @@
             <div class="cm-settings-list text-small">
                 <a class="cm-settings-item" href="{{ route('community.me.posts') }}">My posts</a>
                 <a class="cm-settings-item" href="{{ route('community.me.comments') }}">My comments</a>
+                <a class="cm-settings-item" href="{{ route('community.me.saved') }}">Saved posts</a>
             </div>
         </section>
 

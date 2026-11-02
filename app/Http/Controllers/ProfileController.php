@@ -72,4 +72,9 @@ class ProfileController extends Controller
     {
         return view('profile.comments', ['comments' => $community->myComments($request->user()->id)]);
     }
+
+    public function saved(Request $request, CommunityService $community)
+    {
+        return view('profile.saved', ['posts' => $community->bookmarkedPosts((int) $request->user()->id)]);
+    }
 }

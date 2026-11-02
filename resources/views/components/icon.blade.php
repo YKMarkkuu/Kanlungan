@@ -20,5 +20,8 @@
         @case('scale') <path d="M12 3v18M5 6h14M7 6l-4 7h8L7 6Zm10 0-4 7h8l-4-7ZM8 21h8" /> @break
         @case('check') <path d="m5 12.5 4.5 4.5L19 7.5" /> @break
         @case('send') <path d="M22 2 11 13" /><path d="M22 2 15 22l-4-9-9-4 20-7Z" /> @break
+        @case('bookmark') <path d="M6 4h12v17l-6-4.5L6 21V4Z" /> @break
+        @case('smile') <circle cx="12" cy="12" r="9" /><path d="M8.5 14.5c.9 1.2 2.1 1.8 3.5 1.8s2.6-.6 3.5-1.8" /><path d="M9 9.5h.01M15 9.5h.01" /> @break
+        @case('tag') <path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z" /><circle cx="7.5" cy="7.5" r="1" /> @break
     @endswitch
 </svg>

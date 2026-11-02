@@ -16,9 +16,9 @@ class DemoCommunity
     /** The viewer's per-thread alias (a placeholder until alias generation exists). */
     public const ALIAS = 'Anonymous Falcon #4821';
 
-    public const FEED_CATEGORIES = ['Ask', 'Share', 'Help', 'Vent', 'Academic'];
+    public const FEED_CATEGORIES = ['Ask', 'Share', 'Help', 'Vent', 'Academic', 'Marketplace', 'Meme'];
 
-    public const CREATE_CATEGORIES = ['Ask', 'Share', 'Help', 'Vent', 'Academic'];
+    public const CREATE_CATEGORIES = ['Ask', 'Share', 'Help', 'Vent', 'Academic', 'Marketplace', 'Meme'];
 
     private static function basePosts(): array
     {

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Block;
+use App\Models\Bookmark;
 use App\Models\Comment;
 use App\Models\Post;
 use App\Models\Reaction;
@@ -222,13 +223,23 @@ class CommunityService
     }
 
     /** @param  array<int, array{path: string, width: int, height: int}>  $images */
-    public function createPost(int $authorId, string $category, string $body, bool $anonymous, array $images = []): Post
+    public function createPost(
+        int $authorId,
+        string $category,
+        string $body,
+        bool $anonymous,
+        array $images = [],
+        ?int $price = null,
+        ?string $condition = null,
+    ): Post
     {
-        return DB::transaction(function () use ($authorId, $category, $body, $anonymous, $images) {
+        return DB::transaction(function () use ($authorId, $category, $body, $anonymous, $images, $price, $condition) {
             $post = Post::create([
                 'author_id' => $authorId,
                 'category' => $category,
                 'body' => $body,
+                'price' => $price,
+                'condition' => $condition,
                 'is_anonymous' => $anonymous,
             ]);
 
@@ -311,13 +322,21 @@ class CommunityService
             throw ValidationException::withMessages(['report' => 'You cannot interact with this user.']);
         }
 
+        // Marketplace is transactional, not community support: reactions register, points do not.
+        // Both directions use this flag so un-liking never deducts points that were never given.
+        $parentPost = $reactable instanceof Post ? $reactable : ($reactable instanceof Comment ? $reactable->post : null);
+        $awardsPoints = $parentPost?->category !== Post::MARKETPLACE;
+
         $existing = $reactable->reactions()->where('user_id', $userId)->where('type', $type)->first();
         $amount = $type === Reaction::HELPFUL ? PointService::HELPFUL_RECEIVED : PointService::LIKE_RECEIVED;
         $name = $type === Reaction::HELPFUL ? 'helpful' : 'like';
 
         if ($existing !== null) {
             $existing->delete();
-            $this->points->award($authorId, -$amount, $name.'_removed', $reactable);
+
+            if ($awardsPoints) {
+                $this->points->award($authorId, -$amount, $name.'_removed', $reactable);
+            }
 
             return false;
         }
@@ -333,10 +352,13 @@ class CommunityService
             return true;
         }
 
-        $this->points->award($authorId, $amount, $name.'_received', $reactable);
+        if ($awardsPoints) {
+            $this->points->award($authorId, $amount, $name.'_received', $reactable);
+        }
 
         if ($type === Reaction::HELPFUL && $reactable instanceof Comment) {
-            $this->alerts->notify($authorId, 'helpful', "Your answer was marked helpful +{$amount}", '"'.Str::limit($reactable->body, 40).'"', route('post.show', $reactable->post_id).'#comment-'.$reactable->id);
+            $title = $awardsPoints ? "Your answer was marked helpful +{$amount}" : 'Your answer was marked helpful';
+            $this->alerts->notify($authorId, 'helpful', $title, '"'.Str::limit($reactable->body, 40).'"', route('post.show', $reactable->post_id).'#comment-'.$reactable->id);
         }
 
         return true;
@@ -373,6 +395,52 @@ class CommunityService
         $this->setAccepted($comment, true);
     }
 
+    /**
+     * Save / un-save a post for this viewer. Returns true when it is saved after the call.
+     * Un-saving always works (even for a removed post); saving a removed post is refused.
+     */
+    public function toggleBookmark(int $userId, Post $post): bool
+    {
+        $existing = Bookmark::where('user_id', $userId)->where('post_id', $post->id)->first();
+
+        if ($existing !== null) {
+            $existing->delete();
+
+            return false;
+        }
+
+        if ($post->removed_at !== null) {
+            throw ValidationException::withMessages(['report' => 'This post was removed, so it cannot be saved.']);
+        }
+
+        try {
+            Bookmark::create(['user_id' => $userId, 'post_id' => $post->id]);
+        } catch (QueryException $e) {
+            if (! Bookmark::where('user_id', $userId)->where('post_id', $post->id)->exists()) {
+                throw $e;
+            }
+        }
+
+        return true;
+    }
+
+    /** @return array<int, array<string, mixed>> the viewer's saved posts, most recently saved first */
+    public function bookmarkedPosts(int $userId): array
+    {
+        $posts = $this->postQuery($userId)
+            ->join('bookmarks as saved', 'saved.post_id', '=', 'posts.id')
+            ->where('saved.user_id', $userId)
+            ->whereNull('posts.removed_at')
+            ->orderByDesc('saved.created_at')
+            ->orderByDesc('saved.id')
+            ->limit(50)
+            ->get();
+
+        $states = $this->reports->statesFor($userId, Post::class, $posts);
+
+        return $posts->map(fn (Post $post) => $this->postArray($post, $userId, $states[$post->id] ?? null))->all();
+    }
+
     /* ---------- internals ---------- */
 
     /** @return array<int, int> ids of users the viewer has blocked */
@@ -398,6 +466,7 @@ class CommunityService
     private function postQuery(int $viewerId)
     {
         return Post::query()
+            ->select('posts.*')
             ->with(['author:id,display_name,avatar_path', 'images'])
             ->withCount([
                 'comments',
@@ -405,6 +474,7 @@ class CommunityService
             ])
             ->withExists([
                 'reactions as liked' => fn ($q) => $q->where('type', Reaction::LIKE)->where('user_id', $viewerId),
+                'bookmarks as bookmarked' => fn ($q) => $q->where('user_id', $viewerId),
             ]);
     }
 
@@ -440,6 +510,11 @@ class CommunityService
             'body' => $removed ? $this->tombstone('post', $post->removed_by) : $post->body,
             'images' => $images,
             'image' => $images[0]['path'] ?? null, // TEMPORARY: lets the current post-card keep working. Remove with the Blade update.
+            'has_bookmarked' => (bool) $post->bookmarked,
+            'is_marketplace' => $post->category === Post::MARKETPLACE,
+            'is_meme' => $post->category === Post::MEME,
+            'price' => $removed ? null : $post->price,
+            'condition' => $removed ? null : $post->condition,
             'removed' => $removed,
             'mine' => (int) $post->author_id === $viewerId,
             'report' => $removed ? null : $report,

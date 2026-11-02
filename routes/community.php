@@ -38,6 +38,7 @@ Route::middleware(['auth', EnforceRestrictions::class])->group(function () {
     Route::post('/post/{id}/comments/{commentId}/accept', [PostController::class, 'acceptComment'])->whereNumber(['id', 'commentId'])->name('comment.accept');
 
     Route::post('/post/{id}/like', [PostController::class, 'likePost'])->whereNumber('id')->middleware('throttle:60,1')->name('post.like');
+    Route::post('/post/{id}/bookmark', [PostController::class, 'bookmarkPost'])->whereNumber('id')->middleware('throttle:60,1')->name('post.bookmark');
     Route::post('/post/{id}/comments/{commentId}/like', [PostController::class, 'likeComment'])->whereNumber(['id', 'commentId'])->middleware('throttle:60,1')->name('comment.like');
     Route::post('/post/{id}/comments/{commentId}/helpful', [PostController::class, 'helpfulComment'])->whereNumber(['id', 'commentId'])->middleware('throttle:60,1')->name('comment.helpful');
 
@@ -53,6 +54,7 @@ Route::middleware(['auth', EnforceRestrictions::class])->group(function () {
     Route::post('/profile/avatar', [ProfileController::class, 'updateAvatar'])->middleware('throttle:10,1')->name('profile.avatar');
     Route::get('/me/posts', [ProfileController::class, 'posts'])->name('community.me.posts');
     Route::get('/me/comments', [ProfileController::class, 'comments'])->name('community.me.comments');
+    Route::get('/me/saved', [ProfileController::class, 'saved'])->name('community.me.saved');
     Route::post('/me/name', [ProfileController::class, 'updateName'])->name('community.me.name');
 
     // Search + alerts (design screens 3 and 7)

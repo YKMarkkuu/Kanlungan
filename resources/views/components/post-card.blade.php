@@ -11,13 +11,26 @@
     </article>
 @else
 @php($reported = $showReportStatus && $post['report'])
-<article class="card cm-post {{ $reported ? 'cm-reported' : 'cm-post--flat' }}" id="post-{{ $post['id'] }}">
+@php($isMarket = $post['is_marketplace'] ?? false)
+@php($isMeme = $post['is_meme'] ?? false)
+@php($bookmarked = $post['has_bookmarked'] ?? false)
+<article class="card cm-post {{ $reported ? 'cm-reported' : 'cm-post--flat' }} {{ $isMeme ? 'cm-post--meme' : '' }}" id="post-{{ $post['id'] }}">
     <div class="cm-post__head">
         <x-avatar :avatar-path="$post['avatar_path'] ?? null" :name="$post['author_alias']" />
         <div class="cm-post__meta">
             <strong class="cm-post__author">{{ $post['author_alias'] }}</strong>
             <time class="cm-post__time" datetime="{{ $post['created_at']->toIso8601String() }}" title="{{ $post['created_at']->format('F j, Y, g:i A') }}">{{ $post['time_ago'] }}</time>
-            <span class="chip--tag">{{ $post['category'] }}</span>
+            <span class="chip--tag">
+                @if ($isMeme)@include('components.icon', ['name' => 'smile'])@endif
+                @if ($isMarket)@include('components.icon', ['name' => 'tag'])@endif
+                {{ $post['category'] }}
+            </span>
+            @if ($isMarket && $post['price'] !== null)
+                <span class="cm-price" aria-label="Price: {{ $post['price'] === 0 ? 'free' : number_format($post['price']).' pesos' }}">{{ $post['price'] === 0 ? 'Free' : '₱'.number_format($post['price']) }}</span>
+                @if ($post['condition'])
+                    <span class="cm-post__condition">{{ $post['condition'] }}</span>
+                @endif
+            @endif
         </div>
     </div>
 
@@ -78,6 +91,16 @@
             <span class="cm-action-btn cm-stat" aria-label="Comment, {{ $post['comments'] }} comments" title="Comment">@include('components.icon', ['name' => 'comment'])<span class="cm-stat__count" data-comments-count>{{ $post['comments'] }}</span></span>
         @endif
         <button type="button" class="cm-action-btn" onclick="copyLink('{{ route('post.show', $post['id']) }}')" aria-label="Share" title="Share">@include('components.icon', ['name' => 'share'])</button>
+        <form method="POST" action="{{ route('post.bookmark', $post['id']) }}" class="cm-bookmark-form">
+            @csrf
+            <button type="submit"
+                    class="cm-action-btn cm-bookmark {{ $bookmarked ? 'is-active' : '' }}"
+                    data-bookmark
+                    data-post-id="{{ $post['id'] }}"
+                    aria-pressed="{{ $bookmarked ? 'true' : 'false' }}"
+                    aria-label="{{ $bookmarked ? 'Remove from saved' : 'Save post' }}"
+                    title="{{ $bookmarked ? 'Remove from saved' : 'Save post' }}">@include('components.icon', ['name' => 'bookmark'])</button>
+        </form>
         <div class="cm-more-menu">
             <button type="button" class="cm-action-btn cm-more-menu__toggle" data-menu-toggle
                     aria-label="More post actions" title="More actions" aria-expanded="false"

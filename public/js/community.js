@@ -649,7 +649,7 @@
 
     function composerFailure(res, errorEl) {
         var errors = res.data && res.data.errors;
-        var fields = ['body', 'category', 'photos', 'photos.0', 'photos.1', 'photos.2', 'photo', 'parent_id', 'report'];
+        var fields = ['body', 'category', 'price', 'condition', 'display_name', 'photos', 'photos.0', 'photos.1', 'photos.2', 'photo', 'parent_id', 'report'];
         var message = '';
         var i;
 
@@ -700,6 +700,12 @@
         var postBtn = document.getElementById('post-btn');
         var anon = document.getElementById('anonymous');
         var anonHint = document.getElementById('anon-hint');
+        var marketFields = document.querySelector('[data-market-fields]');
+        var priceInput = document.getElementById('price');
+        var conditionInput = document.getElementById('condition');
+        var marketNameHint = document.getElementById('market-name-hint');
+        var marketOn = false;
+        var anonBeforeMarket = true;
         var charCount = document.getElementById('char-count');
         var alias = postForm.getAttribute('data-alias');
         var postSubmitting = false;
@@ -718,13 +724,75 @@
         };
 
         var syncPostBtn = function () {
-            postBtn.disabled = postSubmitting || photosBusy > 0 || body.value.trim().length < 3;
+            var priceMissing = marketOn && priceInput.value.trim() === '';
+            postBtn.disabled = postSubmitting || photosBusy > 0 || priceMissing || body.value.trim().length < 3;
         };
 
         var syncAnon = function () {
+            if (marketOn) {
+                anonHint.textContent = postForm.getAttribute('data-has-name') === '1'
+                    ? 'Listings always show your display name.'
+                    : 'Listings show your display name. Add one in Me first.';
+                return;
+            }
+
             anonHint.textContent = anon.checked
                 ? 'You\u2019ll appear under a random alias (like ' + alias + ') in this thread'
                 : 'Your display name will be shown on this post';
+        };
+
+        var isMarketplace = function () {
+            var selected = postForm.querySelector('input[name="category"]:checked');
+
+            return Boolean(selected && selected.value === 'Marketplace');
+        };
+
+        var setMarket = function (on, instant) {
+            if (!marketFields || on === marketOn) {
+                return;
+            }
+
+            marketOn = on;
+
+            if (instant) {
+                marketFields.style.transition = 'none';
+            }
+
+            marketFields.classList.toggle('is-open', on);
+            marketFields.setAttribute('aria-hidden', on ? 'false' : 'true');
+
+            if (instant) {
+                void marketFields.offsetWidth;
+                marketFields.style.transition = '';
+            }
+
+            priceInput.disabled = !on;
+            conditionInput.disabled = !on;
+            postForm.classList.toggle('is-market', on);
+
+            if (marketNameHint) {
+                marketNameHint.hidden = postForm.getAttribute('data-has-name') === '1' || !on;
+            }
+
+            if (on) {
+                anonBeforeMarket = anon.checked;
+                anon.checked = false;
+                anon.disabled = true;
+                anon.closest('.cm-anon-badge').classList.add('is-locked');
+
+                if (!instant) {
+                    window.setTimeout(function () {
+                        priceInput.focus({ preventScroll: true });
+                    }, 280);
+                }
+            } else {
+                anon.disabled = false;
+                anon.checked = anonBeforeMarket;
+                anon.closest('.cm-anon-badge').classList.remove('is-locked');
+            }
+
+            syncAnon();
+            syncPostBtn();
         };
 
         /* -- Auto-expanding textarea: no cap, the page scrolls instead -- */
@@ -745,6 +813,28 @@
         window.addEventListener('resize', autoGrow);
 
         anon.addEventListener('change', syncAnon);
+
+        postForm.querySelectorAll('input[name="category"]').forEach(function (input) {
+            input.addEventListener('change', function () {
+                setMarket(isMarketplace(), false);
+            });
+        });
+
+        priceInput.addEventListener('input', function () {
+            var digits = priceInput.value.replace(/\D/g, '').slice(0, 7);
+
+            if (digits !== '' && parseInt(digits, 10) > 1000000) {
+                digits = '1000000';
+            }
+
+            if (priceInput.value !== digits) {
+                priceInput.value = digits;
+            }
+
+            syncPostBtn();
+        });
+
+        setMarket(isMarketplace(), true);
 
         /* -- AJAX submit -- */
 
@@ -1496,6 +1586,142 @@
         }).then(function () {
             button.classList.remove('is-loading');
             button.removeAttribute('aria-busy');
+        });
+    });
+
+    /* ---------- Bookmarks (save ribbon) ---------- */
+
+    function popBookmark(el) {
+        el.classList.remove('is-popping');
+        void el.offsetWidth;
+        el.classList.add('is-popping');
+        clearTimeout(el._popTimer);
+        el._popTimer = setTimeout(function () {
+            el.classList.remove('is-popping');
+        }, 520);
+    }
+
+    function bookmarkButtons(postId) {
+        return document.querySelectorAll('[data-bookmark][data-post-id="' + postId + '"]');
+    }
+
+    function applyBookmark(postId, active) {
+        bookmarkButtons(postId).forEach(function (el) {
+            var wasActive = el.classList.contains('is-active');
+            var label = active ? 'Remove from saved' : 'Save post';
+
+            el.classList.toggle('is-active', active);
+            el.setAttribute('aria-pressed', active ? 'true' : 'false');
+            el.setAttribute('aria-label', label);
+            el.title = label;
+
+            if (active && !wasActive) {
+                popBookmark(el);
+            }
+        });
+    }
+
+    function setBookmarkLoading(postId, loading) {
+        bookmarkButtons(postId).forEach(function (el) {
+            el.classList.toggle('is-loading', loading);
+            el.setAttribute('aria-busy', loading ? 'true' : 'false');
+
+            if (!loading) {
+                el.removeAttribute('aria-busy');
+            }
+        });
+    }
+
+    function showSavedEmptyIfDone() {
+        var empty = document.querySelector('[data-saved-empty]');
+
+        if (empty && document.querySelectorAll('[data-saved-item]').length === 0) {
+            empty.hidden = false;
+            empty.classList.add('cm-animate-fade');
+        }
+    }
+
+    document.addEventListener('click', function (event) {
+        var button = event.target.closest('[data-bookmark]');
+
+        if (!button || !button.form) {
+            return;
+        }
+
+        event.preventDefault();
+
+        if (button.classList.contains('is-loading')) {
+            return;
+        }
+
+        var postId = button.getAttribute('data-post-id');
+        var wasActive = button.classList.contains('is-active');
+        var item = wasActive ? button.closest('[data-saved-item]') : null;
+        var headers = { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
+        var token = reactCsrf();
+
+        if (token) {
+            headers['X-CSRF-TOKEN'] = token;
+        }
+
+        setBookmarkLoading(postId, true);
+        applyBookmark(postId, !wasActive);
+
+        if (!wasActive && navigator.vibrate && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            navigator.vibrate(8);
+        }
+
+        if (item) {
+            item.classList.add('is-leaving');
+        }
+
+        var request = fetch(button.form.action, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: headers
+        }).then(function (response) {
+            return response.json().then(function (data) {
+                return { ok: response.ok, status: response.status, data: data || {} };
+            }, function () {
+                return { ok: response.ok, status: response.status, data: {} };
+            });
+        }, function () {
+            return { networkError: true };
+        });
+        var settle = new Promise(function (resolve) {
+            window.setTimeout(resolve, item ? 280 : 0);
+        });
+
+        Promise.all([request, settle]).then(function (results) {
+            var res = results[0];
+            setBookmarkLoading(postId, false);
+
+            if (res.ok && res.data && res.data.status === 'success') {
+                applyBookmark(postId, Boolean(res.data.is_active));
+
+                if (item) {
+                    if (res.data.is_active) {
+                        item.classList.remove('is-leaving');
+                    } else if (item.parentNode) {
+                        item.parentNode.removeChild(item);
+                        showSavedEmptyIfDone();
+                    }
+                }
+
+                return;
+            }
+
+            applyBookmark(postId, wasActive);
+
+            if (item) {
+                item.classList.remove('is-leaving');
+            }
+
+            if (res.networkError) {
+                showReactError('Could not reach server.');
+            } else {
+                handleReactFailure(res);
+            }
         });
     });
 

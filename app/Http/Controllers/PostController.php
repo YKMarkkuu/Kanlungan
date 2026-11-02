@@ -23,6 +23,8 @@ class PostController extends Controller
     {
         return view('feed.create', [
             'categories' => Post::CATEGORIES,
+            'conditions' => Post::CONDITIONS,
+            'hasDisplayName' => trim((string) auth()->user()->display_name) !== '',
             // Example only: the real alias is per thread, so it is only known once the post exists.
             'alias' => 'Anonymous Falcon #4821',
         ]);
@@ -33,11 +35,18 @@ class PostController extends Controller
         $data = $request->validate([
             'category' => ['required', Rule::in(Post::CATEGORIES)],
             'body' => ['required', 'string', 'min:3', 'max:2000'],
+            'price' => ['nullable', 'required_if:category,'.Post::MARKETPLACE, 'integer', 'min:0', 'max:'.Post::MAX_PRICE],
+            'condition' => ['nullable', Rule::in(Post::CONDITIONS)],
             'photos' => ['nullable', 'array', 'max:'.Post::MAX_PHOTOS],
             'photos.*' => ['file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
             // TEMPORARY: the old single-photo field, until the new composer UI ships. Remove then.
             'photo' => ['nullable', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
         ], [
+            'price.required_if' => 'Enter a price for your listing (use 0 for free).',
+            'price.integer' => 'The price must be a whole number of pesos.',
+            'price.min' => 'The price cannot be negative.',
+            'price.max' => 'The price cannot be more than ₱'.number_format(Post::MAX_PRICE).'.',
+            'condition.in' => 'Pick a condition from the list.',
             'photos.max' => 'You can only upload up to '.Post::MAX_PHOTOS.' photos.',
             'photos.*.max' => 'Each photo must be 4 MB or smaller.',
             'photos.*.image' => 'Please choose JPG, PNG or WebP photos.',
@@ -46,8 +55,17 @@ class PostController extends Controller
             'photo.image' => 'Please choose a JPG, PNG or WebP photo.',
         ]);
 
-        // Anonymous is on by default; a missing value means "anonymous".
-        $anonymous = $request->input('anonymous', '1') === '1';
+        $isMarketplace = $data['category'] === Post::MARKETPLACE;
+
+        if ($isMarketplace && trim((string) $request->user()->display_name) === '') {
+            throw ValidationException::withMessages([
+                'display_name' => 'Add a display name in Me before listing on the Marketplace, so buyers know who they are dealing with.',
+            ]);
+        }
+
+        $anonymous = $isMarketplace ? false : $request->input('anonymous', '1') === '1';
+        $price = $isMarketplace ? (int) $data['price'] : null;
+        $condition = $isMarketplace ? ($data['condition'] ?? null) : null;
 
         // No 'dimensions' rule any more: big camera photos are shrunk on the server instead of rejected.
         $files = array_values(array_filter([
@@ -66,7 +84,15 @@ class PostController extends Controller
                 $stored[] = $this->images->storePostPhoto($file);
             }
 
-            $this->community->createPost($request->user()->id, $data['category'], trim($data['body']), $anonymous, $stored);
+            $this->community->createPost(
+                $request->user()->id,
+                $data['category'],
+                trim($data['body']),
+                $anonymous,
+                $stored,
+                $price,
+                $condition,
+            );
         } catch (\Throwable $e) {
             // Any failure (bad file 2 of 3, DB error) must not leave orphan files on disk.
             $this->images->deletePaths(array_column($stored, 'path'));
@@ -81,6 +107,18 @@ class PostController extends Controller
         }
 
         return redirect()->route('feed')->with('status', 'Posted.');
+    }
+
+    public function bookmarkPost(Request $request, int $id): RedirectResponse|JsonResponse
+    {
+        $post = Post::findOrFail($id);
+        $active = $this->community->toggleBookmark((int) $request->user()->id, $post);
+
+        if (! $request->expectsJson()) {
+            return back();
+        }
+
+        return response()->json(['status' => 'success', 'is_active' => $active]);
     }
 
     public function show(Request $request, int $id)

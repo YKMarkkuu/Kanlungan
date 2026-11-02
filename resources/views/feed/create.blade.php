@@ -5,7 +5,8 @@
 @section('main-class', 'cm-main--compose')
 
 @section('content')
-    <form method="POST" action="{{ route('post.store') }}" class="cm-compose-form" id="post-form" enctype="multipart/form-data" data-alias="{{ $alias }}">
+    <form method="POST" action="{{ route('post.store') }}" class="cm-compose-form" id="post-form" enctype="multipart/form-data"
+          data-alias="{{ $alias }}" data-has-name="{{ $hasDisplayName ? '1' : '0' }}">
         @csrf
 
         <header class="cm-header cm-animate-fade">
@@ -24,6 +25,37 @@
             @endforeach
         </div>
 
+        <div class="cm-collapse" id="market-fields" data-market-fields aria-hidden="true">
+            <div class="cm-collapse__inner">
+                <div class="cm-market">
+                    <div class="field">
+                        <label class="field__label" for="price">Price</label>
+                        <div class="cm-price-input">
+                            <span class="cm-price-input__prefix" aria-hidden="true">₱</span>
+                            <input class="input" type="text" id="price" name="price" inputmode="numeric" pattern="[0-9]*"
+                                   maxlength="7" placeholder="0" autocomplete="off" value="{{ old('price') }}" disabled>
+                        </div>
+                        @error('price') <p class="field__error">{{ $message }}</p> @enderror
+                    </div>
+
+                    <div class="field">
+                        <label class="field__label" for="condition">Condition <span class="text-muted">(optional)</span></label>
+                        <select class="input" id="condition" name="condition" disabled>
+                            <option value="">Not specified</option>
+                            @foreach ($conditions as $condition)
+                                <option value="{{ $condition }}" @selected(old('condition') === $condition)>{{ $condition }}</option>
+                            @endforeach
+                        </select>
+                        @error('condition') <p class="field__error">{{ $message }}</p> @enderror
+                    </div>
+
+                    <p class="text-small text-muted" id="market-name-hint" @if ($hasDisplayName) hidden @endif>
+                        Listings show your display name. Add one in <a class="cm-underline" href="{{ route('community.me') }}">Me</a> before posting.
+                    </p>
+                </div>
+            </div>
+        </div>
+
         <div class="cm-compose cm-compose--canvas cm-animate-in" style="--cm-delay: 50ms">
             <div class="cm-compose__row">
                 <x-avatar :avatar-path="auth()->user()->avatar_path" :name="auth()->user()->display_name" class="cm-compose__avatar" />
@@ -40,6 +72,9 @@
                     @enderror
                     @error('category')
                         <p class="field__error">{{ $message }}</p>
+                    @enderror
+                    @error('display_name')
+                        <p class="field__error">{{ $message }} <a class="cm-underline" href="{{ route('community.me') }}">Go to Me</a></p>
                     @enderror
 
                     <div id="image-preview-container" class="cm-compose__preview hidden"></div>
