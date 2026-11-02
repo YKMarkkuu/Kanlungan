@@ -6,6 +6,7 @@ use App\Models\Block;
 use App\Models\Bookmark;
 use App\Models\Comment;
 use App\Models\Post;
+use App\Models\PostItem;
 use App\Models\Reaction;
 use App\Models\Report;
 use App\Support\Alias;
@@ -222,7 +223,10 @@ class CommunityService
             ->count();
     }
 
-    /** @param  array<int, array{path: string, width: int, height: int}>  $images */
+    /**
+     * @param  array<int, array{path: string, width: int, height: int}>  $images
+     * @param  array<int, array{label: ?string, price: int}>  $items
+     */
     public function createPost(
         int $authorId,
         string $category,
@@ -231,9 +235,10 @@ class CommunityService
         array $images = [],
         ?int $price = null,
         ?string $condition = null,
+        array $items = [],
     ): Post
     {
-        return DB::transaction(function () use ($authorId, $category, $body, $anonymous, $images, $price, $condition) {
+        return DB::transaction(function () use ($authorId, $category, $body, $anonymous, $images, $price, $condition, $items) {
             $post = Post::create([
                 'author_id' => $authorId,
                 'category' => $category,
@@ -249,6 +254,14 @@ class CommunityService
                     'position' => $position,
                     'width' => $image['width'],
                     'height' => $image['height'],
+                ]);
+            }
+
+            foreach (array_values($items) as $position => $item) {
+                $post->items()->create([
+                    'position' => $position,
+                    'label' => $item['label'],
+                    'price' => $item['price'],
                 ]);
             }
 
@@ -467,7 +480,7 @@ class CommunityService
     {
         return Post::query()
             ->select('posts.*')
-            ->with(['author:id,display_name,avatar_path', 'images'])
+            ->with(['author:id,display_name,avatar_path', 'images', 'items'])
             ->withCount([
                 'comments',
                 'reactions as likes_count' => fn ($q) => $q->where('type', Reaction::LIKE),
@@ -499,6 +512,7 @@ class CommunityService
         $images = $removed ? [] : $post->images
             ->map(fn ($image) => ['path' => $image->path, 'width' => $image->width, 'height' => $image->height])
             ->all();
+        $items = $removed ? [] : $this->itemsFor($post);
 
         return [
             'id' => $post->id,
@@ -515,6 +529,10 @@ class CommunityService
             'is_meme' => $post->category === Post::MEME,
             'price' => $removed ? null : $post->price,
             'condition' => $removed ? null : $post->condition,
+            'items' => $items,
+            'item_count' => count($items),
+            'price_text' => self::priceText(array_column($items, 'price')),
+            'price_label' => $this->priceLabel($items),
             'removed' => $removed,
             'mine' => (int) $post->author_id === $viewerId,
             'report' => $removed ? null : $report,
@@ -523,6 +541,71 @@ class CommunityService
             'liked' => (bool) $post->liked,
             'time_ago' => $this->ago($post->created_at),
         ];
+    }
+
+    /**
+     * @param  array<int, int|string>  $prices
+     */
+    public static function priceText(array $prices): ?string
+    {
+        $prices = array_values(array_map('intval', $prices));
+
+        if ($prices === []) {
+            return null;
+        }
+
+        $min = min($prices);
+        $max = max($prices);
+        $format = fn (int $price) => $price === 0 ? 'Free' : '₱'.number_format($price);
+
+        if ($min === $max) {
+            if ($min === 0) {
+                return 'Free';
+            }
+
+            return count($prices) > 1 ? $format($min).' each' : $format($min);
+        }
+
+        return $format($min).' – '.$format($max);
+    }
+
+    /**
+     * A single-item listing has no post_items rows, so rebuild it from posts.price.
+     *
+     * @return array<int, array{label: ?string, price: int}>
+     */
+    private function itemsFor(Post $post): array
+    {
+        if ($post->category !== Post::MARKETPLACE) {
+            return [];
+        }
+
+        if ($post->items->isNotEmpty()) {
+            return $post->items
+                ->map(fn (PostItem $item) => ['label' => $item->label, 'price' => (int) $item->price])
+                ->all();
+        }
+
+        return $post->price !== null ? [['label' => null, 'price' => (int) $post->price]] : [];
+    }
+
+    /** Screen-reader text for a price badge, spelling out each item where available. */
+    private function priceLabel(array $items): ?string
+    {
+        if ($items === []) {
+            return null;
+        }
+
+        $pesos = fn (int $price) => $price === 0 ? 'free' : number_format($price).' pesos';
+
+        if (count($items) === 1) {
+            return 'Price: '.$pesos($items[0]['price']);
+        }
+
+        return count($items).' items: '.implode(', ', array_map(
+            fn (array $item) => ($item['label'] ?? 'Item').' '.$pesos($item['price']),
+            $items,
+        ));
     }
 
     /** @return array<string, mixed> */

@@ -21,9 +21,21 @@ class PostController extends Controller
 
     public function create()
     {
+        $oldItems = old('items');
+        $itemRows = is_array($oldItems)
+            ? array_values(array_filter($oldItems, 'is_array'))
+            : [];
+        $itemRows = array_slice($itemRows, 0, Post::MAX_ITEMS);
+
+        if ($itemRows === []) {
+            $itemRows = [[]];
+        }
+
         return view('feed.create', [
             'categories' => Post::CATEGORIES,
             'conditions' => Post::CONDITIONS,
+            'itemRows' => $itemRows,
+            'maxItems' => Post::MAX_ITEMS,
             'hasDisplayName' => trim((string) auth()->user()->display_name) !== '',
             // Example only: the real alias is per thread, so it is only known once the post exists.
             'alias' => 'Anonymous Falcon #4821',
@@ -32,20 +44,36 @@ class PostController extends Controller
 
     public function store(Request $request): RedirectResponse|JsonResponse
     {
-        $data = $request->validate([
+        $isMarketplace = $request->input('category') === Post::MARKETPLACE;
+        $itemInput = $request->input('items');
+        $multiItem = is_array($itemInput) && count($itemInput) > 1;
+
+        $rules = [
             'category' => ['required', Rule::in(Post::CATEGORIES)],
             'body' => ['required', 'string', 'min:3', 'max:2000'],
-            'price' => ['nullable', 'required_if:category,'.Post::MARKETPLACE, 'integer', 'min:0', 'max:'.Post::MAX_PRICE],
             'condition' => ['nullable', Rule::in(Post::CONDITIONS)],
             'photos' => ['nullable', 'array', 'max:'.Post::MAX_PHOTOS],
             'photos.*' => ['file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
             // TEMPORARY: the old single-photo field, until the new composer UI ships. Remove then.
             'photo' => ['nullable', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
-        ], [
-            'price.required_if' => 'Enter a price for your listing (use 0 for free).',
-            'price.integer' => 'The price must be a whole number of pesos.',
-            'price.min' => 'The price cannot be negative.',
-            'price.max' => 'The price cannot be more than ₱'.number_format(Post::MAX_PRICE).'.',
+        ];
+
+        if ($isMarketplace) {
+            $rules['items'] = ['required', 'array', 'min:1', 'max:'.Post::MAX_ITEMS];
+            $rules['items.*'] = ['array'];
+            $rules['items.*.price'] = ['required', 'integer', 'min:0', 'max:'.Post::MAX_PRICE];
+            $rules['items.*.label'] = [Rule::requiredIf($multiItem), 'nullable', 'string', 'max:'.Post::MAX_ITEM_LABEL];
+        }
+
+        $data = $request->validate($rules, [
+            'items.required' => 'Add at least one item with a price.',
+            'items.max' => 'You can list up to '.Post::MAX_ITEMS.' items in one post.',
+            'items.*.price.required' => 'Enter a price for each item (use 0 for free).',
+            'items.*.price.integer' => 'Prices must be whole numbers of pesos.',
+            'items.*.price.min' => 'A price cannot be negative.',
+            'items.*.price.max' => 'A price cannot be more than ₱'.number_format(Post::MAX_PRICE).'.',
+            'items.*.label.required' => 'Give each item a short name so buyers can tell them apart.',
+            'items.*.label.max' => 'Item names can be up to '.Post::MAX_ITEM_LABEL.' characters.',
             'condition.in' => 'Pick a condition from the list.',
             'photos.max' => 'You can only upload up to '.Post::MAX_PHOTOS.' photos.',
             'photos.*.max' => 'Each photo must be 4 MB or smaller.',
@@ -55,8 +83,6 @@ class PostController extends Controller
             'photo.image' => 'Please choose a JPG, PNG or WebP photo.',
         ]);
 
-        $isMarketplace = $data['category'] === Post::MARKETPLACE;
-
         if ($isMarketplace && trim((string) $request->user()->display_name) === '') {
             throw ValidationException::withMessages([
                 'display_name' => 'Add a display name in Me before listing on the Marketplace, so buyers know who they are dealing with.',
@@ -64,8 +90,23 @@ class PostController extends Controller
         }
 
         $anonymous = $isMarketplace ? false : $request->input('anonymous', '1') === '1';
-        $price = $isMarketplace ? (int) $data['price'] : null;
         $condition = $isMarketplace ? ($data['condition'] ?? null) : null;
+        $items = [];
+
+        if ($isMarketplace) {
+            $rows = array_values($data['items']);
+
+            foreach ($rows as $row) {
+                $label = trim((string) ($row['label'] ?? ''));
+                $items[] = [
+                    'label' => count($rows) > 1 && $label !== '' ? $label : null,
+                    'price' => (int) $row['price'],
+                ];
+            }
+        }
+
+        $price = $items === [] ? null : min(array_column($items, 'price'));
+        $extraItems = count($items) > 1 ? $items : [];
 
         // No 'dimensions' rule any more: big camera photos are shrunk on the server instead of rejected.
         $files = array_values(array_filter([
@@ -92,6 +133,7 @@ class PostController extends Controller
                 $stored,
                 $price,
                 $condition,
+                $extraItems,
             );
         } catch (\Throwable $e) {
             // Any failure (bad file 2 of 3, DB error) must not leave orphan files on disk.

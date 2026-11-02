@@ -649,9 +649,16 @@
 
     function composerFailure(res, errorEl) {
         var errors = res.data && res.data.errors;
-        var fields = ['body', 'category', 'price', 'condition', 'display_name', 'photos', 'photos.0', 'photos.1', 'photos.2', 'photo', 'parent_id', 'report'];
+        var fields = ['body', 'category', 'condition', 'display_name', 'photos', 'photos.0', 'photos.1', 'photos.2', 'photo', 'parent_id', 'report'];
+        var itemKey = errors ? Object.keys(errors).filter(function (key) {
+            return key === 'items' || key.indexOf('items.') === 0;
+        })[0] : null;
         var message = '';
         var i;
+
+        if (itemKey) {
+            fields.splice(1, 0, itemKey);
+        }
 
         if (res.networkError) {
             showInlineError(errorEl, 'Could not reach server.');
@@ -701,11 +708,11 @@
         var anon = document.getElementById('anonymous');
         var anonHint = document.getElementById('anon-hint');
         var marketFields = document.querySelector('[data-market-fields]');
-        var priceInput = document.getElementById('price');
         var conditionInput = document.getElementById('condition');
         var marketNameHint = document.getElementById('market-name-hint');
         var marketOn = false;
         var anonBeforeMarket = true;
+        var itemsIncomplete;
         var charCount = document.getElementById('char-count');
         var alias = postForm.getAttribute('data-alias');
         var postSubmitting = false;
@@ -724,8 +731,8 @@
         };
 
         var syncPostBtn = function () {
-            var priceMissing = marketOn && priceInput.value.trim() === '';
-            postBtn.disabled = postSubmitting || photosBusy > 0 || priceMissing || body.value.trim().length < 3;
+            var itemsMissing = marketOn && itemsIncomplete();
+            postBtn.disabled = postSubmitting || photosBusy > 0 || itemsMissing || body.value.trim().length < 3;
         };
 
         var syncAnon = function () {
@@ -739,60 +746,6 @@
             anonHint.textContent = anon.checked
                 ? 'You\u2019ll appear under a random alias (like ' + alias + ') in this thread'
                 : 'Your display name will be shown on this post';
-        };
-
-        var isMarketplace = function () {
-            var selected = postForm.querySelector('input[name="category"]:checked');
-
-            return Boolean(selected && selected.value === 'Marketplace');
-        };
-
-        var setMarket = function (on, instant) {
-            if (!marketFields || on === marketOn) {
-                return;
-            }
-
-            marketOn = on;
-
-            if (instant) {
-                marketFields.style.transition = 'none';
-            }
-
-            marketFields.classList.toggle('is-open', on);
-            marketFields.setAttribute('aria-hidden', on ? 'false' : 'true');
-
-            if (instant) {
-                void marketFields.offsetWidth;
-                marketFields.style.transition = '';
-            }
-
-            priceInput.disabled = !on;
-            conditionInput.disabled = !on;
-            postForm.classList.toggle('is-market', on);
-
-            if (marketNameHint) {
-                marketNameHint.hidden = postForm.getAttribute('data-has-name') === '1' || !on;
-            }
-
-            if (on) {
-                anonBeforeMarket = anon.checked;
-                anon.checked = false;
-                anon.disabled = true;
-                anon.closest('.cm-anon-badge').classList.add('is-locked');
-
-                if (!instant) {
-                    window.setTimeout(function () {
-                        priceInput.focus({ preventScroll: true });
-                    }, 280);
-                }
-            } else {
-                anon.disabled = false;
-                anon.checked = anonBeforeMarket;
-                anon.closest('.cm-anon-badge').classList.remove('is-locked');
-            }
-
-            syncAnon();
-            syncPostBtn();
         };
 
         /* -- Auto-expanding textarea: no cap, the page scrolls instead -- */
@@ -814,26 +767,202 @@
 
         anon.addEventListener('change', syncAnon);
 
-        postForm.querySelectorAll('input[name="category"]').forEach(function (input) {
-            input.addEventListener('change', function () {
-                setMarket(isMarketplace(), false);
+        /* -- Marketplace: slide-down items + condition, anonymity locked OFF -- */
+
+        var itemsEditor = document.getElementById('items-editor');
+        var itemRowsBox = document.getElementById('item-rows');
+        var itemTemplate = document.getElementById('item-row-template');
+        var addItemBtn = document.getElementById('add-item-btn');
+        var itemsTitle = document.getElementById('items-title');
+        var anonLabel = anon.closest('.cm-anon-badge');
+        var maxItems = parseInt(itemsEditor.getAttribute('data-max-items'), 10) || 5;
+        var rowAnimationMs = 280;
+
+        var liveRows = function () {
+            return Array.prototype.filter.call(itemRowsBox.querySelectorAll('[data-item-row]'), function (row) {
+                return !row.hasAttribute('data-removing');
             });
-        });
+        };
 
-        priceInput.addEventListener('input', function () {
-            var digits = priceInput.value.replace(/\D/g, '').slice(0, 7);
+        var rowPrice = function (row) { return row.querySelector('[data-item-price]'); };
+        var rowName = function (row) { return row.querySelector('[data-item-name] input'); };
 
-            if (digits !== '' && parseInt(digits, 10) > 1000000) {
-                digits = '1000000';
+        itemsIncomplete = function () {
+            var rows = liveRows();
+            var multi = rows.length > 1;
+
+            return rows.some(function (row) {
+                return rowPrice(row).value.trim() === '' || (multi && rowName(row).value.trim() === '');
+            });
+        };
+
+        var syncItems = function () {
+            var rows = liveRows();
+            var multi = rows.length > 1;
+
+            itemsEditor.classList.toggle('is-multi', multi);
+            itemsTitle.textContent = multi ? 'Items for sale' : 'Price';
+            addItemBtn.hidden = rows.length >= maxItems;
+
+            rows.forEach(function (row, index) {
+                var name = rowName(row);
+                var price = rowPrice(row);
+                var nameLabel = row.querySelector('[data-item-name] label');
+                var priceLabel = row.querySelector('.cm-item-row__price label');
+                var remove = row.querySelector('[data-item-remove]');
+
+                name.name = 'items[' + index + '][label]';
+                name.id = 'items-' + index + '-label';
+                nameLabel.htmlFor = name.id;
+                nameLabel.textContent = 'Item ' + (index + 1) + ' name';
+
+                price.name = 'items[' + index + '][price]';
+                price.id = 'items-' + index + '-price';
+                priceLabel.htmlFor = price.id;
+                priceLabel.textContent = multi ? 'Item ' + (index + 1) + ' price in pesos' : 'Price in pesos';
+
+                remove.setAttribute('aria-label', 'Remove item ' + (index + 1));
+                remove.disabled = !marketOn || !multi;
+                price.disabled = !marketOn;
+                name.disabled = !marketOn || !multi;
+            });
+        };
+
+        var isMarketplace = function () {
+            var checked = postForm.querySelector('input[name="category"]:checked');
+
+            return Boolean(checked && checked.value === 'Marketplace');
+        };
+
+        var setMarket = function (on, instant) {
+            if (!marketFields || on === marketOn) {
+                return;
             }
 
-            if (priceInput.value !== digits) {
-                priceInput.value = digits;
+            marketOn = on;
+
+            if (instant) {
+                marketFields.style.transition = 'none';
+            }
+
+            marketFields.classList.toggle('is-open', on);
+            marketFields.setAttribute('aria-hidden', on ? 'false' : 'true');
+
+            if (instant) {
+                void marketFields.offsetWidth;
+                marketFields.style.transition = '';
+            }
+
+            conditionInput.disabled = !on;
+            syncItems();
+
+            if (marketNameHint) {
+                marketNameHint.hidden = postForm.getAttribute('data-has-name') === '1' || !on;
+            }
+
+            if (on) {
+                anonBeforeMarket = anon.checked;
+                anon.checked = false;
+                anon.disabled = true;
+                anonLabel.classList.add('is-locked');
+
+                if (!instant) {
+                    window.setTimeout(function () {
+                        rowPrice(liveRows()[0]).focus({ preventScroll: true });
+                    }, rowAnimationMs);
+                }
+            } else {
+                anon.disabled = false;
+                anon.checked = anonBeforeMarket;
+                anonLabel.classList.remove('is-locked');
+            }
+
+            syncAnon();
+            syncPostBtn();
+        };
+
+        addItemBtn.addEventListener('click', function () {
+            var rows = liveRows();
+
+            if (rows.length >= maxItems) {
+                return;
+            }
+
+            var wasSingle = rows.length === 1;
+            var holder = document.createElement('div');
+            holder.innerHTML = itemTemplate.innerHTML.replace(/__i__/g, String(rows.length));
+
+            var slot = holder.firstElementChild;
+            slot.classList.add('is-hidden');
+            itemRowsBox.appendChild(slot);
+            syncItems();
+            void slot.offsetWidth;
+            slot.classList.remove('is-hidden');
+
+            var target = rowName(wasSingle ? rows[0] : slot);
+            window.setTimeout(function () {
+                target.focus({ preventScroll: true });
+            }, rowAnimationMs);
+            syncPostBtn();
+        });
+
+        itemRowsBox.addEventListener('click', function (event) {
+            var button = event.target.closest('[data-item-remove]');
+
+            if (!button) {
+                return;
+            }
+
+            var row = button.closest('[data-item-row]');
+            var rows = liveRows();
+
+            if (!row || rows.length <= 1) {
+                return;
+            }
+
+            row.setAttribute('data-removing', '');
+            row.querySelectorAll('input, button').forEach(function (element) {
+                element.disabled = true;
+            });
+            row.classList.add('is-hidden');
+
+            syncItems();
+            syncPostBtn();
+
+            window.setTimeout(function () {
+                if (row.parentNode) {
+                    row.parentNode.removeChild(row);
+                }
+            }, rowAnimationMs);
+
+            (addItemBtn.hidden ? rowPrice(liveRows()[0]) : addItemBtn).focus({ preventScroll: true });
+        });
+
+        itemRowsBox.addEventListener('input', function (event) {
+            var field = event.target;
+
+            if (field.matches('[data-item-price]')) {
+                var digits = field.value.replace(/\D/g, '').slice(0, 7);
+
+                if (digits !== '' && parseInt(digits, 10) > 1000000) {
+                    digits = '1000000';
+                }
+
+                if (field.value !== digits) {
+                    field.value = digits;
+                }
             }
 
             syncPostBtn();
         });
 
+        postForm.querySelectorAll('input[name="category"]').forEach(function (radio) {
+            radio.addEventListener('change', function () {
+                setMarket(isMarketplace(), false);
+            });
+        });
+
+        syncItems();
         setMarket(isMarketplace(), true);
 
         /* -- AJAX submit -- */

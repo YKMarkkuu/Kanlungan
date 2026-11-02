@@ -25,8 +25,11 @@
                 @if ($isMarket)@include('components.icon', ['name' => 'tag'])@endif
                 {{ $post['category'] }}
             </span>
-            @if ($isMarket && $post['price'] !== null)
-                <span class="cm-price" aria-label="Price: {{ $post['price'] === 0 ? 'free' : number_format($post['price']).' pesos' }}">{{ $post['price'] === 0 ? 'Free' : '₱'.number_format($post['price']) }}</span>
+            @if ($isMarket && ($post['price_text'] ?? null))
+                <span class="cm-price" aria-label="{{ $post['price_label'] }}">{{ $post['price_text'] }}</span>
+                @if (($post['item_count'] ?? 0) > 1)
+                    <span class="cm-post__condition">{{ $post['item_count'] }} items</span>
+                @endif
                 @if ($post['condition'])
                     <span class="cm-post__condition">{{ $post['condition'] }}</span>
                 @endif
@@ -46,6 +49,17 @@
             <button type="button" class="link-btn cm-see-more" data-see-more aria-expanded="false" hidden>See more</button>
         @endif
     </div>
+
+    @if (! $link && $isMarket && ($post['item_count'] ?? 0) > 1)
+        <ul class="cm-items" aria-label="Items for sale">
+            @foreach ($post['items'] as $item)
+                <li class="cm-items__row">
+                    <span class="cm-items__label">{{ $item['label'] }}</span>
+                    <span class="cm-items__price">{{ $item['price'] === 0 ? 'Free' : '₱'.number_format($item['price']) }}</span>
+                </li>
+            @endforeach
+        </ul>
+    @endif
 
     @php($photos = array_slice($post['images'] ?? [], 0, 3))
     @php($photoCount = count($photos))

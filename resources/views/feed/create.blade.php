@@ -28,14 +28,20 @@
         <div class="cm-collapse" id="market-fields" data-market-fields aria-hidden="true">
             <div class="cm-collapse__inner">
                 <div class="cm-market">
-                    <div class="field">
-                        <label class="field__label" for="price">Price</label>
-                        <div class="cm-price-input">
-                            <span class="cm-price-input__prefix" aria-hidden="true">₱</span>
-                            <input class="input" type="text" id="price" name="price" inputmode="numeric" pattern="[0-9]*"
-                                   maxlength="7" placeholder="0" autocomplete="off" value="{{ old('price') }}" disabled>
+                    <div class="cm-items-editor {{ count($itemRows) > 1 ? 'is-multi' : '' }}" id="items-editor" data-max-items="{{ $maxItems }}">
+                        <span class="field__label" id="items-title">{{ count($itemRows) > 1 ? 'Items for sale' : 'Price' }}</span>
+
+                        <div class="cm-item-rows" id="item-rows">
+                            @foreach ($itemRows as $i => $row)
+                                @include('components.item-row', ['i' => $i, 'label' => $row['label'] ?? '', 'price' => $row['price'] ?? ''])
+                            @endforeach
                         </div>
-                        @error('price') <p class="field__error">{{ $message }}</p> @enderror
+
+                        @if ($errors->has('items') || $errors->has('items.*'))
+                            <p class="field__error">{{ $errors->first('items') ?: $errors->first('items.*') }}</p>
+                        @endif
+
+                        <button type="button" class="cm-add-item" id="add-item-btn" @if (count($itemRows) >= $maxItems) hidden @endif>+ Add another item</button>
                     </div>
 
                     <div class="field">
@@ -55,6 +61,8 @@
                 </div>
             </div>
         </div>
+
+        <template id="item-row-template">@include('components.item-row', ['i' => '__i__'])</template>
 
         <div class="cm-compose cm-compose--canvas cm-animate-in" style="--cm-delay: 50ms">
             <div class="cm-compose__row">

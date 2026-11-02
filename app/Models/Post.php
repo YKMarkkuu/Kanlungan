@@ -19,6 +19,10 @@ class Post extends Model
 
     public const MAX_PRICE = 1000000;
 
+    public const MAX_ITEMS = 5;
+
+    public const MAX_ITEM_LABEL = 40;
+
     public const MAX_PHOTOS = 3;
 
     protected $fillable = ['author_id', 'category', 'body', 'price', 'condition', 'is_anonymous', 'removed_at', 'removed_by'];
@@ -38,6 +42,11 @@ class Post extends Model
     public function images(): HasMany
     {
         return $this->hasMany(PostImage::class)->orderBy('position');
+    }
+
+    public function items(): HasMany
+    {
+        return $this->hasMany(PostItem::class)->orderBy('position');
     }
 
     public function bookmarks(): HasMany

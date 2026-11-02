@@ -64,62 +64,116 @@ class BookmarkMarketplaceTest extends TestCase
             ->assertJsonValidationErrors(['report']);
     }
 
-    public function test_marketplace_requires_display_name_and_stores_non_anonymous_listing_data(): void
+    public function test_marketplace_requires_items_and_a_display_name(): void
     {
         $seller = User::factory()->create(['display_name' => null]);
 
         $this->actingAs($seller)->postJson(route('post.store'), [
             'category' => Post::MARKETPLACE,
-            'body' => 'A free used textbook',
-            'price' => '0',
-            'condition' => 'Used',
-            'anonymous' => '1',
-        ])->assertUnprocessable()->assertJsonValidationErrors(['display_name']);
-        $this->assertDatabaseMissing('posts', ['author_id' => $seller->id]);
+            'body' => 'Selling a calculator',
+        ])->assertUnprocessable()->assertJsonValidationErrors('items');
 
-        $seller->forceFill(['display_name' => 'Seller Name'])->save();
         $this->actingAs($seller)->postJson(route('post.store'), [
             'category' => Post::MARKETPLACE,
-            'body' => 'A free used textbook',
-            'price' => '0',
-            'condition' => 'Used',
+            'body' => 'Selling a calculator',
+            'items' => [['price' => '350']],
+        ])->assertUnprocessable()->assertJsonValidationErrors('display_name');
+        $this->assertSame(0, Post::count());
+    }
+
+    public function test_single_item_listing_is_forced_non_anonymous_and_has_no_item_rows(): void
+    {
+        $seller = User::factory()->create(['display_name' => 'Seller Name']);
+
+        $this->actingAs($seller)->postJson(route('post.store'), [
+            'category' => Post::MARKETPLACE,
+            'body' => 'Scientific calculator',
             'anonymous' => '1',
-        ])->assertCreated()->assertJsonPath('status', 'success');
+            'items' => [['label' => 'ignored for a single item', 'price' => '350']],
+            'condition' => 'Like New',
+        ])->assertCreated();
 
         $post = Post::where('author_id', $seller->id)->firstOrFail();
-        $this->assertSame(0, $post->price);
-        $this->assertSame('Used', $post->condition);
+        $this->assertSame(350, $post->price);
+        $this->assertSame('Like New', $post->condition);
         $this->assertFalse($post->is_anonymous);
+        $this->assertSame(0, $post->items()->count());
         $this->actingAs($seller)->get(route('feed'))
             ->assertOk()
             ->assertSee('Seller Name')
-            ->assertSee('Free')
-            ->assertSee('Used')
+            ->assertSee('₱350')
+            ->assertSee('Like New')
             ->assertSee('data-bookmark', false);
     }
 
-    public function test_marketplace_price_and_condition_are_validated_and_non_market_posts_ignore_them(): void
+    public function test_multi_item_listing_stores_items_and_shows_range_then_itemized_thread(): void
+    {
+        $seller = User::factory()->create(['display_name' => 'Seller Name']);
+
+        $this->actingAs($seller)->postJson(route('post.store'), [
+            'category' => Post::MARKETPLACE,
+            'body' => 'Dorm clearance sale',
+            'items' => [
+                ['label' => 'Clip-on lamp', 'price' => '300'],
+                ['label' => 'Desk fan', 'price' => '250'],
+            ],
+        ])->assertCreated();
+
+        $post = Post::where('author_id', $seller->id)->firstOrFail();
+        $this->assertSame(250, $post->price);
+        $this->assertSame(['Clip-on lamp', 'Desk fan'], $post->items->pluck('label')->all());
+
+        $this->actingAs($seller)->get(route('feed'))->assertOk()
+            ->assertSee('₱250 – ₱300')
+            ->assertSee('2 items');
+        $this->actingAs($seller)->get(route('post.show', $post->id))->assertOk()
+            ->assertSee('cm-items__row', false)
+            ->assertSee('Clip-on lamp')
+            ->assertSee('Desk fan');
+    }
+
+    public function test_multi_item_listing_requires_a_name_for_each_item_and_has_a_five_item_limit(): void
+    {
+        $seller = User::factory()->create(['display_name' => 'Seller Name']);
+
+        $this->actingAs($seller)->postJson(route('post.store'), [
+            'category' => Post::MARKETPLACE,
+            'body' => 'Two things',
+            'items' => [['label' => '', 'price' => '100'], ['label' => 'Fan', 'price' => '200']],
+        ])->assertUnprocessable()->assertJsonValidationErrors('items.0.label');
+
+        $sixItems = array_map(fn ($number) => ['label' => "Item {$number}", 'price' => '10'], range(1, 6));
+        $this->actingAs($seller)->postJson(route('post.store'), [
+            'category' => Post::MARKETPLACE,
+            'body' => 'Too many',
+            'items' => $sixItems,
+        ])->assertUnprocessable()->assertJsonValidationErrors('items');
+        $this->assertSame(0, Post::count());
+    }
+
+    public function test_item_prices_and_condition_are_validated_and_items_are_ignored_for_other_categories(): void
     {
         $seller = User::factory()->create(['display_name' => 'Seller Name']);
 
         $this->actingAs($seller)->postJson(route('post.store'), [
             'category' => Post::MARKETPLACE,
             'body' => 'Invalid listing',
-            'price' => '-1',
+            'items' => [['price' => '-1']],
             'condition' => 'Unknown',
-        ])->assertUnprocessable()->assertJsonValidationErrors(['price', 'condition']);
+        ])->assertUnprocessable()->assertJsonValidationErrors(['items.0.price', 'condition']);
 
         $this->actingAs($seller)->postJson(route('post.store'), [
-            'category' => 'Share',
+            'category' => Post::MEME,
             'body' => 'A regular post',
-            'price' => '25',
+            'items' => [['label' => 'Stray item', 'price' => '25']],
             'condition' => 'Used',
             'anonymous' => '1',
         ])->assertCreated();
 
-        $post = Post::where('category', 'Share')->firstOrFail();
+        $post = Post::where('category', Post::MEME)->firstOrFail();
         $this->assertNull($post->price);
         $this->assertNull($post->condition);
+        $this->assertSame(0, $post->items()->count());
         $this->assertTrue($post->is_anonymous);
     }
 
@@ -131,7 +185,8 @@ class BookmarkMarketplaceTest extends TestCase
             ->assertOk()
             ->assertSee('Marketplace')
             ->assertSee('id="market-fields"', false)
-            ->assertSee('id="price"', false)
+            ->assertSee('data-item-price', false)
+            ->assertSee('name="items[0][price]"', false)
             ->assertSee('data-has-name="0"', false);
     }
 
