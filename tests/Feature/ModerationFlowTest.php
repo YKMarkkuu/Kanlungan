@@ -289,7 +289,7 @@ class ModerationFlowTest extends TestCase
         $communityPhoto = 'uploads/posts/'.\Illuminate\Support\Str::uuid().'.jpg';
         file_put_contents(public_path($communityPhoto), 'community photo');
         $communityPost = $this->makePost($communityAuthor, 'COMMUNITY-PHOTO-POST');
-        $communityPost->update(['image_path' => $communityPhoto]);
+        $communityPost->images()->create(['path' => $communityPhoto, 'position' => 0, 'width' => 1, 'height' => 1]);
 
         $this->reportAndVote($communityPost, $communityReporter, 'Harassment', [
             'agree', 'agree', 'agree', 'agree', 'false_report',
@@ -297,6 +297,7 @@ class ModerationFlowTest extends TestCase
 
         $this->assertNotNull($communityPost->fresh()->removed_at);
         $this->assertFileDoesNotExist(public_path($communityPhoto));
+        $this->assertSame(0, $communityPost->images()->count());
 
         $moderator = User::factory()->create(['role' => 'moderator']);
         $moderatorAuthor = User::factory()->create();
@@ -304,7 +305,7 @@ class ModerationFlowTest extends TestCase
         $moderatorPhoto = 'uploads/posts/'.\Illuminate\Support\Str::uuid().'.jpg';
         file_put_contents(public_path($moderatorPhoto), 'moderator photo');
         $moderatorPost = $this->makePost($moderatorAuthor, 'MODERATOR-PHOTO-POST');
-        $moderatorPost->update(['image_path' => $moderatorPhoto]);
+        $moderatorPost->images()->create(['path' => $moderatorPhoto, 'position' => 0, 'width' => 1, 'height' => 1]);
         $this->actingAs($moderatorReporter)->post("/report/post/{$moderatorPost->id}", ['category' => 'Threats']);
         $moderatorReport = Report::latest('id')->firstOrFail();
 
@@ -764,16 +765,60 @@ class ModerationFlowTest extends TestCase
         ])->assertSessionHasNoErrors();
 
         $post = Post::firstOrFail();
-        $this->assertNotNull($post->image_path);
-        $this->assertStringEndsWith('.jpg', $post->image_path);
-        $this->assertFileExists(public_path($post->image_path));
-        $this->assertLessThanOrEqual(1280, getimagesize(public_path($post->image_path))[0]);
+        $path = $post->images()->firstOrFail()->path;
+        $this->assertStringEndsWith('.jpg', $path);
+        $this->assertFileExists(public_path($path));
+        [$width, $height] = getimagesize(public_path($path));
+        $this->assertLessThanOrEqual(1600, max($width, $height));
 
-        $this->actingAs($user)->get('/feed')->assertSee($post->image_path);
+        $this->actingAs($user)->get('/feed')->assertSee($path);
 
-        @unlink(public_path($post->image_path));
+        @unlink(public_path($path));
 
         $this->actingAs($user)->post('/post', ['category' => 'Share', 'body' => 'bad file', 'photo' => UploadedFile::fake()->create('x.pdf', 10, 'application/pdf')])->assertSessionHasErrors('photo');
+    }
+
+    public function test_three_large_photos_are_resized_and_a_fourth_is_rejected(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->post('/post', [
+            'category' => 'Share', 'body' => 'big camera photos', 'anonymous' => '1',
+            'photos' => [
+                UploadedFile::fake()->image('a.jpg', 3200, 2400),
+                UploadedFile::fake()->image('b.png', 2400, 3200),
+                UploadedFile::fake()->image('c.jpg', 800, 600),
+            ],
+        ])->assertSessionHasNoErrors();
+
+        $post = Post::firstOrFail();
+        $images = $post->images;
+        $this->assertCount(3, $images);
+        $this->assertSame([0, 1, 2], $images->pluck('position')->all());
+
+        foreach ($images as $image) {
+            [$width, $height] = getimagesize(public_path($image->path));
+            $this->assertLessThanOrEqual(1600, max($width, $height));
+            $this->assertSame([$width, $height], [$image->width, $image->height]);
+        }
+
+        $paths = $images->pluck('path')->all();
+        $this->actingAs($user)->get('/feed')->assertOk()
+            ->assertSee($paths[0])
+            ->assertSee($paths[1])
+            ->assertSee($paths[2])
+            ->assertSee('Photo 3 of 3 attached to this post');
+
+        $this->actingAs($user)->delete("/post/{$post->id}");
+        $this->assertSame(0, $post->images()->count());
+        foreach ($paths as $path) {
+            $this->assertFileDoesNotExist(public_path($path));
+        }
+
+        $this->actingAs($user)->post('/post', [
+            'category' => 'Share', 'body' => 'too many', 'anonymous' => '1',
+            'photos' => array_map(fn ($i) => UploadedFile::fake()->image("p{$i}.jpg", 100, 100), range(1, 4)),
+        ])->assertSessionHasErrors('photos');
     }
 
     public function test_role_command(): void
