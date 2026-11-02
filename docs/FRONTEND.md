@@ -77,7 +77,7 @@ Blade components in `resources/views/components/`:
 
 - `post-card.blade.php` — feed post card
 - `comment-card.blade.php` — comment item
-- `category-chip.blade.php` — All / Ask / Share / Help / Vent
+- `category-chip.blade.php` — All / Ask / Share / Help / Vent / Academic / Marketplace / Meme
 - `course-chip.blade.php` — BSIT / BSMLS / BSN / Other
 - `report-sheet.blade.php` — bottom sheet with 8 reasons
 - `alert-item.blade.php` — notification list item
@@ -102,17 +102,30 @@ php
     'id' => 1,
     'author_alias' => 'Anonymous Falcon #4821',
     'is_anonymous' => true,
-    'category' => 'Ask',
+    'category' => 'Ask', // Ask / Share / Help / Vent / Academic / Marketplace / Meme
     'course' => 'BSIT',
     'subject' => 'ITPM',
     'body' => 'How to become SME?',
+    'images' => [
+        ['path' => 'uploads/posts/example.jpg', 'width' => 1600, 'height' => 1200],
+    ],
     'likes' => 12,
     'comments' => 4,
     'time_ago' => '5m',
-    'is_bookmarked' => false,
+    'has_bookmarked' => false, // private to the current viewer
+    'is_marketplace' => false,
+    'is_meme' => false,
+    'price' => null, // lowest whole-peso price; Marketplace only, 0 means free
+    'condition' => null, // Marketplace only
+    'items' => [], // Marketplace items: [['label' => 'Desk fan', 'price' => 250], ...]
+    'item_count' => 0,
+    'price_text' => null, // formatted badge text (for example "₱250 – ₱300")
+    'price_label' => null, // accessible description of the item's prices
     'is_helpful' => false,
 ]
 ```
+
+Marketplace posts contain one to five whole-peso-priced items (0 means free), may include a condition, and always show the author's display name. Multi-item listings require a short name per item; single-item listings store their price directly on the post. Other post categories may be anonymous. Saved posts are private to the authenticated user and appear at `/me/saved`.
 
 ### Comment
 php
@@ -163,6 +176,7 @@ Route::view('/moderation/history', 'moderation.history')->name('moderation.histo
 Replace with controllers when auth and DB are wired.
 
 Active community reports are reviewed and voted on at `/reports`, not in the main feed.
+The implemented saved-post page is authenticated at `/me/saved`; bookmark state is viewer-specific and must not be exposed publicly.
 
 ## Commit conventions
 Use Conventional Commits. Examples:

@@ -1,5 +1,7 @@
 FROM php:8.1-apache
 
+RUN { echo 'upload_max_filesize=5M'; echo 'post_max_size=16M'; echo 'memory_limit=256M'; } > /usr/local/etc/php/conf.d/uploads.ini
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     libpng-dev \
