@@ -146,5 +146,40 @@
             </div>
         </section>
 
+        <section class="cm-settings-group cm-danger-zone" aria-labelledby="settings-danger">
+            <h2 class="cm-settings-header cm-danger-zone__title" id="settings-danger">Danger Zone</h2>
+            <div class="card cm-danger-zone__card stack">
+                @if (in_array($role, ['moderator', 'guidance', 'admin', 'dpo'], true))
+                    <p class="text-small">Staff accounts cannot be deleted here. Ask an admin to remove your role first.</p>
+                @else
+                    <p class="text-small">Deleting your account erases your name, email, Student ID, picture, saved posts and the text and photos of everything you posted. Other students' replies stay. This cannot be undone.</p>
+                    <button type="button" class="btn btn--danger btn--block" data-delete-open aria-haspopup="dialog">Delete my account</button>
+                @endif
+                @error('report') <p class="field__error" role="alert">{{ $message }}</p> @enderror
+            </div>
+        </section>
+
+        @unless (in_array($role, ['moderator', 'guidance', 'admin', 'dpo'], true))
+            <div class="cm-modal" id="delete-account-modal" role="dialog" aria-modal="true"
+                 aria-labelledby="delete-account-title" data-delete-modal @unless ($errors->has('confirm')) hidden @endunless>
+                <button type="button" class="cm-modal__backdrop" aria-label="Cancel account deletion" data-delete-cancel></button>
+                <form method="POST" action="{{ route('community.me.delete') }}" class="cm-modal__panel stack" autocomplete="off">
+                    @csrf
+                    <h2 id="delete-account-title">Delete your account?</h2>
+                    <p class="text-small">Your posts and comments will be erased, your photos deleted, and you will be logged out. This cannot be undone.</p>
+                    <div class="field">
+                        <label class="field__label" for="delete-confirm">Type DELETE to confirm</label>
+                        <input class="input" type="text" id="delete-confirm" name="confirm" data-delete-input
+                               autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="DELETE">
+                        @error('confirm') <p class="field__error">{{ $message }}</p> @enderror
+                    </div>
+                    <div class="cm-modal__actions">
+                        <button type="button" class="btn btn--outline" data-delete-cancel>Cancel</button>
+                        <button type="submit" class="btn btn--danger" data-delete-submit disabled>Delete forever</button>
+                    </div>
+                </form>
+            </div>
+        @endunless
+
     </div>
 @endsection

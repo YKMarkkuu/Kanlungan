@@ -65,8 +65,6 @@ Route::middleware(['auth', EnforceRestrictions::class])->group(function () {
     Route::get('/alerts/{id}', [AlertController::class, 'open'])->whereNumber('id')->name('alerts.open');
 
     // Static pages
-    Route::get('/rules', [PageController::class, 'rules'])->name('page.rules');
-    Route::get('/privacy', [PageController::class, 'privacy'])->name('page.privacy');
     Route::get('/help', [PageController::class, 'help'])->name('page.help');
 
     // Moderator queue (design screen 9): moderator, admin and guidance accounts only

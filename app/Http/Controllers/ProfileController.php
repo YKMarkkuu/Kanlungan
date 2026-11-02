@@ -3,11 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\PointLog;
+use App\Services\AccountDeletionService;
 use App\Services\CommunityService;
 use App\Services\ImageService;
 use App\Services\PointService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 
 class ProfileController extends Controller
 {
@@ -61,6 +64,25 @@ class ProfileController extends Controller
         \App\Models\User::whereKey($request->user()->id)->update(['display_name' => $name === '' ? null : $name]);
 
         return back()->with('report_status', 'Display name saved.');
+    }
+
+    public function destroyAccount(Request $request, AccountDeletionService $deletion): RedirectResponse
+    {
+        $request->validate(
+            ['confirm' => ['required', Rule::in(['DELETE'])]],
+            [
+                'confirm.required' => 'Type DELETE to confirm.',
+                'confirm.in' => 'Type DELETE in capital letters to confirm.',
+            ],
+        );
+
+        $deletion->delete($request->user());
+
+        Auth::logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        return redirect('/')->with('status', 'Your account was deleted. Thank you for being part of Kanlungan.');
     }
 
     public function posts(Request $request, CommunityService $community)

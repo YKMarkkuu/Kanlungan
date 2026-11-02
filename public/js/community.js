@@ -2019,16 +2019,21 @@
             sheetCloseTimer = setTimeout(finishCloseSheet, 240);
         };
 
-        document.querySelectorAll('[data-report-open]').forEach(function (button) {
-            button.addEventListener('click', function () {
-                clearTimeout(sheetCloseTimer);
-                sheetCloseTimer = null;
-                sheet.classList.remove('is-closing');
+        document.addEventListener('click', function (event) {
+            var button = event.target.closest('[data-report-open]');
 
-                reportForm.action = button.getAttribute('data-report-action');
-                reportTitle.textContent = 'Report this ' + button.getAttribute('data-report-kind');
-                sheet.hidden = false;
-            });
+            if (!button) {
+                return;
+            }
+
+            event.preventDefault();
+            clearTimeout(sheetCloseTimer);
+            sheetCloseTimer = null;
+            sheet.classList.remove('is-closing');
+
+            reportForm.action = button.getAttribute('data-report-action');
+            reportTitle.textContent = 'Report this ' + button.getAttribute('data-report-kind');
+            sheet.hidden = false;
         });
 
         sheet.querySelectorAll('[data-report-close]').forEach(function (el) {
@@ -2266,5 +2271,68 @@
 
         lightbox.addEventListener('touchend', endSwipe, { passive: true });
         lightbox.addEventListener('touchcancel', endSwipe, { passive: true });
+    }
+
+    /* ---------- Account deletion confirmation ---------- */
+
+    var deleteModal = document.querySelector('[data-delete-modal]');
+
+    if (deleteModal) {
+        var deleteInput = deleteModal.querySelector('[data-delete-input]');
+        var deleteSubmit = deleteModal.querySelector('[data-delete-submit]');
+        var deleteOpener = null;
+
+        var syncDeleteSubmit = function () {
+            deleteSubmit.disabled = deleteInput.value.trim() !== 'DELETE';
+        };
+
+        var openDeleteModal = function (opener) {
+            deleteOpener = opener || null;
+            deleteModal.hidden = false;
+            document.body.classList.add('cm-no-scroll');
+            syncDeleteSubmit();
+            deleteInput.focus();
+        };
+
+        var closeDeleteModal = function () {
+            deleteModal.hidden = true;
+            document.body.classList.remove('cm-no-scroll');
+            deleteInput.value = '';
+            syncDeleteSubmit();
+
+            if (deleteOpener) {
+                deleteOpener.focus();
+            }
+        };
+
+        document.querySelectorAll('[data-delete-open]').forEach(function (button) {
+            button.addEventListener('click', function () { openDeleteModal(button); });
+        });
+
+        deleteModal.querySelectorAll('[data-delete-cancel]').forEach(function (button) {
+            button.addEventListener('click', closeDeleteModal);
+        });
+
+        deleteInput.addEventListener('input', syncDeleteSubmit);
+
+        deleteModal.querySelector('form').addEventListener('submit', function (event) {
+            if (deleteInput.value.trim() !== 'DELETE') {
+                event.preventDefault();
+                return;
+            }
+
+            deleteSubmit.textContent = 'Deleting\u2026';
+            deleteSubmit.disabled = true;
+        });
+
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && !deleteModal.hidden) {
+                closeDeleteModal();
+            }
+        });
+
+        if (!deleteModal.hidden) {
+            openDeleteModal(null);
+        }
     }
 })();

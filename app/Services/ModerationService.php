@@ -37,8 +37,8 @@ class ModerationService
     public function queue(string $tab, ?string $severity): Collection
     {
         $query = Report::query()->with([
-            'reportable.author:id,display_name,banned_at,muted_until',
-            'reporter:id,display_name,banned_at,muted_until',
+            'reportable.author:id,display_name,banned_at,muted_until,deleted_at',
+            'reporter:id,display_name,banned_at,muted_until,deleted_at',
         ])->withCount([
             'votes',
             'votes as agree_count' => fn ($q) => $q->where('choice', 'agree'),
@@ -93,6 +93,14 @@ class ModerationService
     /** @return array<int, string> actions this role may run on this card */
     public function actionsFor(string $role, Report $report): array
     {
+        $subjectUser = $report->mod_subject === 'reporter'
+            ? $report->reporter
+            : $report->reportable?->author;
+
+        if ($subjectUser?->deleted_at !== null) {
+            return $role === 'guidance' ? [] : ['dismiss'];
+        }
+
         if ($role === 'guidance') {
             return $report->referred_guidance_at !== null && $report->guidance_handled_at === null ? ['handled'] : [];
         }
@@ -100,9 +108,6 @@ class ModerationService
         $actions = $report->mod_subject === 'reporter'
             ? ['warn', 'mute', 'ban', 'dismiss']
             : ['warn', 'remove', 'mute', 'ban', 'dismiss'];
-        $subjectUser = $report->mod_subject === 'reporter'
-            ? $report->reporter
-            : $report->reportable?->author;
 
         if ($subjectUser?->banned_at !== null) {
             $actions[] = 'unban';
@@ -279,6 +284,10 @@ class ModerationService
 
             if (! $targetUser) {
                 throw $this->error('The user for this report could not be found.');
+            }
+
+            if ($targetUser->deleted_at !== null) {
+                throw $this->error('This account has been deleted and can no longer be unmasked.');
             }
 
             ModAction::create([

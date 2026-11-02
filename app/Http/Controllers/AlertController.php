@@ -53,6 +53,9 @@ class AlertController extends Controller
             if ($report->outcome === 'moderator_reviewed') {
                 $status = 'Reviewed by Moderator';
                 $statusClass = 'neutral';
+            } elseif ($report->outcome === 'author_deleted') {
+                $status = 'Closed because the author deleted their account';
+                $statusClass = 'neutral';
             } elseif ($target?->removed_by === 'moderator') {
                 $status = 'Removed by Moderator';
                 $statusClass = 'removed';

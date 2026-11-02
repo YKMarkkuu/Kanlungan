@@ -39,6 +39,9 @@ class OtpController extends Controller
      * No transaction (one insert + one delete). If a unique-key race ever
      * fires, catch QueryException here later. Does not log the user in.
      *
+     * The terms checkbox is validated before OTP verification, and the server
+     * records the timestamp and current terms version.
+     *
      * display_name is optional. When blank, name falls back to the email local
      * part and display_name stays null. On success a flash message is set for
      * the login page, which the client redirects to.
@@ -74,6 +77,8 @@ class OtpController extends Controller
             'student_id' => $data['student_id'],
             'campus' => 'pampanga',
             'verified_at' => now(),
+            'accepted_terms_at' => now(),
+            'terms_version' => config('kanlungan.terms_version'),
         ]);
 
         OtpService::invalidate($email);

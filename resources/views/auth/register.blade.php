@@ -85,6 +85,12 @@
                 <button type="submit" class="btn btn--primary btn--block">Send code</button>
             </form>
 
+            <p class="auth-disclaimer" style="margin-top: 16px;">
+                Before you sign up, read the
+                <a href="{{ route('page.rules') }}" target="_blank" rel="noopener">community rules</a> and the
+                <a href="{{ route('page.privacy') }}" target="_blank" rel="noopener">privacy notice</a>.
+            </p>
+
             <p class="auth-footer" style="margin-top: 24px;">
                 Already registered? <a href="{{ route('login') }}">Sign in</a>
             </p>
@@ -139,7 +145,9 @@
 
                 <label class="check" for="accept">
                     <input type="checkbox" id="accept" name="accept" required>
-                    <span>I accept the community rules and privacy notice</span>
+                    <span>I accept the
+                        <a href="{{ route('page.rules') }}" target="_blank" rel="noopener">community rules</a> and
+                        <a href="{{ route('page.privacy') }}" target="_blank" rel="noopener">privacy notice</a></span>
                 </label>
 
                 <div class="field">

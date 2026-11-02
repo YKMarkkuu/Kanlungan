@@ -18,7 +18,7 @@ class PointService
 
     public const ACCEPTED_RECEIVED = 5;
 
-    public const DAILY_HELPFUL_CAP = 50;
+    public const HELPFUL_DAILY_CAP = 50;
 
     public const DAY_TIMEZONE = 'Asia/Manila';
 
@@ -79,9 +79,9 @@ class PointService
         }
 
         DB::transaction(function () use ($userId, $amount, $reason, $source) {
-            $row = DB::table('users')->where('id', $userId)->lockForUpdate()->first(['id', 'points']);
+            $row = DB::table('users')->where('id', $userId)->lockForUpdate()->first(['id', 'points', 'deleted_at']);
 
-            if ($row === null) {
+            if ($row === null || $row->deleted_at !== null) {
                 return;
             }
 
@@ -113,9 +113,9 @@ class PointService
         }
 
         DB::transaction(function () use ($userId, $source) {
-            $row = DB::table('users')->where('id', $userId)->lockForUpdate()->first(['id']);
+            $row = DB::table('users')->where('id', $userId)->lockForUpdate()->first(['id', 'deleted_at']);
 
-            if ($row === null) {
+            if ($row === null || $row->deleted_at !== null) {
                 return;
             }
 
@@ -128,7 +128,7 @@ class PointService
                 ->where('created_at', '>=', $dayStart)
                 ->where('created_at', '<', $dayEnd)
                 ->sum('amount');
-            $amount = min(self::HELPFUL_RECEIVED, max(0, self::DAILY_HELPFUL_CAP - $earnedToday));
+            $amount = min(self::HELPFUL_RECEIVED, max(0, self::HELPFUL_DAILY_CAP - $earnedToday));
 
             if ($amount > 0) {
                 $this->award($userId, $amount, 'helpful_received', $source);
@@ -141,9 +141,9 @@ class PointService
         $receivedReason = str_replace('_removed', '_received', $reason);
 
         DB::transaction(function () use ($userId, $reason, $receivedReason, $source) {
-            $row = DB::table('users')->where('id', $userId)->lockForUpdate()->first(['id']);
+            $row = DB::table('users')->where('id', $userId)->lockForUpdate()->first(['id', 'deleted_at']);
 
-            if ($row === null) {
+            if ($row === null || $row->deleted_at !== null) {
                 return;
             }
 

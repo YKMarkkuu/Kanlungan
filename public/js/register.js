@@ -622,6 +622,12 @@
             return;
         }
 
+        if (errors.terms) {
+            showMessage(rulesBanner, errors.terms[0]);
+            acceptCheckbox.focus();
+            return;
+        }
+
         if (errors.display_name) {
             showMessage(displayNameError, errors.display_name[0]);
             displayNameInput.focus();
@@ -653,7 +659,8 @@
             email: pendingEmail,
             code: verifiedCode,
             student_id: payload.studentId,
-            display_name: payload.displayName
+            display_name: payload.displayName,
+            terms: acceptCheckbox.checked
         }).then(function (res) {
             busy = false;
 

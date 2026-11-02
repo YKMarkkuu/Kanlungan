@@ -26,6 +26,8 @@ class User extends Authenticatable
         'display_name',
         'avatar_path',
         'verified_at',
+        'accepted_terms_at',
+        'terms_version',
     ];
 
     /**
@@ -47,6 +49,8 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
         'verified_at' => 'datetime',
+        'accepted_terms_at' => 'datetime',
+        'deleted_at' => 'datetime',
     ];
 
     /** Users this user has blocked. */

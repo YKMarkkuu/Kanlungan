@@ -10,6 +10,10 @@ class AlertService
 {
     public function notify(int $userId, string $kind, string $title, ?string $body = null, ?string $url = null): void
     {
+        if (User::whereKey($userId)->whereNotNull('deleted_at')->exists()) {
+            return;
+        }
+
         Alert::create([
             'user_id' => $userId,
             'kind' => $kind,

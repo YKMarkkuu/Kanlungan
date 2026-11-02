@@ -70,6 +70,7 @@ class AuthFlowTest extends TestCase
             'code' => '123456',
             'student_id' => $studentId,
             'display_name' => 'Test Student',
+            'terms' => true,
         ])->assertCreated()->assertExactJson(['status' => 'registered']);
 
         $this->assertDatabaseHas('users', [
@@ -77,13 +78,16 @@ class AuthFlowTest extends TestCase
             'student_id' => $studentId,
             'display_name' => 'Test Student',
             'campus' => 'pampanga',
+            'terms_version' => config('kanlungan.terms_version'),
         ]);
+        $this->assertNotNull(User::where('email', $email)->value('accepted_terms_at'));
 
         $this->createOtp($email);
         $this->postJson('/auth/register', [
             'email' => $email,
             'code' => '123456',
             'student_id' => '10987654321',
+            'terms' => true,
         ])->assertUnprocessable()->assertExactJson(['status' => 'email_taken']);
 
         $duplicateStudentEmail = 'student4567pam@student.fatima.edu.ph';
@@ -92,6 +96,7 @@ class AuthFlowTest extends TestCase
             'email' => $duplicateStudentEmail,
             'code' => '123456',
             'student_id' => $studentId,
+            'terms' => true,
         ])->assertUnprocessable()->assertExactJson(['status' => 'student_id_taken']);
     }
 

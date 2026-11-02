@@ -8,6 +8,7 @@ use Illuminate\Foundation\Http\FormRequest;
  * Deliberately does not accept `campus` or `name` from the client.
  * The controller sets campus = 'pampanga' and derives name from display_name
  * (or from the email local part when display_name is blank).
+ * Consent is required, while its timestamp and version come from the server.
  */
 class RegisterRequest extends FormRequest
 {
@@ -36,6 +37,7 @@ class RegisterRequest extends FormRequest
             'code' => ['required', 'string', 'digits:6'],
             'student_id' => ['required', 'string', 'digits:11'],
             'display_name' => ['nullable', 'string', 'min:2', 'max:40'],
+            'terms' => ['accepted'],
         ];
     }
 
@@ -46,6 +48,7 @@ class RegisterRequest extends FormRequest
     {
         return [
             'email.regex' => 'The email must be a valid OLFU Pampanga student email.',
+            'terms.accepted' => 'You must accept the community rules and privacy notice to create an account.',
         ];
     }
 }
