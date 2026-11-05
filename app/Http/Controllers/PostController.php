@@ -182,7 +182,7 @@ class PostController extends Controller
         ]);
     }
 
-    public function destroy(Request $request, int $id): RedirectResponse
+    public function destroy(Request $request, int $id): RedirectResponse|JsonResponse
     {
         $post = Post::findOrFail($id);
         abort_unless((int) $post->author_id === (int) $request->user()->id, 403);
@@ -190,6 +190,10 @@ class PostController extends Controller
         if ($post->removed_at === null) {
             $post->forceFill(['removed_at' => now(), 'removed_by' => 'author'])->save();
             $this->images->deletePostImages($post);
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json(['status' => 'success']);
         }
 
         return redirect()->route('feed')->with('status', 'Post deleted.');

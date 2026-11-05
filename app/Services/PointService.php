@@ -32,13 +32,25 @@ class PointService
 
     public const LABELS = [
         'helpful_received' => 'Someone marked your comment helpful',
-        'helpful_removed' => 'A "Helpful" was removed',
-        'accepted_received' => 'Your answer was marked helpful',
-        'accepted_removed' => 'An accepted answer was un-marked',
-        'report_upheld_author' => 'Your post/comment was removed after a report',
-        'report_upheld_reporter' => 'Your report was upheld',
-        'false_report' => 'Your report was judged false',
-        'wrong_tag' => 'Your report had the wrong tag',
+        'helpful_removed' => 'A helpful mark was taken back',
+        'accepted_received' => 'Your answer was accepted',
+        'accepted_removed' => 'Your answer is no longer accepted',
+        'report_upheld_author' => 'Your post or comment was removed after a report',
+        'report_upheld_reporter' => 'Your report helped keep the community safe',
+        'false_report' => 'A report you made was judged false',
+        'wrong_tag' => 'A report you made had the wrong reason',
+    ];
+
+    /** Icon (resources/views/components/icon.blade.php) shown on each ledger row. */
+    public const ICONS = [
+        'helpful_received' => 'star',
+        'helpful_removed' => 'star',
+        'accepted_received' => 'check',
+        'accepted_removed' => 'check',
+        'report_upheld_author' => 'flag',
+        'report_upheld_reporter' => 'shield',
+        'false_report' => 'flag',
+        'wrong_tag' => 'tag',
     ];
 
     /** Badge thresholds (design screen 8): Newcomer -> Helper -> Trusted. */
@@ -70,6 +82,54 @@ class PointService
             'percent' => (int) min(100, round($points / $top * 100)),
             'badges' => array_map(fn (int $min) => $points >= $min, self::BADGES),
         ];
+    }
+
+    /**
+     * Turns raw point_logs rows into a banking-style ledger, grouped by day in
+     * Manila time: Today / Yesterday / Earlier. Empty groups are dropped.
+     *
+     * @param  iterable<int, PointLog>  $logs  newest first
+     * @return array<int, array{title: string, rows: array<int, array<string, string>>}>
+     */
+    public static function groupHistory(iterable $logs): array
+    {
+        $tz = self::DAY_TIMEZONE;
+        $startOfToday = now($tz)->startOfDay();
+        $startOfYesterday = $startOfToday->copy()->subDay();
+        $buckets = ['Today' => [], 'Yesterday' => [], 'Earlier' => []];
+
+        foreach ($logs as $log) {
+            $at = $log->created_at?->copy()->setTimezone($tz);
+
+            $bucket = match (true) {
+                $at === null, $at->lt($startOfYesterday) => 'Earlier',
+                $at->lt($startOfToday) => 'Yesterday',
+                default => 'Today',
+            };
+
+            $amount = (int) $log->amount;
+            $gain = $amount > 0;
+            $size = abs($amount);
+
+            $buckets[$bucket][] = [
+                'label' => self::LABELS[$log->reason] ?? 'Points updated',
+                'icon' => self::ICONS[$log->reason] ?? ($gain ? 'plus' : 'minus'),
+                'tone' => $gain ? 'gain' : 'loss',
+                'amount_text' => ($gain ? '+' : '−').$size,
+                'spoken' => ($gain ? 'Plus ' : 'Minus ').$size.($size === 1 ? ' point' : ' points'),
+                'time' => $at === null ? '' : ($bucket === 'Earlier' ? $at->format('M j') : $at->format('g:i A')),
+            ];
+        }
+
+        $groups = [];
+
+        foreach ($buckets as $title => $rows) {
+            if ($rows !== []) {
+                $groups[] = ['title' => $title, 'rows' => $rows];
+            }
+        }
+
+        return $groups;
     }
 
     public function award(int $userId, int $amount, string $reason, ?Model $source = null): void

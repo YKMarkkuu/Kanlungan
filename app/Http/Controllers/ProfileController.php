@@ -18,13 +18,9 @@ class ProfileController extends Controller
     {
         $user = $request->user();
 
-        $history = PointLog::where('user_id', $user->id)
-            ->latest()->latest('id')->limit(30)->get()
-            ->map(fn (PointLog $log) => [
-                'amount' => $log->amount,
-                'label' => PointService::LABELS[$log->reason] ?? $log->reason,
-                'time' => $log->created_at?->diffForHumans(),
-            ]);
+        $history = PointService::groupHistory(
+            PointLog::where('user_id', $user->id)->latest()->latest('id')->limit(30)->get()
+        );
 
         $points = (int) ($user->points ?? 0);
 

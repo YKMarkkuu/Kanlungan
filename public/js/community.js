@@ -59,6 +59,22 @@
         var unreadCountUrl = notificationToggle.getAttribute('data-unread-count-url');
         var renderedUnreadCount = Number(notificationToggle.getAttribute('data-unread-count'));
 
+        function wobbleBells() {
+            if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                return;
+            }
+
+            document.querySelectorAll('.cm-bell .icon, [data-alert-activity-link] .icon, [data-unread-badge]').forEach(function (el) {
+                el.classList.remove('is-wobbling');
+                void el.getBoundingClientRect();
+                el.classList.add('is-wobbling');
+                el.addEventListener('animationend', function done() {
+                    el.classList.remove('is-wobbling');
+                    el.removeEventListener('animationend', done);
+                });
+            });
+        }
+
         function refreshUnreadCount() {
             fetch(unreadCountUrl, {
                 method: 'GET',
@@ -78,6 +94,7 @@
                     return;
                 }
 
+                var hasNewAlert = nextCount > renderedUnreadCount;
                 renderedUnreadCount = nextCount;
                 notificationToggle.setAttribute('data-unread-count', String(nextCount));
                 notificationToggle.setAttribute('aria-label', 'Notifications' + (nextCount > 0 ? ', ' + nextCount + ' unread' : ''));
@@ -90,6 +107,10 @@
                 var activityLink = document.querySelector('[data-alert-activity-link]');
                 if (activityLink) {
                     activityLink.setAttribute('aria-label', 'Activity' + (nextCount > 0 ? ', ' + nextCount + ' unread' : ''));
+                }
+
+                if (hasNewAlert) {
+                    wobbleBells();
                 }
             }).catch(function (error) {
                 console.error(error);
@@ -111,27 +132,71 @@
 
     /* ---------- Profile avatar preview and crop ---------- */
 
-    document.querySelectorAll('[data-profile-edit-toggle]').forEach(function (toggle) {
-        toggle.addEventListener('click', function () {
-            var form = document.getElementById(toggle.getAttribute('aria-controls'));
+    /* ---------- Profile: tap your name to edit it inline ---------- */
 
-            if (!form) {
+    var nameForm = document.querySelector('[data-name-form]');
+    var nameTrigger = document.querySelector('[data-name-edit]');
+
+    if (nameForm && nameTrigger) {
+        var nameRoot = nameForm.closest('.cm-identity');
+        var nameInput = nameForm.querySelector('input[name="display_name"]');
+        var nameOriginal = nameInput.getAttribute('data-original') || '';
+        var nameLocked = false;
+
+        var openNameEditor = function () {
+            nameLocked = false;
+            nameTrigger.hidden = true;
+            nameForm.hidden = false;
+            nameForm.classList.add('cm-animate-fade');
+            nameRoot.classList.add('is-editing');
+            nameInput.focus();
+            nameInput.setSelectionRange(nameInput.value.length, nameInput.value.length);
+        };
+
+        var closeNameEditor = function () {
+            nameInput.value = nameOriginal;
+            nameForm.hidden = true;
+            nameTrigger.hidden = false;
+            nameRoot.classList.remove('is-editing');
+            nameTrigger.focus({ preventScroll: true });
+        };
+
+        var commitName = function () {
+            if (nameLocked) {
                 return;
             }
 
-            var isExpanded = toggle.getAttribute('aria-expanded') === 'true';
-            toggle.setAttribute('aria-expanded', String(!isExpanded));
-            form.hidden = isExpanded;
+            nameLocked = true;
 
-            if (!isExpanded) {
-                var nameInput = form.querySelector('input');
-                if (nameInput) {
-                    nameInput.focus();
-                }
-                form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            if (nameInput.value.trim() === nameOriginal.trim()) {
+                closeNameEditor();
+                return;
+            }
+
+            if (nameForm.requestSubmit) {
+                nameForm.requestSubmit();
+            } else {
+                nameForm.submit();
+            }
+        };
+
+        nameTrigger.addEventListener('click', openNameEditor);
+        nameInput.addEventListener('blur', commitName);
+        nameInput.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                commitName();
+            } else if (event.key === 'Escape') {
+                nameLocked = true;
+                closeNameEditor();
             }
         });
-    });
+        nameForm.addEventListener('submit', function () { nameLocked = true; });
+
+        if (!nameForm.hidden) {
+            nameInput.focus();
+        }
+    }
 
     var avatarForm = document.querySelector('[data-avatar-upload]');
 
@@ -1126,6 +1191,7 @@
                 });
             }).then(function (res) {
                 if (res.ok && res.data.status === 'success') {
+                    try { sessionStorage.setItem('cm-new-post', '1'); } catch (e) { /* private mode */ }
                     window.location.href = res.data.redirect || '/feed';
                     return;
                 }
@@ -2350,4 +2416,142 @@
             openDeleteModal(null);
         }
     }
+
+    /* ---------- Feed: a just-published post slides down from the top ---------- */
+
+    (function () {
+        var list = document.getElementById('feed-posts');
+        var flagged = false;
+
+        try {
+            flagged = sessionStorage.getItem('cm-new-post') === '1';
+            sessionStorage.removeItem('cm-new-post');
+        } catch (e) { /* storage unavailable */ }
+
+        if (!list || !flagged || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            return;
+        }
+
+        var first = list.firstElementChild;
+
+        if (!first || !first.classList.contains('cm-post')) {
+            return;
+        }
+
+        var second = first.nextElementSibling;
+        var gap = second ? (parseFloat(window.getComputedStyle(second).marginTop) || 0) : 0;
+
+        list.style.setProperty('--cm-arrive-h', (first.offsetHeight + gap) + 'px');
+        list.classList.add('is-arriving');
+        first.classList.add('cm-post--arrive');
+        window.scrollTo(0, 0);
+
+        window.setTimeout(function () {
+            list.classList.remove('is-arriving');
+            first.classList.remove('cm-post--arrive');
+            list.style.removeProperty('--cm-arrive-h');
+        }, 900);
+    })();
+
+    /* ---------- Post deletion: collapse like a native iOS list row ---------- */
+
+    function collapseAway(row, done) {
+        var finished = false;
+        var finish = function () {
+            if (finished) {
+                return;
+            }
+
+            finished = true;
+
+            if (row.parentNode) {
+                row.parentNode.removeChild(row);
+            }
+
+            if (done) {
+                done();
+            }
+        };
+
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            finish();
+            return;
+        }
+
+        row.style.height = row.getBoundingClientRect().height + 'px';
+        row.style.overflow = 'hidden';
+        void row.offsetHeight;
+
+        row.classList.remove('is-deleting');
+        row.classList.add('cm-row--leaving');
+        row.style.height = '0px';
+
+        row.addEventListener('transitionend', function (event) {
+            if (event.target === row && event.propertyName === 'height') {
+                finish();
+            }
+        });
+        window.setTimeout(finish, 520);
+    }
+
+    document.addEventListener('submit', function (event) {
+        var form = event.target;
+
+        if (event.defaultPrevented || !(form instanceof HTMLFormElement)) {
+            return;
+        }
+
+        var override = form.querySelector('input[name="_method"]');
+        var path;
+
+        try {
+            path = new URL(form.action, window.location.href).pathname;
+        } catch (error) {
+            return;
+        }
+
+        if (!override || override.value.toUpperCase() !== 'DELETE' || !/^\/post\/\d+$/.test(path)) {
+            return;
+        }
+
+        var card = form.closest('.cm-post');
+
+        if (!card || /^\/post\/\d+$/.test(window.location.pathname)) {
+            return;
+        }
+
+        event.preventDefault();
+        closeMoreMenus();
+
+        var row = card.closest('[data-saved-item]') || card;
+        var headers = { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
+        var token = reactCsrf();
+
+        if (token) {
+            headers['X-CSRF-TOKEN'] = token;
+        }
+
+        card.classList.add('is-deleting');
+
+        fetch(form.action, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: headers,
+            body: new FormData(form)
+        }).then(function (response) {
+            if (response.status === 401) {
+                window.location.href = '/';
+                return;
+            }
+
+            if (!response.ok) {
+                throw new Error('Could not delete that post. Try again.');
+            }
+
+            collapseAway(row);
+        }).catch(function (error) {
+            card.classList.remove('is-deleting');
+            showReactError(error.message === 'Failed to fetch' ? 'Could not reach server.' : error.message);
+        });
+    });
 })();

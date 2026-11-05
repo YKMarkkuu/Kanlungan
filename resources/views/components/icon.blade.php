@@ -6,6 +6,7 @@
         @case('bell') <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16Z" /><path d="M10 20.5h4" /> @break
         @case('user') <circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /> @break
         @case('plus') <path d="M12 5v14M5 12h14" /> @break
+        @case('minus') <path d="M5 12h14" /> @break
         @case('back') <path d="m15 5-7 7 7 7" /> @break
         @case('close') <path d="M6 6l12 12M18 6 6 18" /> @break
         @case('flag') <path d="M6 20V5M6 5h11l-2 4 2 4H6" /> @break
@@ -23,5 +24,6 @@
         @case('bookmark') <path d="M6 4h12v17l-6-4.5L6 21V4Z" /> @break
         @case('smile') <circle cx="12" cy="12" r="9" /><path d="M8.5 14.5c.9 1.2 2.1 1.8 3.5 1.8s2.6-.6 3.5-1.8" /><path d="M9 9.5h.01M15 9.5h.01" /> @break
         @case('tag') <path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z" /><circle cx="7.5" cy="7.5" r="1" /> @break
+        @case('camera') <path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z" /><circle cx="12" cy="13" r="3.5" /> @break
     @endswitch
 </svg>

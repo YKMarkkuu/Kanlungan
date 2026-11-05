@@ -12,40 +12,46 @@
 @endsection
 
 @section('content')
+    @php($nameValue = $display_name === 'Anonymous' ? '' : $display_name)
+    @php($editingName = $errors->has('display_name'))
+
     <div class="stack cm-profile">
         <header class="cm-header"><h1>Me</h1></header>
 
-        <section class="card cm-profile-header" aria-label="Profile">
-            <x-avatar :avatar-path="$user->avatar_path" :name="$display_name" class="cm-avatar--xl" />
-            <div class="cm-profile-header__details">
-                <h2>{{ $display_name }}</h2>
-                <button type="button" class="btn btn--outline" data-profile-edit-toggle
-                        aria-expanded="{{ $errors->has('display_name') ? 'true' : 'false' }}"
-                        aria-controls="profile-name-form">Edit</button>
-            </div>
-        </section>
-
-        <section class="card cm-profile-settings stack" aria-labelledby="profile-settings-title">
-            <h2 id="profile-settings-title">Profile Settings</h2>
-            <form method="POST" action="{{ route('profile.avatar') }}" class="cm-avatar-upload"
+        <section class="card cm-identity {{ $editingName ? 'is-editing' : '' }}" aria-label="Profile">
+            <form method="POST" action="{{ route('profile.avatar') }}" class="cm-identity__avatar-form"
                   enctype="multipart/form-data" data-avatar-upload>
                 @csrf
                 <input class="cm-visually-hidden" type="file" id="avatar" name="avatar"
                        accept="image/jpeg,image/png,image/webp" required data-avatar-input>
-                @error('avatar') <p class="field__error">{{ $message }}</p> @enderror
-                <button type="button" class="btn btn--outline" data-avatar-choose>Change Avatar</button>
+                <button type="button" class="cm-identity__avatar" data-avatar-choose aria-label="Change profile picture">
+                    <x-avatar :avatar-path="$user->avatar_path" :name="$display_name" />
+                    <span class="cm-identity__badge" aria-hidden="true">@include('components.icon', ['name' => 'camera'])</span>
+                </button>
             </form>
 
-            <form method="POST" action="{{ route('community.me.name') }}"
-                  class="stack cm-profile-name-form" id="profile-name-form"
-                  @if (! $errors->has('display_name')) hidden @endif>
-                @csrf
-                <label class="text-small text-muted" for="display_name">Shown only on posts and comments where you turn anonymous off. Leave empty to stay Anonymous.</label>
-                <input class="input" type="text" id="display_name" name="display_name" value="{{ old('display_name', $display_name === 'Anonymous' ? '' : $display_name) }}" maxlength="40" placeholder="Anonymous">
-                @error('display_name') <p class="field__error">{{ $message }}</p> @enderror
-                <button type="submit" class="btn btn--primary">Save name</button>
-            </form>
+            <div class="cm-identity__who">
+                <button type="button"
+                        class="cm-identity__name {{ $nameValue === '' ? 'is-placeholder' : '' }}"
+                        data-name-edit
+                        aria-label="Edit display name. Currently {{ $display_name }}"
+                        @if ($editingName) hidden @endif>{{ $display_name }}</button>
+
+                <form method="POST" action="{{ route('community.me.name') }}" class="cm-identity__name-form"
+                      data-name-form autocomplete="off" @unless ($editingName) hidden @endunless>
+                    @csrf
+                    <label class="cm-visually-hidden" for="display_name">Display name</label>
+                    <input class="cm-identity__input" type="text" id="display_name" name="display_name"
+                           value="{{ old('display_name', $nameValue) }}" data-original="{{ $nameValue }}"
+                           maxlength="40" placeholder="Anonymous" enterkeyhint="done">
+                </form>
+
+                @error('display_name') <p class="field__error" role="alert">{{ $message }}</p> @enderror
+                <p class="cm-identity__hint cm-identity__hint--idle text-small text-muted">Tap your photo or name to change them.</p>
+                <p class="cm-identity__hint cm-identity__hint--editing text-small text-muted">Shown only where you turn anonymous off. Leave empty to stay Anonymous.</p>
+            </div>
         </section>
+        @error('avatar') <p class="field__error" role="alert">{{ $message }}</p> @enderror
 
         <div class="cm-avatar-crop" id="avatar-crop" role="dialog" aria-modal="true"
              aria-labelledby="avatar-crop-title" hidden data-avatar-crop>
@@ -127,11 +133,22 @@
         <div class="text-small text-muted">Language: English</div>
 
         <h2>Points history</h2>
-        @forelse ($history as $row)
-            <div class="card cm-points__row">
-                <span>{{ $row['label'] }} <span class="text-small text-muted">{{ $row['time'] }}</span></span>
-                <strong class="{{ $row['amount'] < 0 ? 'cm-points--neg' : 'cm-points--pos' }}">{{ $row['amount'] > 0 ? '+' : '' }}{{ $row['amount'] }}</strong>
-            </div>
+        @forelse ($history as $group)
+            <section class="cm-ledger" aria-label="{{ $group['title'] }}">
+                <h3 class="cm-ledger__title">{{ $group['title'] }}</h3>
+                <ul class="cm-ledger__list">
+                    @foreach ($group['rows'] as $row)
+                        <li class="cm-ledger__row">
+                            <span class="cm-ledger__icon cm-ledger__icon--{{ $row['tone'] }}" aria-hidden="true">@include('components.icon', ['name' => $row['icon']])</span>
+                            <span class="cm-ledger__text">
+                                <span class="cm-ledger__label">{{ $row['label'] }}</span>
+                                <span class="cm-ledger__time">{{ $row['time'] }}</span>
+                            </span>
+                            <strong class="cm-ledger__amount cm-ledger__amount--{{ $row['tone'] }}" aria-label="{{ $row['spoken'] }}">{{ $row['amount_text'] }}</strong>
+                        </li>
+                    @endforeach
+                </ul>
+            </section>
         @empty
             <div class="card cm-empty"><p class="text-muted">No points yet.</p></div>
         @endforelse
