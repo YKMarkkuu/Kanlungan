@@ -133,25 +133,24 @@
         <div class="text-small text-muted">Language: English</div>
 
         <h2>Points history</h2>
+        @php($visibleHistoryRows = 0)
         @forelse ($history as $group)
-            <section class="cm-ledger" aria-label="{{ $group['title'] }}">
-                <h3 class="cm-ledger__title">{{ $group['title'] }}</h3>
-                <ul class="cm-ledger__list">
-                    @foreach ($group['rows'] as $row)
-                        <li class="cm-ledger__row">
-                            <span class="cm-ledger__icon cm-ledger__icon--{{ $row['tone'] }}" aria-hidden="true">@include('components.icon', ['name' => $row['icon']])</span>
-                            <span class="cm-ledger__text">
-                                <span class="cm-ledger__label">{{ $row['label'] }}</span>
-                                <span class="cm-ledger__time">{{ $row['time'] }}</span>
-                            </span>
-                            <strong class="cm-ledger__amount cm-ledger__amount--{{ $row['tone'] }}" aria-label="{{ $row['spoken'] }}">{{ $row['amount_text'] }}</strong>
-                        </li>
-                    @endforeach
-                </ul>
-            </section>
+            @php($rowsToShow = array_slice($group['rows'], 0, max(0, 5 - $visibleHistoryRows)))
+            @php($visibleHistoryRows += count($rowsToShow))
+            @if ($rowsToShow !== [])
+                <section class="cm-ledger" aria-label="{{ $group['title'] }}">
+                    <h3 class="cm-ledger__title">{{ $group['title'] }}</h3>
+                    <ul class="cm-ledger__list">
+                        @foreach ($rowsToShow as $row)
+                            @include('components.point-history-row', ['row' => $row])
+                        @endforeach
+                    </ul>
+                </section>
+            @endif
         @empty
             <div class="card cm-empty"><p class="text-muted">No points yet.</p></div>
         @endforelse
+        <a href="{{ route('community.me.points') }}" class="cm-settings-item">View full history</a>
 
         <section class="cm-settings-group cm-settings-group--account" aria-labelledby="settings-account">
             <h2 class="cm-settings-header" id="settings-account">Account</h2>

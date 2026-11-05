@@ -52,6 +52,7 @@ Route::middleware(['auth', EnforceRestrictions::class])->group(function () {
     Route::get('/me', [ProfileController::class, 'show'])->name('community.me');
 
     Route::post('/profile/avatar', [ProfileController::class, 'updateAvatar'])->middleware('throttle:10,1')->name('profile.avatar');
+    Route::get('/me/points', [ProfileController::class, 'points'])->name('community.me.points');
     Route::get('/me/posts', [ProfileController::class, 'posts'])->name('community.me.posts');
     Route::get('/me/comments', [ProfileController::class, 'comments'])->name('community.me.comments');
     Route::get('/me/saved', [ProfileController::class, 'saved'])->name('community.me.saved');

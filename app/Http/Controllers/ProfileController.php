@@ -19,7 +19,7 @@ class ProfileController extends Controller
         $user = $request->user();
 
         $history = PointService::groupHistory(
-            PointLog::where('user_id', $user->id)->latest()->latest('id')->limit(30)->get()
+            PointLog::where('user_id', $user->id)->latest()->latest('id')->limit(5)->get()
         );
 
         $points = (int) ($user->points ?? 0);
@@ -33,6 +33,15 @@ class ProfileController extends Controller
             'history' => $history,
             'blockedUsers' => $user->blockedUsers()->orderByPivot('created_at', 'desc')->get(),
         ]);
+    }
+
+    public function points(Request $request)
+    {
+        $history = PointService::groupHistory(
+            PointLog::where('user_id', $request->user()->id)->latest()->latest('id')->limit(100)->get()
+        );
+
+        return view('profile.points', ['history' => $history]);
     }
 
     public function updateAvatar(Request $request, ImageService $images): RedirectResponse
