@@ -144,7 +144,7 @@
                 </div>
 
                 <label class="check" for="accept">
-                    <input type="checkbox" id="accept" name="accept" required>
+                    <input type="checkbox" id="accept" name="terms" value="1" required>
                     <span>I accept the
                         <a href="{{ route('page.rules') }}" target="_blank" rel="noopener">community rules</a> and
                         <a href="{{ route('page.privacy') }}" target="_blank" rel="noopener">privacy notice</a></span>
