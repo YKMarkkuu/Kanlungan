@@ -99,6 +99,11 @@
         window.setInterval(refreshUnreadCount, 30000);
         window.addEventListener('pageshow', function (event) {
             if (event.persisted) {
+                if (document.querySelector('[data-activity]')) {
+                    window.location.reload();
+                    return;
+                }
+
                 refreshUnreadCount();
             }
         });
@@ -482,6 +487,11 @@
                     feedSkeleton.classList.add('hidden');
                     feedSkeleton.setAttribute('aria-hidden', 'true');
                 }
+
+                if (typeof feedObserver !== 'undefined' && feedObserver && loadMoreButton.getAttribute('data-next-url')) {
+                    feedObserver.unobserve(loadMoreContainer);
+                    feedObserver.observe(loadMoreContainer);
+                }
             });
         }
 
@@ -788,6 +798,11 @@
 
         if (res.status === 401) {
             window.location.href = '/';
+            return;
+        }
+
+        if (res.status === 410) {
+            window.location.reload();
             return;
         }
 

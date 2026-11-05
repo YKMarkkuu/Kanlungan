@@ -64,6 +64,11 @@ class CommunityFlowTest extends TestCase
             ->assertDontSee('Other user notification')
             ->assertSee('data-notification-dropdown', false)
             ->assertSee('Mark all as read');
+
+        $rulesResponse = $this->get('/rules')->assertOk();
+        $this->assertStringContainsString('no-store', $rulesResponse->headers->get('Cache-Control'));
+        $privacyResponse = $this->get('/privacy')->assertOk();
+        $this->assertStringContainsString('no-store', $privacyResponse->headers->get('Cache-Control'));
     }
 
     public function test_legacy_reports_page_redirects_to_the_activity_verdicts_tab(): void
@@ -245,6 +250,12 @@ class CommunityFlowTest extends TestCase
     {
         [$author, $other] = User::factory()->count(2)->create();
         $post = $this->makePost($author);
+        $comment = Comment::create([
+            'post_id' => $post->id,
+            'author_id' => $other->id,
+            'body' => 'REPLY-UNDER-AUTHOR-TOMBSTONE',
+            'is_anonymous' => true,
+        ]);
 
         $this->actingAs($author)->get('/feed')
             ->assertOk()
@@ -263,7 +274,47 @@ class CommunityFlowTest extends TestCase
         $this->assertSame('author', $post->fresh()->removed_by);
         $this->actingAs($other)->get("/post/{$post->id}")
             ->assertOk()
-            ->assertSee('removed by its author');
+            ->assertSee('removed by its author')
+            ->assertSee($comment->body)
+            ->assertDontSee('comment-form')
+            ->assertDontSee('data-reply-to="'.$comment->id.'"', false);
+
+        $this->postJson("/post/{$post->id}/comments", ['body' => 'stale tab comment'])
+            ->assertStatus(410)
+            ->assertJson(['status' => 'post_removed']);
+
+        $this->postJson("/post/{$post->id}/like")
+            ->assertUnprocessable();
+
+        $this->postJson("/post/{$post->id}/comments/{$comment->id}/like")
+            ->assertUnprocessable();
+
+        $this->actingAs($author)
+            ->postJson("/post/{$post->id}/comments/{$comment->id}/accept")
+            ->assertUnprocessable();
+    }
+
+    public function test_moderator_and_community_removed_posts_hide_their_threads(): void
+    {
+        $author = User::factory()->create();
+        $viewer = User::factory()->create();
+
+        foreach (['moderator', 'community'] as $removedBy) {
+            $post = $this->makePost($author);
+            $post->forceFill(['removed_at' => now(), 'removed_by' => $removedBy])->save();
+            $comment = Comment::create([
+                'post_id' => $post->id,
+                'author_id' => $viewer->id,
+                'body' => 'HIDDEN-REMOVED-POST-COMMENT-'.$removedBy,
+                'is_anonymous' => true,
+            ]);
+
+            $this->actingAs($viewer)->get("/post/{$post->id}")
+                ->assertOk()
+                ->assertSee('Comments are hidden because this post was removed.')
+                ->assertDontSee($comment->body)
+                ->assertDontSee('comment-form');
+        }
     }
 
     public function test_comment_actions_are_contextual_and_only_author_can_delete(): void

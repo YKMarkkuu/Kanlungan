@@ -544,6 +544,30 @@ class ModerationFlowTest extends TestCase
         $this->actingAs($mod)->get('/moderation?tab=history')->assertSee('Possible danger')->assertSee('Student contacted');
     }
 
+    public function test_moderator_cannot_restore_a_post_deleted_by_its_author(): void
+    {
+        [$author, $reporter] = User::factory()->count(2)->create();
+        $moderator = User::factory()->create(['role' => 'moderator']);
+        $post = $this->makePost($author, 'AUTHOR-DELETED-REPORTED-POST');
+
+        $this->actingAs($reporter)->post("/report/post/{$post->id}", ['category' => 'Threats'])
+            ->assertRedirect();
+        $report = Report::latest('id')->firstOrFail();
+
+        $this->actingAs($author)->delete("/post/{$post->id}")
+            ->assertRedirect('/feed');
+        $removedAt = $post->fresh()->removed_at;
+        $this->assertSame('author', $post->fresh()->removed_by);
+
+        $this->actingAs($moderator)->post("/moderation/{$report->id}", [
+            'action' => 'restore',
+            'reason' => 'Reviewing the reported content',
+        ])->assertSessionHasErrors('report');
+
+        $this->assertEquals($removedAt, $post->fresh()->removed_at);
+        $this->assertSame('author', $post->fresh()->removed_by);
+    }
+
     public function test_moderator_can_override_report_category_before_referring_case(): void
     {
         $author = User::factory()->create();
@@ -791,9 +815,11 @@ class ModerationFlowTest extends TestCase
     {
         $user = User::factory()->create();
         $this->makePost($user, 'student assistant for ITPM');
+        $cappedTermMatch = $this->makePost($user, str_repeat('a', 80).' capped term result');
         Post::create(['author_id' => $user->id, 'category' => 'Ask', 'body' => 'assistant removed one', 'is_anonymous' => true, 'removed_at' => now(), 'removed_by' => 'community']);
 
         $this->actingAs($user)->get('/search?q=assistant')->assertOk()->assertSee('student assistant for ITPM')->assertDontSee('assistant removed one');
+        $this->actingAs($user)->get('/search?q='.str_repeat('a', 80).'%20ignored')->assertSee($cappedTermMatch->body);
         $this->actingAs($user)->get('/search?q=zzzz')->assertSee('No posts found');
         $this->actingAs($user)->get('/search')->assertSee('at least 2 letters');
     }

@@ -122,6 +122,8 @@ php
     'price_text' => null, // formatted badge text (for example "₱250 – ₱300")
     'price_label' => null, // accessible description of the item's prices
     'is_helpful' => false,
+    'removed' => false,
+    'removed_by' => null, // author / moderator / community when removed
 ]
 ```
 

@@ -119,7 +119,14 @@ class ModerationService
 
         if ($report->mod_subject !== 'reporter' && $report->reportable?->removed_at !== null) {
             $actions = array_values(array_diff($actions, ['remove']));
-            $actions[] = 'restore';
+
+            $target = $report->reportable;
+            $authorWiped = $target->removed_by === 'author'
+                || $target->body === AccountDeletionService::TOMBSTONE_BODY;
+
+            if (! $authorWiped) {
+                $actions[] = 'restore';
+            }
         }
 
         if ($report->referred_guidance_at === null && $report->mod_subject !== 'reporter') {
@@ -143,6 +150,14 @@ class ModerationService
 
         DB::transaction(function () use ($actor, $reportId, $action, $reason, $overrideCategory) {
             $report = Report::lockForUpdate()->with('reportable')->findOrFail($reportId);
+
+            if ($action === 'restore'
+                && $report->mod_subject !== 'reporter'
+                && $report->reportable?->removed_at !== null
+                && ($report->reportable->removed_by === 'author'
+                    || $report->reportable->body === AccountDeletionService::TOMBSTONE_BODY)) {
+                throw $this->error('The author deleted this themselves, so it cannot be restored.');
+            }
 
             if (! in_array($action, $this->actionsFor((string) $actor->role, $report), true)) {
                 throw $this->error('That action is not available for this case.');

@@ -13,6 +13,7 @@ use App\Support\Alias;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -35,18 +36,22 @@ class CommunityService
     /** @return array{hasPendingReports: bool, posts: \Illuminate\Pagination\CursorPaginator} */
     public function feed(int $viewerId, ?string $category = null): array
     {
-        $this->reports->sweepDue();
+        if (Cache::add('reports:sweep', 1, 60)) {
+            $this->reports->sweepDue();
+        }
 
-        $activeReports = Report::query()->whereIn('status', [Report::OPEN, Report::VOTING])->get(['reporter_id', 'reportable_type', 'reportable_id']);
-        $reporterPostIds = $activeReports
-            ->where('reportable_type', Post::class)
-            ->where('reporter_id', $viewerId)
-            ->pluck('reportable_id')
-            ->all();
+        $active = [Report::OPEN, Report::VOTING];
 
         $posts = $this->postQuery($viewerId)
             ->whereNull('removed_at')
-            ->whereNotIn('id', $reporterPostIds)
+            ->whereNotExists(function ($query) use ($viewerId, $active) {
+                $query->selectRaw('1')
+                    ->from('reports')
+                    ->whereColumn('reports.reportable_id', 'posts.id')
+                    ->where('reports.reportable_type', Post::class)
+                    ->where('reports.reporter_id', $viewerId)
+                    ->whereIn('reports.status', $active);
+            })
             ->when($category !== null && in_array($category, Post::CATEGORIES, true), fn ($q) => $q->where('category', $category))
             ->latest()
             ->latest('id')
@@ -54,7 +59,7 @@ class CommunityService
         $states = $this->reports->statesFor($viewerId, Post::class, $posts->getCollection());
 
         return [
-            'hasPendingReports' => $activeReports->isNotEmpty(),
+            'hasPendingReports' => Report::whereIn('status', $active)->exists(),
             'posts' => $posts->through(fn (Post $post) => $this->postArray($post, $viewerId, $states[$post->id] ?? null)),
         ];
     }
@@ -114,7 +119,7 @@ class CommunityService
     /** @return array<int, array<string, mixed>> */
     public function search(int $viewerId, string $term): array
     {
-        $term = trim($term);
+        $term = mb_substr(trim($term), 0, 80);
 
         if (mb_strlen($term) < 2) {
             return [];
@@ -324,6 +329,7 @@ class CommunityService
      */
     public function toggleReaction(int $userId, Model $reactable, string $type): bool
     {
+        $parentPost = $reactable instanceof Post ? $reactable : $reactable->post;
         $authorId = (int) $reactable->author_id;
 
         if ($authorId === $userId) {
@@ -332,6 +338,10 @@ class CommunityService
 
         if (Block::existsBetween($userId, $authorId)) {
             throw ValidationException::withMessages(['report' => 'You cannot interact with this user.']);
+        }
+
+        if ($parentPost->removed_at !== null) {
+            throw ValidationException::withMessages(['report' => 'This post was removed.']);
         }
 
         return DB::transaction(function () use ($userId, $reactable, $authorId, $type) {
@@ -372,6 +382,10 @@ class CommunityService
         DB::transaction(function () use ($userId, $post, $comment) {
             $post = Post::query()->lockForUpdate()->findOrFail($post->id);
             $comment = Comment::query()->lockForUpdate()->findOrFail($comment->id);
+
+            if ($post->removed_at !== null) {
+                throw ValidationException::withMessages(['report' => 'This post was removed.']);
+            }
 
             if ((int) $post->author_id !== $userId) {
                 throw ValidationException::withMessages(['report' => 'Only the author of the post can accept an answer.']);
@@ -525,6 +539,7 @@ class CommunityService
             'price_text' => self::priceText(array_column($items, 'price')),
             'price_label' => $this->priceLabel($items),
             'removed' => $removed,
+            'removed_by' => $removed ? $post->removed_by : null,
             'mine' => (int) $post->author_id === $viewerId,
             'report' => $removed ? null : $report,
             'likes' => (int) $post->likes_count,

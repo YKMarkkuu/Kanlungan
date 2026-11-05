@@ -58,7 +58,7 @@ Route::middleware(['auth', EnforceRestrictions::class])->group(function () {
     Route::post('/me/name', [ProfileController::class, 'updateName'])->name('community.me.name');
 
     // Search + alerts (design screens 3 and 7)
-    Route::get('/search', [SearchController::class, 'index'])->name('search');
+    Route::get('/search', [SearchController::class, 'index'])->middleware('throttle:30,1')->name('search');
     Route::get('/alerts', [AlertController::class, 'index'])->name('alerts');
     Route::get('/alerts/unread-count', [AlertController::class, 'unreadCount'])->name('alerts.unread-count');
     Route::post('/alerts/read-all', [AlertController::class, 'readAll'])->name('alerts.read-all');

@@ -170,9 +170,14 @@ class PostController extends Controller
 
         abort_if($post === null, 404);
 
+        $locked = $post['removed'];
+        $hideThread = $locked && in_array($post['removed_by'], ['moderator', 'community'], true);
+
         return view('feed.show', [
             'post' => $post,
-            'comments' => $this->community->comments($userId, $id),
+            'locked' => $locked,
+            'hideThread' => $hideThread,
+            'comments' => $hideThread ? [] : $this->community->comments($userId, $id),
             'alias' => $this->community->aliasIn($userId, $id),
         ]);
     }
@@ -205,6 +210,13 @@ class PostController extends Controller
     public function comment(Request $request, int $id): RedirectResponse|JsonResponse
     {
         $post = Post::findOrFail($id);
+
+        if ($post->removed_at !== null) {
+            return $request->expectsJson()
+                ? response()->json(['status' => 'post_removed'], 410)
+                : redirect()->route('post.show', $post->id);
+        }
+
         abort_if(Block::existsBetween((int) $request->user()->id, (int) $post->author_id), 403, 'You cannot interact with this user.');
 
         $data = $request->validate([

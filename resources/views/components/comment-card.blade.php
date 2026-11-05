@@ -1,6 +1,7 @@
 {{-- One comment with optional collapsed replies. Expects $comment and optional $reply / $canAccept. --}}
 @php($reply = $reply ?? false)
-@php($canAccept = ($canAccept ?? false) && ! $reply && ! $comment['mine'] && ! $comment['removed'])
+@php($locked = $locked ?? false)
+@php($canAccept = ($canAccept ?? false) && ! $locked && ! $reply && ! $comment['mine'] && ! $comment['removed'])
 @php($replies = $reply ? [] : ($comment['replies'] ?? []))
 @php($repliesId = 'comment-replies-'.$comment['id'])
 @php($menuId = 'comment-actions-'.$comment['id'])
@@ -46,7 +47,9 @@
                 <div class="cm-comment__actions">
                     {{-- Left: Reply + View N replies, inline. --}}
                     <div class="cm-comment__actions-left">
-                        <button type="button" class="cm-comment__action-btn" data-reply-to="{{ $comment['id'] }}" data-reply-name="{{ $comment['author_alias'] }}" aria-label="Reply to comment">Reply</button>
+                        @unless ($locked)
+                            <button type="button" class="cm-comment__action-btn" data-reply-to="{{ $comment['id'] }}" data-reply-name="{{ $comment['author_alias'] }}" aria-label="Reply to comment">Reply</button>
+                        @endunless
                         @if (count($replies) > 0)
                             <button type="button"
                                     class="cm-view-replies-btn"
@@ -132,7 +135,7 @@
     @if (count($replies) > 0)
         <div class="cm-replies-container hidden" id="{{ $repliesId }}">
             @foreach ($replies as $child)
-                @include('components.comment-card', ['comment' => $child, 'reply' => true])
+                @include('components.comment-card', ['comment' => $child, 'reply' => true, 'locked' => $locked])
             @endforeach
         </div>
     @endif
