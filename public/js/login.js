@@ -357,7 +357,7 @@
 
             // Success: leave the inputs disabled while the browser navigates.
             if (res.status === 200 && res.data.status === 'authenticated') {
-                window.location.href = URL_HOME;
+                window.location.href = res.data.redirect || URL_HOME;
                 return;
             }
 

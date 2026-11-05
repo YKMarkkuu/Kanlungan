@@ -78,6 +78,7 @@ class AuthFlowTest extends TestCase
             'student_id' => $studentId,
             'display_name' => 'Test Student',
             'campus' => 'pampanga',
+            'has_completed_onboarding' => false,
             'terms_version' => config('kanlungan.terms_version'),
         ]);
         $this->assertNotNull(User::where('email', $email)->value('accepted_terms_at'));
@@ -112,7 +113,10 @@ class AuthFlowTest extends TestCase
 
         $this->postJson('/auth/login', ['email' => $email, 'code' => '123456'])
             ->assertOk()
-            ->assertExactJson(['status' => 'authenticated']);
+            ->assertExactJson([
+                'status' => 'authenticated',
+                'redirect' => route('onboarding'),
+            ]);
         $this->assertAuthenticatedAs($user);
 
         auth()->logout();

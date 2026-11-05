@@ -51,6 +51,7 @@ class User extends Authenticatable
         'verified_at' => 'datetime',
         'accepted_terms_at' => 'datetime',
         'deleted_at' => 'datetime',
+        'has_completed_onboarding' => 'boolean',
     ];
 
     /** Users this user has blocked. */

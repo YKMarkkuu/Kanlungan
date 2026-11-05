@@ -21,7 +21,7 @@
 </head>
 <body>
     <div class="page">
-        <main class="guest-page">
+        <main class="guest-page @yield('guest-class')">
             <div class="container">
                 @yield('content')
             </div>

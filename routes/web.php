@@ -34,7 +34,9 @@ Route::post('/auth/login',  [LoginController::class, 'login'])->middleware('thro
 
 Route::middleware(['auth', RejectDeletedAccounts::class])->group(function () {
     Route::post('/auth/logout', [LoginController::class, 'logout'])->name('auth.logout');
-    Route::get('/home', fn () => redirect()->route('feed'))->name('home');
+    Route::get('/home', [LoginController::class, 'home'])->name('home');
+    Route::get('/onboarding', [LoginController::class, 'onboarding'])->name('onboarding');
+    Route::post('/onboarding/complete', [LoginController::class, 'completeOnboarding'])->name('onboarding.complete');
 
     Route::post('/me/delete', [ProfileController::class, 'destroyAccount'])
         ->middleware('throttle:3,1,account-delete')

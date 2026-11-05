@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\OtpService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
 
 class LoginController extends Controller
@@ -49,10 +50,34 @@ class LoginController extends Controller
         // The code is spent; don't allow replay.
         OtpService::invalidate($email);
 
-        return response()->json(['status' => 'authenticated'], 200);
+        return response()->json([
+            'status' => 'authenticated',
+            'redirect' => $user->has_completed_onboarding ? route('feed') : route('onboarding'),
+        ], 200);
     }
 
-        public function logout(Request $request): \Illuminate\Http\JsonResponse|\Illuminate\Http\RedirectResponse
+    public function home(Request $request): RedirectResponse
+    {
+        return redirect()->route($request->user()->has_completed_onboarding ? 'feed' : 'onboarding');
+    }
+
+    public function onboarding(Request $request)
+    {
+        if ($request->user()->has_completed_onboarding) {
+            return redirect()->route('feed');
+        }
+
+        return response()->view('onboarding');
+    }
+
+    public function completeOnboarding(Request $request): RedirectResponse
+    {
+        $request->user()->forceFill(['has_completed_onboarding' => true])->save();
+
+        return redirect()->route('feed');
+    }
+
+    public function logout(Request $request): \Illuminate\Http\JsonResponse|RedirectResponse
     {
         Auth::logout();
 
