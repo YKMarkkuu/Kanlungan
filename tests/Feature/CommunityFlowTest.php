@@ -294,6 +294,18 @@ class CommunityFlowTest extends TestCase
             ->assertUnprocessable();
     }
 
+    public function test_post_deletion_returns_json_for_ajax_requests(): void
+    {
+        $author = User::factory()->create();
+        $post = $this->makePost($author);
+
+        $this->actingAs($author)->deleteJson("/post/{$post->id}")
+            ->assertOk()
+            ->assertJson(['status' => 'success']);
+
+        $this->assertSame('author', $post->fresh()->removed_by);
+    }
+
     public function test_moderator_and_community_removed_posts_hide_their_threads(): void
     {
         $author = User::factory()->create();

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Alert;
 use App\Models\Comment;
 use App\Models\ModAction;
+use App\Models\PointLog;
 use App\Models\Post;
 use App\Models\Report;
 use App\Models\ReportVote;
@@ -829,12 +830,19 @@ class ModerationFlowTest extends TestCase
         $user = User::factory()->create();
         $post = $this->makePost($user, 'MY-OWN-POST');
         Comment::create(['post_id' => $post->id, 'author_id' => $user->id, 'body' => 'MY-OWN-COMMENT', 'is_anonymous' => true]);
+        PointLog::create(['user_id' => $user->id, 'amount' => 3, 'reason' => 'helpful_received']);
 
         $this->actingAs($user)->post('/me/name', ['display_name' => 'Mika R.'])->assertSessionHasNoErrors();
         $this->assertSame('Mika R.', User::find($user->id)->display_name);
 
         $user = $user->fresh();
-        $this->actingAs($user)->get('/me')->assertOk()->assertSee('Mika R.')->assertSee('My posts');
+        $this->actingAs($user)->get('/me')->assertOk()
+            ->assertSee('Mika R.')
+            ->assertSee('My posts')
+            ->assertSee('data-name-edit', false)
+            ->assertSee('Someone marked your comment helpful')
+            ->assertSee('Today')
+            ->assertSee('+3');
         $this->actingAs($user)->get('/me/posts')->assertOk()->assertSee('MY-OWN-POST');
         $this->actingAs($user)->get('/me/comments')->assertOk()->assertSee('MY-OWN-COMMENT');
         $this->actingAs($user)->get('/rules')->assertOk()->assertSee('How reports work');
@@ -842,6 +850,33 @@ class ModerationFlowTest extends TestCase
         $this->actingAs($user)->get('/help')->assertOk()->assertSee('1553');
         $this->actingAs($user)->get('/me')->assertDontSee('Moderation queue');
         $this->actingAs(User::factory()->create(['role' => 'moderator']))->get('/me')->assertSee('Moderation queue');
+    }
+
+    public function test_profile_shows_five_point_history_rows_and_full_history_has_its_own_page(): void
+    {
+        $user = User::factory()->create();
+
+        for ($amount = 1; $amount <= 7; $amount++) {
+            PointLog::create([
+                'user_id' => $user->id,
+                'amount' => $amount,
+                'reason' => 'helpful_received',
+            ]);
+        }
+
+        $profileResponse = $this->actingAs($user)->get('/me')
+            ->assertOk()
+            ->assertSee(route('community.me.points'))
+            ->assertSee('View full history')
+            ->assertSee('>+7</strong>', false)
+            ->assertSee('>+3</strong>', false)
+            ->assertDontSee('>+2</strong>', false);
+
+        $this->actingAs($user)->get(route('community.me.points'))
+            ->assertOk()
+            ->assertSee('Points history')
+            ->assertSee('>+7</strong>', false)
+            ->assertSee('>+1</strong>', false);
     }
 
     public function test_photo_upload_is_re_encoded_and_shown(): void
