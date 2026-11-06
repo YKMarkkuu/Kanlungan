@@ -19,7 +19,7 @@
     <link rel="stylesheet" href="{{ asset('css/components.css') }}">
     @yield('head')
 </head>
-<body>
+<body class="@yield('body-class')">
     <div class="page">
         <main class="guest-page @yield('guest-class')">
             <div class="container">

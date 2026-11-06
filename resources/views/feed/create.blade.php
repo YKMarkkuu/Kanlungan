@@ -6,7 +6,7 @@
 
 @section('content')
     <form method="POST" action="{{ route('post.store') }}" class="cm-compose-form" id="post-form" enctype="multipart/form-data"
-          data-alias="{{ $alias }}" data-has-name="{{ $hasDisplayName ? '1' : '0' }}">
+          data-alias="{{ $alias }}" data-display-name="{{ trim((string) auth()->user()->display_name) !== '' ? auth()->user()->display_name : $alias }}" data-has-name="{{ $hasDisplayName ? '1' : '0' }}">
         @csrf
 
         <header class="cm-header cm-animate-fade">
@@ -69,7 +69,7 @@
                 <x-avatar :avatar-path="auth()->user()->avatar_path" :name="auth()->user()->display_name" class="cm-compose__avatar" />
 
                 <div class="cm-compose__main">
-                    <p class="text-small text-muted cm-compose__as" id="anon-hint">You'll appear under a random alias (like {{ $alias }}) in this thread</p>
+                    <p class="text-small text-muted cm-compose__as" id="anon-hint"></p>
 
                     <label class="cm-visually-hidden" for="body">What's on your mind?</label>
                     <textarea class="cm-compose__input" id="body" name="body" rows="5" maxlength="2000"

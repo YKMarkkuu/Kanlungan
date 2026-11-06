@@ -1,5 +1,6 @@
 {{-- One comment with optional collapsed replies. Expects $comment and optional $reply / $canAccept. --}}
 @php($reply = $reply ?? false)
+@php($isOp = $isOp ?? ($comment['is_op'] ?? false))
 @php($locked = $locked ?? false)
 @php($canAccept = ($canAccept ?? false) && ! $locked && ! $reply && ! $comment['mine'] && ! $comment['removed'])
 @php($replies = $reply ? [] : ($comment['replies'] ?? []))
@@ -14,6 +15,9 @@
                 <div class="cm-comment__head">
                     @unless ($comment['removed'])
                         <strong class="cm-comment__author">{{ $comment['author_alias'] }}</strong>
+                        @if ($isOp)
+                            <span class="cm-op-tag">Author</span>
+                        @endif
                     @endunless
                     {{-- The only timestamp for this comment. --}}
                     <time class="cm-comment__time" title="{{ $comment['created_at']->format('F j, Y, g:i A') }}">{{ $comment['time_ago'] }}</time>
@@ -31,7 +35,7 @@
                     @endif
                 </div>
 
-                <p class="cm-comment__body {{ $comment['removed'] ? 'text-muted' : '' }}">{{ $comment['body'] }}</p>
+                <p class="cm-comment__body {{ $comment['removed'] ? 'text-muted' : '' }}">@if ($reply && ! $comment['removed'] && ! empty($comment['parent_alias']))<span class="cm-reply-mention">{{ '@'.$comment['parent_alias'] }}</span> @endif{{ $comment['body'] }}</p>
                 @unless ($comment['removed'])
                     @if ($comment['is_accepted'])
                         <span class="cm-badge">@include('components.icon', ['name' => 'check']) Accepted</span>
@@ -135,7 +139,7 @@
     @if (count($replies) > 0)
         <div class="cm-replies-container hidden" id="{{ $repliesId }}">
             @foreach ($replies as $child)
-                @include('components.comment-card', ['comment' => $child, 'reply' => true, 'locked' => $locked])
+                @include('components.comment-card', ['comment' => $child, 'reply' => true, 'isOp' => $child['is_op'] ?? false, 'locked' => $locked])
             @endforeach
         </div>
     @endif

@@ -37,6 +37,7 @@ Route::middleware(['auth', RejectDeletedAccounts::class])->group(function () {
     Route::get('/home', [LoginController::class, 'home'])->name('home');
     Route::get('/onboarding', [LoginController::class, 'onboarding'])->name('onboarding');
     Route::post('/onboarding/complete', [LoginController::class, 'completeOnboarding'])->name('onboarding.complete');
+    Route::post('/onboarding/restart', [ProfileController::class, 'restartOnboarding'])->name('onboarding.restart');
 
     Route::post('/me/delete', [ProfileController::class, 'destroyAccount'])
         ->middleware('throttle:3,1,account-delete')

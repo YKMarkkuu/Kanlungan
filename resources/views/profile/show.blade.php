@@ -108,6 +108,7 @@
                 <a class="cm-settings-item" href="{{ route('page.privacy') }}">Privacy notice</a>
                 <a class="cm-settings-item" href="{{ route('page.rules') }}">Rules</a>
                 <a class="cm-settings-item" href="{{ route('page.help') }}">Help</a>
+                <button type="button" class="cm-settings-item" data-restart-onboarding>How Kanlungan works</button>
                 @if (in_array($role, ['moderator', 'admin', 'guidance'], true))
                     <a class="cm-settings-item" href="{{ route('moderation') }}">Moderation queue</a>
                 @endif

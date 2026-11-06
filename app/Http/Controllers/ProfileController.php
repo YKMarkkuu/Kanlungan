@@ -7,6 +7,7 @@ use App\Services\AccountDeletionService;
 use App\Services\CommunityService;
 use App\Services\ImageService;
 use App\Services\PointService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -14,6 +15,13 @@ use Illuminate\Validation\Rule;
 
 class ProfileController extends Controller
 {
+    public function restartOnboarding(Request $request): JsonResponse
+    {
+        $request->user()->forceFill(['has_completed_onboarding' => false])->save();
+
+        return response()->json(['status' => 'success']);
+    }
+
     public function show(Request $request)
     {
         $user = $request->user();

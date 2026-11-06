@@ -26,6 +26,11 @@ class Comment extends Model
         return $this->belongsTo(User::class, 'author_id');
     }
 
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'parent_id');
+    }
+
     public function reactions(): MorphMany
     {
         return $this->morphMany(Reaction::class, 'reactable');

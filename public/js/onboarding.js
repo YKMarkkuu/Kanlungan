@@ -11,13 +11,14 @@
     var slides = Array.prototype.slice.call(onboarding.querySelectorAll('[data-onboarding-slide]'));
     var dots = Array.prototype.slice.call(onboarding.querySelectorAll('[data-onboarding-dot]'));
     var status = onboarding.querySelector('[data-onboarding-status]');
+    var nextButton = onboarding.querySelector('[data-onboarding-next]');
+    var completeButton = onboarding.querySelector('[data-onboarding-complete]');
     var activeIndex = 0;
 
-    if (slides.length !== 3 || dots.length !== slides.length) {
-        throw new Error('Onboarding requires exactly three slides and progress indicators.');
+    if (!slidesContainer || !status || !nextButton || !completeButton ||
+        slides.length !== 4 || dots.length !== slides.length) {
+        throw new Error('Onboarding requires four slides and matching progress indicators.');
     }
-
-    slidesContainer.classList.add('is-enhanced');
 
     function showSlide(index) {
         slides.forEach(function (slide, slideIndex) {
@@ -30,15 +31,23 @@
 
         activeIndex = index;
         status.textContent = 'Step ' + (index + 1) + ' of ' + slides.length;
+        nextButton.hidden = index === slides.length - 1;
+        completeButton.hidden = index !== slides.length - 1;
     }
 
-    onboarding.querySelectorAll('[data-onboarding-next]').forEach(function (button) {
-        button.addEventListener('click', function () {
-            if (activeIndex < slides.length - 1) {
-                showSlide(activeIndex + 1);
-            }
-        });
+    nextButton.addEventListener('click', function () {
+        if (activeIndex < slides.length - 1) {
+            slidesContainer.scrollBy({
+                left: slidesContainer.offsetWidth,
+                behavior: 'smooth'
+            });
+        }
     });
+
+    slidesContainer.addEventListener('scroll', function () {
+        var index = Math.round(slidesContainer.scrollLeft / slidesContainer.offsetWidth);
+        showSlide(Math.max(0, Math.min(index, slides.length - 1)));
+    }, { passive: true });
 
     showSlide(activeIndex);
 })();

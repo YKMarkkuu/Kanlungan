@@ -19,7 +19,7 @@
             {{-- community.js injects new comments / replies here. --}}
             <div class="cm-comment-list" id="comment-list">
                 @foreach ($comments as $comment)
-                    @include('components.comment-card', ['comment' => $comment, 'reply' => false, 'canAccept' => $post['mine'] && ! $locked, 'locked' => $locked])
+                    @include('components.comment-card', ['comment' => $comment, 'reply' => false, 'isOp' => $comment['is_op'] ?? false, 'canAccept' => $post['mine'] && ! $locked, 'locked' => $locked])
                 @endforeach
 
                 @if (count($comments) === 0)
@@ -32,7 +32,7 @@
         <p class="text-small text-muted" style="text-align:center">This post was removed, so new comments are turned off.</p>
     @else
         {{-- Comment box pinned to the bottom (mockup screen 5): [anon] [textarea] [send]. --}}
-        <form method="POST" action="{{ route('post.comment', $post['id']) }}" class="cm-composer" id="comment-form" data-alias="{{ $alias }}">
+        <form method="POST" action="{{ route('post.comment', $post['id']) }}" class="cm-composer" id="comment-form" data-alias="{{ $alias }}" data-display-name="{{ trim((string) auth()->user()->display_name) !== '' ? auth()->user()->display_name : $alias }}">
             @csrf
             <input type="hidden" name="parent_id" id="parent-id" value="">
             <input type="hidden" name="anonymous" id="anon-field" value="1">
@@ -45,7 +45,7 @@
             <p class="field__error" id="comment-error" role="alert" aria-live="polite" hidden></p>
 
             {{-- community.js rewrites this text when the anonymous toggle changes. Keep the id. --}}
-            <p class="cm-composer__label" id="comment-hint">Commenting as {{ $alias }}</p>
+            <p class="cm-composer__label" id="comment-hint"></p>
 
             <div class="cm-composer__row">
                 <button type="button" class="cm-icon-btn cm-anon-toggle is-on" id="anon-toggle" aria-pressed="true" aria-label="Comment anonymously" title="Anonymous">@include('components.icon', ['name' => 'mask'])</button>

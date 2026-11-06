@@ -14,6 +14,45 @@
         });
     };
 
+    var restartOnboardingButton = document.querySelector('[data-restart-onboarding]');
+
+    if (restartOnboardingButton) {
+        restartOnboardingButton.addEventListener('click', function () {
+            var tokenMeta = document.querySelector('meta[name="csrf-token"]');
+            var headers = {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            };
+
+            if (tokenMeta) {
+                headers['X-CSRF-TOKEN'] = tokenMeta.getAttribute('content');
+            }
+
+            restartOnboardingButton.disabled = true;
+            fetch('/onboarding/restart', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: headers
+            }).then(function (response) {
+                if (!response.ok) {
+                    throw new Error('Restarting onboarding failed with HTTP ' + response.status);
+                }
+
+                return response.json();
+            }).then(function (data) {
+                if (!data || data.status !== 'success') {
+                    throw new Error('Restarting onboarding returned an unexpected response.');
+                }
+
+                window.location.href = '/onboarding';
+            }).catch(function (error) {
+                console.error(error);
+                window.alert('Could not restart the tour. Please try again.');
+                restartOnboardingButton.disabled = false;
+            });
+        });
+    }
+
     /* ---------- Notification dropdown and unread-count polling ---------- */
 
     var notificationToggle = document.querySelector('[data-notification-toggle]');
@@ -916,6 +955,7 @@
         var itemsIncomplete;
         var charCount = document.getElementById('char-count');
         var alias = postForm.getAttribute('data-alias');
+        var displayName = postForm.getAttribute('data-display-name');
         var postSubmitting = false;
         var photoItems = [];   // { id, blob, url, name, width, height, pending }
         var photosBusy = 0;    // photos still being resized
@@ -945,8 +985,8 @@
             }
 
             anonHint.textContent = anon.checked
-                ? 'You\u2019ll appear under a random alias (like ' + alias + ') in this thread'
-                : 'Your display name will be shown on this post';
+                ? 'Posting anonymously as ' + alias
+                : 'Posting as ' + displayName;
         };
 
         /* -- Auto-expanding textarea: no cap, the page scrolls instead -- */
@@ -1569,6 +1609,7 @@
         var anonField = document.getElementById('anon-field');
         var hint = document.getElementById('comment-hint');
         var commentAlias = commentForm.getAttribute('data-alias');
+        var commentDisplayName = commentForm.getAttribute('data-display-name');
         var parentId = document.getElementById('parent-id');
         var replyNote = document.getElementById('reply-note');
         var replyName = document.getElementById('reply-name');
@@ -1591,8 +1632,12 @@
             anonField.value = on ? '1' : '0';
             toggle.classList.toggle('is-on', on);
             toggle.setAttribute('aria-pressed', on ? 'true' : 'false');
-            hint.textContent = on ? 'Commenting as ' + commentAlias : 'Commenting with your name';
+            hint.textContent = on
+                ? 'Commenting anonymously as ' + commentAlias
+                : 'Commenting as ' + commentDisplayName;
         });
+
+        hint.textContent = 'Commenting anonymously as ' + commentAlias;
 
         var clearReply = function () {
             parentId.value = '';
