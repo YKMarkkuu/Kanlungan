@@ -27,6 +27,10 @@ Route::post('/auth/register',    [OtpController::class, 'register'])->middleware
 Route::post('/auth/login',  [LoginController::class, 'login'])->middleware('throttle:otp-verify')->name('auth.login');
 Route::post('/auth/logout', [LoginController::class, 'logout'])->middleware('auth')->name('auth.logout');
 
-Route::get('/home', fn () => redirect()->route('feed'))->middleware('auth')->name('home');
+// Students land on the feed, staff (admin / guidance / moderator) on their dashboard.
+Route::get('/home', fn () => in_array(auth()->user()->role, \App\Services\ModerationService::STAFF, true)
+    ? redirect()->route('staff.dashboard')
+    : redirect()->route('feed'))->middleware('auth')->name('home');
 
 require __DIR__.'/community.php';
+require __DIR__.'/staff.php';

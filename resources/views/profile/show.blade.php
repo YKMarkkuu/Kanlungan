@@ -53,9 +53,6 @@
             <a href="{{ route('community.me.comments') }}">My comments</a>
             <span class="text-muted">Language: English</span>
             <span><a href="{{ route('page.privacy') }}">Privacy notice</a> · <a href="{{ route('page.rules') }}">Rules</a> · <a href="{{ route('page.help') }}">Help</a></span>
-            @if (in_array($role, ['moderator', 'admin', 'guidance'], true))
-                <a href="{{ route('moderation') }}">Moderation queue</a>
-            @endif
         </div>
 
         <h2>Points history</h2>

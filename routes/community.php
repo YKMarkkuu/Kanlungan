@@ -2,14 +2,13 @@
 
 use App\Http\Controllers\AlertController;
 use App\Http\Controllers\FeedController;
-use App\Http\Controllers\ModerationController;
 use App\Http\Controllers\PageController;
 use App\Http\Controllers\PostController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SearchController;
 use App\Http\Middleware\EnforceRestrictions;
-use App\Http\Middleware\RequireRole;
+use App\Http\Middleware\StudentsOnly;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -20,11 +19,12 @@ use Illuminate\Support\Facades\Route;
 | middleware. Kept in its own file so it never conflicts with the login /
 | register routes in web.php.
 |
-| Login-only: signed-out visitors are sent to the login page.
+| Login-only: signed-out visitors are sent to the login page. Students only: staff accounts are
+| redirected to /staff (see routes/staff.php and StudentsOnly).
 | Data is stored in the posts / comments / reactions tables.
 */
 
-Route::middleware(['auth', EnforceRestrictions::class])->group(function () {
+Route::middleware(['auth', EnforceRestrictions::class, StudentsOnly::class])->group(function () {
     Route::get('/feed', [FeedController::class, 'index'])->name('feed');
 
     Route::get('/post/create', [PostController::class, 'create'])->name('post.create');
@@ -60,15 +60,4 @@ Route::middleware(['auth', EnforceRestrictions::class])->group(function () {
     Route::get('/rules', [PageController::class, 'rules'])->name('page.rules');
     Route::get('/privacy', [PageController::class, 'privacy'])->name('page.privacy');
     Route::get('/help', [PageController::class, 'help'])->name('page.help');
-
-    // Moderator queue (design screen 9): moderator, admin and guidance accounts only
-    Route::middleware(RequireRole::class.':moderator,admin,guidance')->group(function () {
-        Route::get('/moderation', [ModerationController::class, 'index'])->name('moderation');
-        Route::post('/moderation/{report}', [ModerationController::class, 'act'])->whereNumber('report')->middleware('throttle:60,1')->name('moderation.act');
-    });
-
-    Route::post('/moderation/{report}/unmask', [ModerationController::class, 'unmask'])
-        ->whereNumber('report')
-        ->middleware(RequireRole::class.':admin,dpo')
-        ->name('moderation.unmask');
 });

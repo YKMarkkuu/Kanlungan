@@ -123,3 +123,17 @@ All findings from `docs/AUDIT.md` closed on 2026-10-18. See commit history:
 - 2026-10-12: Community merge
 - 2026-10-16: Audit run (findings documented in docs/AUDIT.md)
 - 2026-10-18: All audit tiers closed, auth tests added
+
+# PM Session Handoff
+
+Last updated: 2026-10-22 (staff dashboard)
+
+## Staff dashboard: DONE — see `docs/STAFF-DASHBOARD.md`
+- `/staff` for admin and guidance: overview, reports queue, case page, restricted accounts, audit log. Own sign-in at `/staff/login`; accounts made with `php artisan staff:create`.
+- Staff only see reported content, under aliases. Reveal (admin/guidance/dpo) needs a reason, is logged, and is shown for 30 minutes to the revealer only.
+- Staff are blocked from student pages (`StudentsOnly`); students are blocked from `/staff`.
+- New report reasons: Sexual content, Profanity.
+- Guidance can now decide (not just mark handled): `ModerationService::GUIDANCE_CAN_DECIDE`.
+- Tests: 67 passing (25 new in `StaffDashboardTest`). Existing `ModerationFlowTest` updated for the new URLs and privacy rules (staff no longer see the reporter's name).
+- Closed debt: `User` casts for `muted_until` / `banned_at` / `points`. "Guidance tab reachable by URL for moderators" no longer applies (old tabs removed).
+- Dead code removed: `ModerationController`, `moderation/index.blade.php`, `ModerationService::queue/history/card`.
