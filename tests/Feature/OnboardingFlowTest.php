@@ -34,6 +34,13 @@ class OnboardingFlowTest extends TestCase
             ->assertSee('Posts can be anonymous, protected by a per-thread alias. The system keeps you accountable, but other students never see who you are.')
             ->assertSee('Earn points by marking comments as Helpful on Ask, Help, and Academic posts. Build your reputation.')
             ->assertSee('Safety reports go straight to moderators.')
+            ->assertSee('onboarding-anon-toggle', false)
+            ->assertSee('<button type="button" class="cm-anon-badge" id="onboarding-anon-toggle" aria-pressed="true">', false)
+            ->assertDontSee('<input class="cm-visually-hidden" type="checkbox" id="onboarding-anon-toggle"', false)
+            ->assertSee('cm-ghost-cursor', false)
+            ->assertSee('M9 11V5a2 2 0 0 1 4 0v5-2a2 2 0 0 1 4 0v2-1a2 2 0 0 1 4 0v6a6 6 0 0 1-6 6h-2a6 6 0 0 1-4.5-2L4 14a2 2 0 0 1 3-2.7L9 13', false)
+            ->assertSee('onboarding-helpful-btn', false)
+            ->assertSee('onboarding-report-menu-toggle', false)
             ->assertSee('Skip')
             ->assertSee("Let's go!", false);
 
