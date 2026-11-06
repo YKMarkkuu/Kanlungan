@@ -200,7 +200,22 @@
     display: flex;
     align-items: center;
     gap: 16px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+}
+
+.cm-post__foot { position: relative; }
+.cm-post__foot-link { position: absolute; inset: 0; z-index: 0; }
+.cm-post__foot-actions,
+.cm-bookmark-form { position: relative; z-index: 1; pointer-events: none; }
+.cm-post__foot-actions { display: flex; align-items: center; gap: 8px; }
+.cm-post__foot-actions { min-width: 0; }
+.cm-post__foot-actions form { margin: 0; }
+.cm-post__foot-actions a,
+.cm-post__foot-actions button,
+.cm-bookmark-form button { pointer-events: auto; }
+.cm-post__foot > .cm-bookmark-form {
+    flex: 0 0 auto;
+    margin: 0 0 0 auto;
 }
 
 .cm-stat {
@@ -1702,6 +1717,7 @@ a.cm-stat { color: inherit; text-decoration: none; display: inline-flex; align-i
 
 .cm-more-menu {
     position: relative;
+    z-index: 2;
     flex: 0 0 auto;
 }
 
@@ -2026,12 +2042,6 @@ a.cm-stat { color: inherit; text-decoration: none; display: inline-flex; align-i
     height: 24px;
 }
 
-.cm-comment--reply .cm-comment__bubble {
-    border-left: 2px solid var(--border-default);
-    border-radius: 4px 14px 14px 4px;
-    background: var(--surface-card);
-}
-
 .cm-op-tag {
     flex: none;
     padding: 2px 6px;
@@ -2097,11 +2107,6 @@ a.cm-stat { color: inherit; text-decoration: none; display: inline-flex; align-i
     line-height: 1.4;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
-}
-
-.cm-reply-mention {
-    color: var(--accent);
-    font-weight: 600;
 }
 
 .cm-comment__bubble > .cm-badge { margin-top: 6px; }
@@ -2270,7 +2275,7 @@ a.cm-stat { color: inherit; text-decoration: none; display: inline-flex; align-i
     position: fixed;
     left: 0;
     right: 0;
-    bottom: 0;
+    bottom: var(--cm-comment-kb, 0px);
     z-index: 100;
     padding: 8px 12px calc(10px + env(safe-area-inset-bottom, 0px));
     background-color: var(--surface-card);

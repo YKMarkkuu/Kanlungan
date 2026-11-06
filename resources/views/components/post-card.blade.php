@@ -35,6 +35,26 @@
                 @endif
             @endif
         </div>
+        <div class="cm-more-menu">
+            <button type="button" class="cm-action-btn cm-more-menu__toggle" data-menu-toggle
+                    aria-label="More post actions" title="More actions" aria-expanded="false"
+                    aria-controls="{{ $menuId }}">
+                @include('components.icon', ['name' => 'more'])
+            </button>
+            <div class="cm-more-menu__dropdown hidden" id="{{ $menuId }}">
+                @if ($post['mine'])
+                    <form method="POST" action="{{ route('post.destroy', $post['id']) }}"
+                          onsubmit="return confirm('Delete this post?');">
+                        @csrf
+                        @method('DELETE')
+                        <button type="submit" class="cm-menu-item text-danger">Delete</button>
+                    </form>
+                @else
+                    @include('components.report-flag', ['type' => 'post', 'item' => $post, 'showLabel' => true])
+                    @include('components.block-button', ['type' => 'post', 'item' => $post, 'menuItem' => true])
+                @endif
+            </div>
+        </div>
     </div>
 
     {{-- Feed cards clamp to 6 lines; the thread page ($link = false) shows everything. --}}
@@ -83,28 +103,33 @@
     @endif
 
     <div class="cm-post__foot text-small text-muted">
-        {{-- Authors cannot like their own post: no button, just the count. --}}
-        @if ($post['mine'])
-            <span class="cm-action-btn cm-action-count" aria-label="{{ $post['likes'] }} likes" title="{{ $post['likes'] }} likes">@include('components.icon', ['name' => 'like']) <span class="cm-stat__count">{{ $post['likes'] }}</span></span>
-        @else
-            {{-- Plain form = no-JS fallback. community.js intercepts the button click (data-react). --}}
-            <form method="POST" action="{{ route('post.like', $post['id']) }}">
-                @csrf
-                <button type="submit"
-                        class="cm-action-btn cm-react {{ $post['liked'] ? 'is-active' : '' }}"
-                        data-react="like"
-                        data-post-id="{{ $post['id'] }}"
-                        aria-pressed="{{ $post['liked'] ? 'true' : 'false' }}"
-                        aria-label="{{ $post['liked'] ? 'Unlike' : 'Like' }} post, {{ $post['likes'] }} likes"
-                        title="{{ $post['liked'] ? 'Unlike post' : 'Like post' }}">@include('components.icon', ['name' => 'like'])<span class="cm-stat__count">{{ $post['likes'] }}</span></button>
-            </form>
-        @endif
         @if ($link)
-            <a class="cm-action-btn cm-stat" href="{{ route('post.show', $post['id']) }}" aria-label="Comment, {{ $post['comments'] }} comments" title="Comment">@include('components.icon', ['name' => 'comment'])<span class="cm-stat__count" data-comments-count>{{ $post['comments'] }}</span></a>
-        @else
-            <span class="cm-action-btn cm-stat" aria-label="Comment, {{ $post['comments'] }} comments" title="Comment">@include('components.icon', ['name' => 'comment'])<span class="cm-stat__count" data-comments-count>{{ $post['comments'] }}</span></span>
+            <a class="cm-post__foot-link" href="{{ route('post.show', $post['id']) }}" aria-label="Open post"></a>
         @endif
-        <button type="button" class="cm-action-btn" onclick="copyLink('{{ route('post.show', $post['id']) }}')" aria-label="Share" title="Share">@include('components.icon', ['name' => 'share'])</button>
+        <div class="cm-post__foot-actions">
+            {{-- Authors cannot like their own post: no button, just the count. --}}
+            @if ($post['mine'])
+                <span class="cm-action-btn cm-action-count" aria-label="{{ $post['likes'] }} likes" title="{{ $post['likes'] }} likes">@include('components.icon', ['name' => 'like']) <span class="cm-stat__count">{{ $post['likes'] }}</span></span>
+            @else
+                {{-- Plain form = no-JS fallback. community.js intercepts the button click (data-react). --}}
+                <form method="POST" action="{{ route('post.like', $post['id']) }}">
+                    @csrf
+                    <button type="submit"
+                            class="cm-action-btn cm-react {{ $post['liked'] ? 'is-active' : '' }}"
+                            data-react="like"
+                            data-post-id="{{ $post['id'] }}"
+                            aria-pressed="{{ $post['liked'] ? 'true' : 'false' }}"
+                            aria-label="{{ $post['liked'] ? 'Unlike' : 'Like' }} post, {{ $post['likes'] }} likes"
+                            title="{{ $post['liked'] ? 'Unlike post' : 'Like post' }}">@include('components.icon', ['name' => 'like'])<span class="cm-stat__count">{{ $post['likes'] }}</span></button>
+                </form>
+            @endif
+            @if ($link)
+                <a class="cm-action-btn cm-stat" href="{{ route('post.show', $post['id']) }}" aria-label="Comment, {{ $post['comments'] }} comments" title="Comment">@include('components.icon', ['name' => 'comment'])<span class="cm-stat__count" data-comments-count>{{ $post['comments'] }}</span></a>
+            @else
+                <span class="cm-action-btn cm-stat" aria-label="Comment, {{ $post['comments'] }} comments" title="Comment">@include('components.icon', ['name' => 'comment'])<span class="cm-stat__count" data-comments-count>{{ $post['comments'] }}</span></span>
+            @endif
+            <button type="button" class="cm-action-btn" onclick="copyLink('{{ route('post.show', $post['id']) }}')" aria-label="Share" title="Share">@include('components.icon', ['name' => 'share'])</button>
+        </div>
         <form method="POST" action="{{ route('post.bookmark', $post['id']) }}" class="cm-bookmark-form">
             @csrf
             <button type="submit"
@@ -115,26 +140,6 @@
                     aria-label="{{ $bookmarked ? 'Remove from saved' : 'Save post' }}"
                     title="{{ $bookmarked ? 'Remove from saved' : 'Save post' }}">@include('components.icon', ['name' => 'bookmark'])</button>
         </form>
-        <div class="cm-more-menu">
-            <button type="button" class="cm-action-btn cm-more-menu__toggle" data-menu-toggle
-                    aria-label="More post actions" title="More actions" aria-expanded="false"
-                    aria-controls="{{ $menuId }}">
-                @include('components.icon', ['name' => 'more'])
-            </button>
-            <div class="cm-more-menu__dropdown hidden" id="{{ $menuId }}">
-                @if ($post['mine'])
-                    <form method="POST" action="{{ route('post.destroy', $post['id']) }}"
-                          onsubmit="return confirm('Delete this post?');">
-                        @csrf
-                        @method('DELETE')
-                        <button type="submit" class="cm-menu-item text-danger">Delete</button>
-                    </form>
-                @else
-                    @include('components.report-flag', ['type' => 'post', 'item' => $post, 'showLabel' => true])
-                    @include('components.block-button', ['type' => 'post', 'item' => $post, 'menuItem' => true])
-                @endif
-            </div>
-        </div>
     </div>
 </article>
 @endif

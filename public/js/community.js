@@ -1615,6 +1615,8 @@
         var replyName = document.getElementById('reply-name');
         var replyCancel = document.getElementById('reply-cancel');
         var commentBody = document.getElementById('comment-body');
+        var replyMentionPrefix = '';
+        var replyTarget = null;
 
         var autoGrowComment = function () {
             commentBody.style.height = 'auto';
@@ -1622,9 +1624,44 @@
             commentBody.style.overflowY = 'hidden';
         };
 
+        var alignReplyTarget = function (behavior) {
+            if (!replyTarget) {
+                return;
+            }
+
+            var top = replyTarget.getBoundingClientRect().top;
+            var targetTop = 16;
+
+            if (Math.abs(top - targetTop) > 8) {
+                window.scrollBy({
+                    top: top - targetTop,
+                    behavior: behavior || 'auto'
+                });
+            }
+        };
+
         commentBody.addEventListener('input', autoGrowComment);
         window.addEventListener('resize', autoGrowComment);
         autoGrowComment();
+
+        if (window.visualViewport) {
+            var commentViewport = window.visualViewport;
+            var syncCommentKeyboard = function () {
+                var keyboardOffset = Math.max(0, window.innerHeight - commentViewport.height - commentViewport.offsetTop);
+                var keyboardOpen = keyboardOffset > 80;
+
+                commentForm.style.setProperty('--cm-comment-kb', keyboardOpen ? keyboardOffset + 'px' : '0px');
+
+                if (keyboardOpen) {
+                    window.requestAnimationFrame(function () {
+                        alignReplyTarget('auto');
+                    });
+                }
+            };
+
+            commentViewport.addEventListener('resize', syncCommentKeyboard);
+            commentViewport.addEventListener('scroll', syncCommentKeyboard);
+        }
 
         toggle.addEventListener('click', function () {
             var on = anonField.value !== '1';
@@ -1640,6 +1677,13 @@
         hint.textContent = 'Commenting anonymously as ' + commentAlias;
 
         var clearReply = function () {
+            if (replyMentionPrefix && commentBody.value.indexOf(replyMentionPrefix) === 0) {
+                commentBody.value = commentBody.value.slice(replyMentionPrefix.length);
+                autoGrowComment();
+            }
+
+            replyMentionPrefix = '';
+            replyTarget = null;
             parentId.value = '';
             replyNote.hidden = true;
             commentBody.placeholder = 'Write a comment\u2026';
@@ -1652,11 +1696,30 @@
                 return;
             }
 
+            var existingDraft = commentBody.value;
+
+            if (replyMentionPrefix && existingDraft.indexOf(replyMentionPrefix) === 0) {
+                existingDraft = existingDraft.slice(replyMentionPrefix.length);
+            }
+
+            var alias = button.getAttribute('data-reply-name');
+            replyMentionPrefix = button.getAttribute('data-reply-self') === '1' ? '' : '@' + alias + ' ';
+            commentBody.value = replyMentionPrefix + existingDraft;
             parentId.value = button.getAttribute('data-reply-to');
-            replyName.textContent = 'Replying to ' + button.getAttribute('data-reply-name');
+            replyTarget = document.getElementById('comment-' + parentId.value);
+            replyName.textContent = 'Replying to ' + alias;
             replyNote.hidden = false;
             commentBody.placeholder = 'Write a reply\u2026';
-            commentBody.focus();
+            autoGrowComment();
+            commentBody.focus({ preventScroll: true });
+
+            if (replyMentionPrefix) {
+                commentBody.setSelectionRange(commentBody.value.length, commentBody.value.length);
+            }
+
+            window.requestAnimationFrame(function () {
+                alignReplyTarget('smooth');
+            });
         });
 
         replyCancel.addEventListener('click', clearReply);

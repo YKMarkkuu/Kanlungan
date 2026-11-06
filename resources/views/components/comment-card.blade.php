@@ -35,7 +35,7 @@
                     @endif
                 </div>
 
-                <p class="cm-comment__body {{ $comment['removed'] ? 'text-muted' : '' }}">@if ($reply && ! $comment['removed'] && ! empty($comment['parent_alias']))<span class="cm-reply-mention">{{ '@'.$comment['parent_alias'] }}</span> @endif{{ $comment['body'] }}</p>
+                <p class="cm-comment__body {{ $comment['removed'] ? 'text-muted' : '' }}">{{ $comment['body'] }}</p>
                 @unless ($comment['removed'])
                     @if ($comment['is_accepted'])
                         <span class="cm-badge">@include('components.icon', ['name' => 'check']) Accepted</span>
@@ -52,7 +52,7 @@
                     {{-- Left: Reply + View N replies, inline. --}}
                     <div class="cm-comment__actions-left">
                         @unless ($locked)
-                            <button type="button" class="cm-comment__action-btn" data-reply-to="{{ $comment['id'] }}" data-reply-name="{{ $comment['author_alias'] }}" aria-label="Reply to comment">Reply</button>
+                            <button type="button" class="cm-comment__action-btn" data-reply-to="{{ $comment['id'] }}" data-reply-name="{{ $comment['author_alias'] }}" data-reply-self="{{ $comment['mine'] ? '1' : '0' }}" aria-label="Reply to comment">Reply</button>
                         @endunless
                         @if (count($replies) > 0)
                             <button type="button"

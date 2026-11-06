@@ -190,14 +190,7 @@ class CommunityService
 
         return $all->whereNull('parent_id')
             ->map(function (array $comment) use ($replies) {
-                $comment['replies'] = ($replies[$comment['id']] ?? collect())
-                    ->map(function (array $reply) use ($comment) {
-                        $reply['parent_alias'] = $comment['author_alias'];
-
-                        return $reply;
-                    })
-                    ->values()
-                    ->all();
+                $comment['replies'] = ($replies[$comment['id']] ?? collect())->values()->all();
 
                 return $comment;
             })
@@ -213,22 +206,9 @@ class CommunityService
      */
     public function commentCard(int $viewerId, int $commentId): array
     {
-        $comment = $this->commentQuery($viewerId)
-            ->with(['post:id,author_id', 'parent.author:id,display_name'])
-            ->findOrFail($commentId);
+        $comment = $this->commentQuery($viewerId)->findOrFail($commentId);
 
-        $data = $this->commentArray($comment, $viewerId, null);
-
-        if ($comment->parent !== null) {
-            $data['parent_alias'] = $this->displayName(
-                $comment->parent->is_anonymous,
-                $comment->parent->author?->display_name,
-                (int) $comment->parent->author_id,
-                (int) $comment->parent->post_id,
-            );
-        }
-
-        return $data;
+        return $this->commentArray($comment, $viewerId, null);
     }
 
     /** The alias this viewer has (or will get) inside a given thread. */
@@ -652,7 +632,6 @@ class CommunityService
             'is_op' => $comment->relationLoaded('post')
                 && $comment->post !== null
                 && (int) $comment->author_id === (int) $comment->post->author_id,
-            'parent_alias' => null,
             'is_anonymous' => $comment->is_anonymous,
             'body' => $removed ? $this->tombstone('comment', $comment->removed_by) : $comment->body,
             'removed' => $removed,
