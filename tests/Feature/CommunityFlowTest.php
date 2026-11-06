@@ -246,6 +246,56 @@ class CommunityFlowTest extends TestCase
             ->assertSee($comment->created_at->format('F j, Y, g:i A'));
     }
 
+    public function test_comment_replies_show_parent_context_and_post_author_badge(): void
+    {
+        [$author, $replyAuthor, $viewer] = User::factory()->count(3)->create();
+        $post = $this->makePost($author);
+        $parent = Comment::create([
+            'post_id' => $post->id,
+            'author_id' => $author->id,
+            'body' => 'Author parent comment',
+            'is_anonymous' => true,
+        ]);
+        Comment::create([
+            'post_id' => $post->id,
+            'author_id' => $replyAuthor->id,
+            'parent_id' => $parent->id,
+            'body' => 'Reply with context',
+            'is_anonymous' => true,
+        ]);
+
+        $this->actingAs($viewer)->get("/post/{$post->id}")
+            ->assertOk()
+            ->assertSee('cm-comment--reply', false)
+            ->assertSee('cm-op-tag">Author</span>', false)
+            ->assertSee('data-reply-self="0"', false)
+            ->assertDontSee('cm-reply-mention', false)
+            ->assertSee('Reply with context');
+
+        $this->actingAs($author)->get("/post/{$post->id}")
+            ->assertOk()
+            ->assertSee('data-reply-self="1"', false);
+    }
+
+    public function test_feed_post_actions_have_header_menu_and_clickable_footer_space(): void
+    {
+        [$author, $viewer] = User::factory()->count(2)->create();
+        $post = $this->makePost($author);
+
+        $response = $this->actingAs($viewer)->get('/feed')->assertOk();
+        $html = $response->getContent();
+        $headerPosition = strpos($html, 'class="cm-post__head"');
+        $menuPosition = strpos($html, 'class="cm-more-menu"', $headerPosition);
+        $footerPosition = strpos($html, 'class="cm-post__foot text-small text-muted"', $menuPosition);
+
+        $this->assertNotFalse($headerPosition);
+        $this->assertNotFalse($menuPosition);
+        $this->assertNotFalse($footerPosition);
+        $this->assertLessThan($footerPosition, $menuPosition);
+        $response->assertSee('class="cm-post__foot-link"', false);
+        $response->assertSee('class="cm-bookmark-form"', false);
+    }
+
     public function test_only_post_author_can_delete_and_removal_hides_content(): void
     {
         [$author, $other] = User::factory()->count(2)->create();

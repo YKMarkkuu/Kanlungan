@@ -29,9 +29,12 @@ class OnboardingFlowTest extends TestCase
         $this->get('/home')->assertRedirect(route('onboarding'));
         $this->get('/onboarding')
             ->assertOk()
-            ->assertSee('A safe, verified space for OLFU Pampanga students.')
-            ->assertSee('Post anonymously. Your identity is protected by a per-thread alias, but the system keeps you accountable.')
-            ->assertSee('Earn points by being helpful on Ask, Help, and Academic posts.')
+            ->assertSee('Welcome to Kanlungan.')
+            ->assertSee('A safe, verified space for OLFU Pampanga.')
+            ->assertSee('Posts can be anonymous, protected by a per-thread alias. The system keeps you accountable, but other students never see who you are.')
+            ->assertSee('Earn points by marking comments as Helpful on Ask, Help, and Academic posts. Build your reputation.')
+            ->assertSee('Safety reports go straight to moderators.')
+            ->assertSee('Skip')
             ->assertSee("Let's go!", false);
 
         $this->post('/onboarding/complete')
@@ -40,6 +43,19 @@ class OnboardingFlowTest extends TestCase
         $this->assertTrue($user->fresh()->has_completed_onboarding);
         $this->get('/home')->assertRedirect(route('feed'));
         $this->get('/onboarding')->assertRedirect(route('feed'));
+    }
+
+    public function test_completed_user_can_restart_onboarding(): void
+    {
+        $user = User::factory()->create(['has_completed_onboarding' => true]);
+
+        $this->actingAs($user)
+            ->postJson('/onboarding/restart')
+            ->assertOk()
+            ->assertJson(['status' => 'success']);
+
+        $this->assertFalse($user->fresh()->has_completed_onboarding);
+        $this->get('/onboarding')->assertOk();
     }
 
     public function test_completed_user_login_redirects_directly_to_feed(): void
