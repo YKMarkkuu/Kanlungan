@@ -720,6 +720,9 @@
                 var nextDocument = new DOMParser().parseFromString(html, 'text/html');
                 var newPosts = nextDocument.querySelectorAll('#feed-posts > article.cm-post');
                 newPosts.forEach(function (post) {
+                    if (post.id && document.getElementById(post.id)) {
+                        return;
+                    }
                     feedPosts.appendChild(post);
                 });
 

@@ -13,7 +13,8 @@ class FeedController extends Controller
         $category = $request->query('category');
         $active = in_array($category, Post::CATEGORIES, true) ? $category : null;
 
-        $feed = $community->feed($request->user()->id, $active);
+        $cursor = $request->query('feed');
+        $feed = $community->feed($request->user()->id, $active, is_string($cursor) ? $cursor : null);
         $posts = $feed['posts']->appends($active !== null ? ['category' => $active] : []);
 
         return view('feed.index', [

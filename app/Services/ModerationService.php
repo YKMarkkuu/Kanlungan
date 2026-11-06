@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Services\FeedRankingService;
 use App\Models\ModAction;
 use App\Models\Report;
 use App\Models\User;
@@ -22,7 +23,7 @@ class ModerationService
 
     public const STAFF = ['moderator', 'admin', 'guidance'];
 
-    public function __construct(private AlertService $alerts, private ImageService $images)
+    public function __construct(private AlertService $alerts, private ImageService $images, private FeedRankingService $ranking)
     {
     }
 
@@ -199,6 +200,10 @@ class ModerationService
                 case 'remove':
                     $target?->forceFill(['removed_at' => now(), 'removed_by' => 'moderator'])->save();
 
+                    if ($target !== null) {
+                        $this->ranking->recomputeEngagement($target instanceof \App\Models\Post ? (int) $target->id : (int) $target->post_id);
+                    }
+
                     if ($target instanceof \App\Models\Post) {
                         $this->images->deletePostImages($target);
                     }
@@ -219,6 +224,9 @@ class ModerationService
 
                 case 'restore':
                     $target?->forceFill(['removed_at' => null, 'removed_by' => null])->save();
+                    if ($target !== null) {
+                        $this->ranking->recomputeEngagement($target instanceof \App\Models\Post ? (int) $target->id : (int) $target->post_id);
+                    }
                     $this->alerts->notify($subjectUserId, 'notice', 'Notice from moderators', "Your {$kind} was restored by moderators. Reason: {$reason}");
                     $changes['mod_status'] = 'reviewed';
                     break;

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Services\FeedRankingService;
 use App\Models\Comment;
 use App\Models\Block;
 use App\Models\Post;
@@ -42,7 +43,7 @@ class ReportService
 
     public const TYPES = ['post' => Post::class, 'comment' => Comment::class];
 
-    public function __construct(private PointService $points, private AlertService $alerts, private ImageService $images)
+    public function __construct(private PointService $points, private AlertService $alerts, private ImageService $images, private FeedRankingService $ranking)
     {
     }
 
@@ -267,6 +268,7 @@ class ReportService
         if ($outcome === VoteTally::UPHELD || $outcome === VoteTally::WRONG_TAG) {
             if ($target !== null && $target->removed_at === null) {
                 $target->forceFill(['removed_at' => now(), 'removed_by' => 'community'])->save();
+                $this->ranking->recomputeEngagement($target instanceof Post ? (int) $target->id : (int) $target->post_id);
 
                 if ($target instanceof Post) {
                     $this->images->deletePostImages($target);

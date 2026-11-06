@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Services\FeedRankingService;
 use App\Models\Block;
 use App\Models\Bookmark;
 use App\Models\Comment;
@@ -10,6 +11,7 @@ use App\Models\PostItem;
 use App\Models\Reaction;
 use App\Models\Report;
 use App\Support\Alias;
+use App\Support\RankedFeedPaginator;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
@@ -31,36 +33,44 @@ class CommunityService
         private ReportService $reports,
         private PointService $points,
         private AlertService $alerts,
+        private FeedRankingService $ranking,
     ) {}
 
-    /** @return array{hasPendingReports: bool, posts: \Illuminate\Pagination\CursorPaginator} */
-    public function feed(int $viewerId, ?string $category = null): array
+    /** @return array{hasPendingReports: bool, posts: RankedFeedPaginator} */
+    public function feed(int $viewerId, ?string $category = null, ?string $cursor = null): array
     {
         if (Cache::add('reports:sweep', 1, 60)) {
             $this->reports->sweepDue();
         }
 
-        $active = [Report::OPEN, Report::VOTING];
+        $category = $category !== null && in_array($category, Post::CATEGORIES, true) ? $category : null;
+        $page = $this->ranking->pageIds($viewerId, $category, $cursor);
 
-        $posts = $this->postQuery($viewerId)
-            ->whereNull('removed_at')
-            ->whereNotExists(function ($query) use ($viewerId, $active) {
-                $query->selectRaw('1')
-                    ->from('reports')
-                    ->whereColumn('reports.reportable_id', 'posts.id')
-                    ->where('reports.reportable_type', Post::class)
-                    ->where('reports.reporter_id', $viewerId)
-                    ->whereIn('reports.status', $active);
-            })
-            ->when($category !== null && in_array($category, Post::CATEGORIES, true), fn ($q) => $q->where('category', $category))
-            ->latest()
-            ->latest('id')
-            ->cursorPaginate(15);
-        $states = $this->reports->statesFor($viewerId, Post::class, $posts->getCollection());
+        // Hydrate the page's ids. visible() runs again so a post removed, or reported by this viewer,
+        // since the snapshot was frozen disappears immediately.
+        $models = $page['ids'] === []
+            ? collect()
+            : $this->ranking->visible($this->postQuery($viewerId), $viewerId)
+                ->whereIn('posts.id', $page['ids'])
+                ->get()
+                ->keyBy('id');
+
+        $ordered = collect($page['ids'])
+            ->map(fn (int $id) => $models->get($id))
+            ->filter()
+            ->values();
+
+        $states = $this->reports->statesFor($viewerId, Post::class, $ordered);
 
         return [
-            'hasPendingReports' => Report::whereIn('status', $active)->exists(),
-            'posts' => $posts->through(fn (Post $post) => $this->postArray($post, $viewerId, $states[$post->id] ?? null)),
+            'hasPendingReports' => Report::whereIn('status', [Report::OPEN, Report::VOTING])->exists(),
+            'posts' => new RankedFeedPaginator(
+                $ordered->map(fn (Post $post) => $this->postArray($post, $viewerId, $states[$post->id] ?? null)),
+                max(1, (int) config('feed.snapshot.per_page')),
+                $page['has_more'],
+                $page['next_cursor'],
+                ['path' => request()->url()],
+            ),
         ];
     }
 
@@ -301,6 +311,8 @@ class CommunityService
             'is_anonymous' => $anonymous,
         ]);
 
+        $this->ranking->recomputeEngagement((int) $post->id);
+
         // Alerts say what was written, never who wrote it.
         $url = route('post.show', $post->id).'#comment-'.$comment->id;
         $snippet = '"'.Str::limit($body, 40).'"';
@@ -345,7 +357,7 @@ class CommunityService
             throw ValidationException::withMessages(['report' => 'This post was removed.']);
         }
 
-        return DB::transaction(function () use ($userId, $reactable, $authorId, $type) {
+        $active = DB::transaction(function () use ($userId, $reactable, $authorId, $type) {
             $existing = $reactable->reactions()->where('user_id', $userId)->where('type', $type)->first();
             $isHelpfulComment = $type === Reaction::HELPFUL && $reactable instanceof Comment;
 
@@ -372,6 +384,13 @@ class CommunityService
 
             return true;
         });
+
+        // Only post likes and comment "helpful" marks feed the score.
+        if (($type === Reaction::LIKE && $reactable instanceof Post) || ($type === Reaction::HELPFUL && $reactable instanceof Comment)) {
+            $this->ranking->recomputeEngagement($reactable instanceof Post ? (int) $reactable->id : (int) $reactable->post_id);
+        }
+
+        return $active;
     }
 
     /**
@@ -414,6 +433,8 @@ class CommunityService
 
             $this->setAccepted($comment, true, $awardsPoints);
         });
+
+        $this->ranking->recomputeEngagement((int) $post->id);
     }
 
     /**

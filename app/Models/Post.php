@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\FeedScore;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -27,7 +28,28 @@ class Post extends Model
 
     protected $fillable = ['author_id', 'category', 'body', 'price', 'condition', 'is_anonymous', 'removed_at', 'removed_by'];
 
-    protected $casts = ['is_anonymous' => 'boolean', 'removed_at' => 'datetime', 'price' => 'integer'];
+    protected $casts = [
+        'is_anonymous' => 'boolean',
+        'removed_at' => 'datetime',
+        'price' => 'integer',
+        'feed_score' => 'float',
+        'engagement_points' => 'integer',
+    ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (Post $post) {
+            if ($post->getAttribute('feed_score') === null) {
+                $post->setAttribute('feed_score', FeedScore::score(
+                    (float) config('feed.base_score'),
+                    0,
+                    0,
+                    (float) config('feed.gravity'),
+                    (float) config('feed.age_offset_hours'),
+                ));
+            }
+        });
+    }
 
     public function author(): BelongsTo
     {

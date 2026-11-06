@@ -12,7 +12,9 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-        // $schedule->command('inspire')->hourly();
+        $schedule->command('feed:rescore')->everyTenMinutes()->withoutOverlapping();
+        $schedule->command('feed:rescore --rebuild')->dailyAt('03:30')->timezone('Asia/Manila')->withoutOverlapping();
+        $schedule->command('reports:resolve-due')->everyFiveMinutes()->withoutOverlapping();
     }
 
     /**
