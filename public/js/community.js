@@ -53,6 +53,167 @@
         });
     }
 
+    var onboardingAnonToggle = document.getElementById('onboarding-anon-toggle');
+    var onboardingAnonCaption = document.getElementById('onboarding-anon-caption');
+    var onboardingDemoWrappers = document.querySelectorAll('.onboarding__demo');
+
+    onboardingDemoWrappers.forEach(function (demo) {
+        demo.addEventListener('click', function (event) {
+            event.stopPropagation();
+        });
+    });
+
+    if (onboardingAnonToggle && onboardingAnonCaption) {
+        onboardingAnonToggle.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            var isAnonymous = onboardingAnonToggle.getAttribute('aria-pressed') !== 'true';
+            onboardingAnonToggle.setAttribute('aria-pressed', String(isAnonymous));
+            onboardingAnonCaption.textContent = isAnonymous
+                ? "You'll appear as Anonymous Falcon"
+                : "You'll appear as Mark";
+        });
+    }
+
+    var onboardingHelpfulButton = document.getElementById('onboarding-helpful-btn');
+    var onboardingPointsCount = document.getElementById('onboarding-points-count');
+    var onboardingPointsEarned = document.getElementById('onboarding-points-earned');
+
+    if (onboardingHelpfulButton && onboardingPointsCount && onboardingPointsEarned) {
+        onboardingHelpfulButton.addEventListener('click', function (event) {
+            event.stopPropagation();
+            event.preventDefault();
+
+            onboardingHelpfulButton.classList.remove('is-popping');
+            void onboardingHelpfulButton.offsetWidth;
+            onboardingHelpfulButton.classList.add('is-popping');
+
+            if (onboardingHelpfulButton.getAttribute('aria-pressed') === 'true') {
+                return;
+            }
+
+            onboardingHelpfulButton.setAttribute('aria-pressed', 'true');
+            onboardingHelpfulButton.classList.add('is-active');
+            onboardingPointsCount.textContent = String(Number(onboardingPointsCount.textContent) + 3);
+            onboardingPointsEarned.hidden = false;
+        });
+    }
+
+    var onboardingReportToggle = document.getElementById('onboarding-report-menu-toggle');
+    var onboardingReportMenu = document.getElementById('onboarding-report-menu');
+    var onboardingReportOption = document.getElementById('onboarding-report-option');
+    var onboardingReportNote = document.getElementById('onboarding-report-note');
+
+    if (onboardingReportToggle && onboardingReportMenu && onboardingReportOption && onboardingReportNote) {
+        onboardingReportToggle.addEventListener('click', function (event) {
+            event.stopPropagation();
+            event.preventDefault();
+
+            var isOpen = onboardingReportToggle.getAttribute('aria-expanded') === 'true';
+            onboardingReportToggle.setAttribute('aria-expanded', String(!isOpen));
+            onboardingReportMenu.hidden = isOpen;
+        });
+
+        onboardingReportOption.addEventListener('click', function (event) {
+            event.stopPropagation();
+            event.preventDefault();
+
+            onboardingReportNote.hidden = false;
+        });
+    }
+
+    function setupOnboardingDemoLoop(button) {
+        var target = button.closest('.cm-demo-target');
+        var slide = button.closest('[data-onboarding-slide]');
+
+        if (!target || !slide) {
+            return;
+        }
+
+        var timer = null;
+        var stopped = false;
+
+        function clearAnimation() {
+            if (timer !== null) {
+                window.clearTimeout(timer);
+                timer = null;
+            }
+
+            target.classList.remove('is-tapping');
+            button.classList.remove('is-rippling');
+        }
+
+        function scheduleTap(delay) {
+            if (!stopped) {
+                timer = window.setTimeout(tap, delay);
+            }
+        }
+
+        function tap() {
+            timer = null;
+
+            if (stopped) {
+                return;
+            }
+
+            if (!slide.classList.contains('is-active')) {
+                scheduleTap(500);
+                return;
+            }
+
+            target.classList.add('is-tapping');
+            timer = window.setTimeout(function () {
+                timer = null;
+
+                if (stopped || !slide.classList.contains('is-active')) {
+                    clearAnimation();
+                    scheduleTap(500);
+                    return;
+                }
+
+                if (button === onboardingReportToggle && onboardingReportMenu) {
+                    onboardingReportToggle.setAttribute('aria-expanded', 'false');
+                    onboardingReportMenu.hidden = true;
+                }
+
+                button.click();
+                timer = window.setTimeout(function () {
+                    timer = null;
+                    target.classList.remove('is-tapping');
+                    button.classList.remove('is-rippling');
+                    scheduleTap(3000);
+                }, 500);
+            }, 500);
+        }
+
+        button.addEventListener('click', function (event) {
+            if (event.isTrusted) {
+                stopped = true;
+                clearAnimation();
+            }
+
+            button.classList.remove('is-rippling');
+            void button.offsetWidth;
+            button.classList.add('is-rippling');
+            window.setTimeout(function () {
+                button.classList.remove('is-rippling');
+            }, 500);
+        }, true);
+
+        scheduleTap(1000);
+    }
+
+    var reduceMotion = window.matchMedia &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (!reduceMotion) {
+        [onboardingAnonToggle, onboardingHelpfulButton, onboardingReportToggle].forEach(function (button) {
+            if (button) {
+                setupOnboardingDemoLoop(button);
+            }
+        });
+    }
+
     /* ---------- Notification dropdown and unread-count polling ---------- */
 
     var notificationToggle = document.querySelector('[data-notification-toggle]');

@@ -43,6 +43,7 @@
 .onboarding__skip {
     min-width: 44px;
     min-height: 44px;
+    margin-right: 16px;
     padding: 8px 0 8px 12px;
     border: 0;
     background: transparent;
@@ -56,6 +57,9 @@
 .onboarding__slides {
     display: flex;
     flex: 1;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
     min-width: 0;
     min-height: 0;
     overflow-x: auto;
@@ -77,6 +81,8 @@
     align-items: center;
     gap: 32px;
     width: 100%;
+    box-sizing: border-box;
+    min-width: 100%;
     height: 100%;
     padding: 24px;
     scroll-snap-align: center;
@@ -143,6 +149,293 @@
     line-height: 1.5;
 }
 
+.onboarding__copy--demo {
+    min-height: 0;
+}
+
+.cm-onboarding-demo {
+    width: min(100%, 360px);
+    max-width: 100%;
+    box-sizing: border-box;
+    touch-action: pan-y;
+    overscroll-behavior: contain;
+}
+
+.onboarding__demo-window,
+.onboarding__demo-comment,
+.onboarding__demo-post {
+    padding: 14px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 16px;
+    background: var(--surface-card);
+    box-shadow: 0 8px 24px rgba(27, 45, 35, 0.06);
+    text-align: left;
+}
+
+.onboarding__demo-heading,
+.onboarding__demo-post-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--text-primary);
+    font-size: 13px;
+}
+
+.onboarding__demo-heading > span {
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.onboarding__demo-window textarea {
+    display: block;
+    width: 100%;
+    height: 45px;
+    margin: 8px 0;
+    padding: 8px 0;
+    resize: none;
+    border: 0;
+    border-top: 1px solid var(--border-subtle);
+    background: transparent;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 13px;
+}
+
+.onboarding__demo .cm-visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+}
+
+.onboarding__demo .cm-anon-badge {
+    display: inline-flex;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+
+.onboarding__demo .cm-anon-badge__pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 36px;
+    padding: 0 12px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 999px;
+    background: var(--surface-card);
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.onboarding__demo .cm-anon-badge__pill .icon {
+    width: 16px;
+    height: 16px;
+}
+
+.onboarding__demo .cm-anon-badge[aria-pressed="true"] .cm-anon-badge__pill {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent-dark);
+}
+
+.onboarding__demo .cm-anon-badge:focus-visible .cm-anon-badge__pill {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.onboarding__demo-caption {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    margin: 10px 0 0;
+    min-height: 2.8em;
+    color: var(--text-muted);
+    font-size: 13px;
+    line-height: 1.4;
+    text-align: center;
+}
+
+.onboarding__demo-comment > strong,
+.onboarding__demo-post-heading > strong {
+    color: var(--text-primary);
+    font-size: 13px;
+}
+
+.onboarding__demo-comment > p,
+.onboarding__demo-post > p {
+    margin: 8px 0 12px;
+    color: var(--text-muted);
+    font-size: 13px;
+    line-height: 1.4;
+    text-align: left;
+}
+
+.onboarding__helpful-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 44px;
+    padding: 0 10px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 999px;
+    background: var(--surface-card);
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.onboarding__helpful-btn .icon { width: 16px; height: 16px; }
+.onboarding__helpful-btn.is-popping { animation: onboarding-demo-pop 360ms var(--ease-spring); }
+.onboarding__helpful-btn.is-active { border-color: var(--warning); background: #fbf2df; color: var(--warning-dark); }
+
+@keyframes onboarding-demo-pop {
+    0% { transform: scale(1); }
+    42% { transform: scale(1.16); }
+    100% { transform: scale(1); }
+}
+
+.onboarding__demo-points {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+    margin: 10px 0 0;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.onboarding__points-earned {
+    color: var(--warning-dark);
+    font-weight: 700;
+    animation: onboarding-demo-points 420ms var(--ease-spring);
+}
+
+@keyframes onboarding-demo-points {
+    from { opacity: 0; transform: translateY(6px) scale(0.8); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.onboarding__demo-post-heading > button {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-muted);
+}
+
+.onboarding__demo-post-heading > button .icon { width: 20px; height: 20px; }
+
+.onboarding__report-menu {
+    display: grid;
+    gap: 6px;
+    padding: 8px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    background: var(--surface-card);
+    box-shadow: 0 6px 18px rgba(27, 45, 35, 0.08);
+    text-align: left;
+}
+
+.onboarding__report-menu[hidden] { display: none; }
+
+.onboarding__report-menu > button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--danger);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+}
+
+.onboarding__report-menu > button .icon { width: 16px; height: 16px; }
+.onboarding__report-menu > p { margin: 0; color: var(--text-muted); font-size: 12px; line-height: 1.4; }
+.onboarding__demo [hidden] { display: none; }
+.onboarding__report-menu > p[hidden] { display: none; }
+
+[data-onboarding] #onboarding-anon-toggle,
+[data-onboarding] #onboarding-helpful-btn,
+[data-onboarding] #onboarding-report-menu-toggle {
+    transition: transform 220ms var(--ease-spring);
+}
+
+.cm-demo-target {
+    position: relative;
+    display: inline-flex;
+    vertical-align: middle;
+}
+
+.cm-ghost-cursor {
+    position: absolute;
+    z-index: 10;
+    top: -10px;
+    right: -10px;
+    color: var(--accent);
+    pointer-events: none;
+    transform: translate(8px, -10px);
+    transform-origin: top left;
+    transition: transform 280ms var(--ease-spring);
+}
+
+.cm-ghost-cursor .icon {
+    width: 26px;
+    height: 26px;
+    filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.24));
+}
+
+.cm-demo-target.is-tapping .cm-ghost-cursor {
+    transform: translate(-8px, 10px) scale(0.9);
+}
+
+.cm-demo-target.is-tapping > button {
+    transform: scale(0.94);
+}
+
+.cm-demo-target > button {
+    position: relative;
+}
+
+.cm-demo-target > button.is-rippling::after {
+    position: absolute;
+    z-index: 1;
+    inset: -5px;
+    border: 2px solid var(--accent);
+    border-radius: inherit;
+    content: "";
+    pointer-events: none;
+    animation: cm-demo-ripple 500ms ease-out forwards;
+}
+
+@keyframes cm-demo-ripple {
+    from { opacity: 0.55; transform: scale(0.88); }
+    to { opacity: 0; transform: scale(1.18); }
+}
+
 .onboarding__button {
     width: 100%;
     min-height: 44px;
@@ -207,4 +500,15 @@
 @media (prefers-reduced-motion: reduce) {
     .onboarding__progress-dot { transition: none; }
     .onboarding__slides { scroll-behavior: auto; }
+    .cm-ghost-cursor,
+    [data-onboarding] #onboarding-anon-toggle,
+    [data-onboarding] #onboarding-helpful-btn,
+    [data-onboarding] #onboarding-report-menu-toggle { animation: none; }
+    .cm-ghost-cursor,
+    [data-onboarding] #onboarding-anon-toggle,
+    [data-onboarding] #onboarding-helpful-btn,
+    [data-onboarding] #onboarding-report-menu-toggle { transition: none; }
+    .cm-demo-target > button.is-rippling::after { animation: none; }
+    .onboarding__helpful-btn.is-popping,
+    .onboarding__points-earned { animation: none; }
 }

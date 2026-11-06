@@ -35,7 +35,11 @@
         completeButton.hidden = index !== slides.length - 1;
     }
 
-    nextButton.addEventListener('click', function () {
+    nextButton.addEventListener('click', function (event) {
+        if (event.target.closest && event.target.closest('.cm-onboarding-demo')) {
+            return;
+        }
+
         if (activeIndex < slides.length - 1) {
             slidesContainer.scrollBy({
                 left: slidesContainer.offsetWidth,
