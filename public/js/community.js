@@ -1,16 +1,122 @@
 (function () {
     'use strict';
 
+    var confirmModal = document.getElementById('confirm-modal');
+    var confirmTitle = document.getElementById('confirm-modal-title');
+    var confirmMessage = document.getElementById('confirm-modal-message');
+    var confirmSubmit = document.getElementById('confirm-modal-submit');
+    var activeConfirmResolve = null;
+    var confirmReturnFocus = null;
+    var toast = document.getElementById('global-toast');
+    var toastTimer = null;
+
+    function finishConfirm(confirmed) {
+        if (!activeConfirmResolve) {
+            return;
+        }
+
+        var resolve = activeConfirmResolve;
+        activeConfirmResolve = null;
+        confirmModal.hidden = true;
+        resolve(confirmed);
+
+        if (confirmReturnFocus && confirmReturnFocus.isConnected) {
+            confirmReturnFocus.focus({ preventScroll: true });
+        }
+        confirmReturnFocus = null;
+    }
+
+    window.showConfirm = function (title, message, isDestructive) {
+        if (!confirmModal) {
+            console.error('The confirmation modal is missing from this page.');
+            return Promise.resolve(false);
+        }
+
+        if (activeConfirmResolve) {
+            finishConfirm(false);
+        }
+
+        confirmTitle.textContent = title;
+        confirmMessage.textContent = message;
+        confirmSubmit.classList.toggle('btn--danger', Boolean(isDestructive));
+        confirmSubmit.classList.toggle('btn--primary', !isDestructive);
+        confirmReturnFocus = document.activeElement;
+        confirmModal.hidden = false;
+
+        return new Promise(function (resolve) {
+            activeConfirmResolve = resolve;
+            confirmModal.querySelector('[data-confirm-cancel]:not(.cm-modal__backdrop)').focus();
+        });
+    };
+
+    confirmModal?.querySelectorAll('[data-confirm-cancel]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            finishConfirm(false);
+        });
+    });
+
+    confirmSubmit?.addEventListener('click', function () {
+        finishConfirm(true);
+    });
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && activeConfirmResolve) {
+            finishConfirm(false);
+        }
+    });
+
+    document.addEventListener('submit', function (event) {
+        var form = event.target;
+
+        if (!(form instanceof HTMLFormElement) || !form.hasAttribute('data-confirm-submit')) {
+            return;
+        }
+
+        event.preventDefault();
+
+        if (form.dataset.confirmPending === 'true') {
+            return;
+        }
+        form.dataset.confirmPending = 'true';
+
+        window.showConfirm(
+            form.dataset.confirmTitle || 'Are you sure?',
+            form.dataset.confirmMessage || '',
+            form.hasAttribute('data-confirm-destructive')
+        ).then(function (confirmed) {
+            delete form.dataset.confirmPending;
+
+            if (confirmed && form.isConnected) {
+                HTMLFormElement.prototype.submit.call(form);
+            }
+        });
+    });
+
+    window.showToast = function (message, isError) {
+        if (!toast) {
+            console.error('The notification toast is missing from this page.');
+            return;
+        }
+
+        window.clearTimeout(toastTimer);
+        toast.textContent = message;
+        toast.classList.toggle('is-error', Boolean(isError));
+        toast.hidden = false;
+        toastTimer = window.setTimeout(function () {
+            toast.hidden = true;
+        }, 3200);
+    };
+
     window.copyLink = function (url) {
         if (!navigator.clipboard || !navigator.clipboard.writeText) {
-            window.alert('Clipboard access is unavailable in this browser.');
+            window.showToast('Clipboard access is unavailable in this browser.', true);
             return;
         }
 
         navigator.clipboard.writeText(url).then(function () {
-            window.alert('Link copied to clipboard!');
+            window.showToast('Link copied to clipboard!');
         }, function () {
-            window.alert('Could not copy link to clipboard.');
+            window.showToast('Could not copy link to clipboard.', true);
         });
     };
 
@@ -47,7 +153,7 @@
                 window.location.href = '/onboarding';
             }).catch(function (error) {
                 console.error(error);
-                window.alert('Could not restart the tour. Please try again.');
+                window.showToast('Could not restart the tour. Please try again.', true);
                 restartOnboardingButton.disabled = false;
             });
         });
@@ -1363,6 +1469,21 @@
 
         postForm.querySelectorAll('input[name="category"]').forEach(function (radio) {
             radio.addEventListener('change', function () {
+                var chipContainer = radio.closest('.cm-chips--compose');
+                var chipLabel = radio.closest('label');
+
+                if (chipContainer && chipLabel) {
+                    var containerRect = chipContainer.getBoundingClientRect();
+                    var labelRect = chipLabel.getBoundingClientRect();
+                    var targetLeft = chipContainer.scrollLeft
+                        + labelRect.left
+                        - containerRect.left
+                        - (chipContainer.clientWidth - labelRect.width) / 2;
+                    var maxScrollLeft = chipContainer.scrollWidth - chipContainer.clientWidth;
+
+                    chipContainer.scrollLeft = Math.max(0, Math.min(targetLeft, maxScrollLeft));
+                }
+
                 setMarket(isMarketplace(), false);
             });
         });

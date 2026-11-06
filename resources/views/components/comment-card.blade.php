@@ -105,7 +105,9 @@
                                 @if ($comment['mine'])
                                     <form method="POST"
                                           action="{{ route('comment.destroy', [$comment['post_id'], $comment['id']]) }}"
-                                          onsubmit="return confirm('Delete this comment?');">
+                                          data-confirm-submit data-confirm-destructive
+                                          data-confirm-title="Delete this comment?"
+                                          data-confirm-message="This action cannot be undone.">
                                         @csrf
                                         @method('DELETE')
                                         <button type="submit" class="cm-menu-item text-danger">Delete</button>

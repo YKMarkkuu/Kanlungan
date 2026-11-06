@@ -79,6 +79,7 @@
     </div>
 
     @include('components.report-sheet')
+    @include('components.confirm-modal')
     @yield('scripts')
 
     <div class="cm-lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Photo viewer" hidden>

@@ -44,7 +44,9 @@
             <div class="cm-more-menu__dropdown hidden" id="{{ $menuId }}">
                 @if ($post['mine'])
                     <form method="POST" action="{{ route('post.destroy', $post['id']) }}"
-                          onsubmit="return confirm('Delete this post?');">
+                          data-confirm-submit data-confirm-destructive
+                          data-confirm-title="Delete this post?"
+                          data-confirm-message="This action cannot be undone.">
                         @csrf
                         @method('DELETE')
                         <button type="submit" class="cm-menu-item text-danger">Delete</button>
