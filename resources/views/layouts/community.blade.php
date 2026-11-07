@@ -52,11 +52,22 @@
                 </div>
             </header>
 
-            @if ($errors->has('report'))
-                <div class="card cm-notice cm-notice--error" role="alert">{{ $errors->first('report') }}</div>
-            @endif
-            @if (session('report_status'))
-                <div class="card cm-notice" role="status" aria-live="polite">{{ session('report_status') }}</div>
+            @php($keepFlashCards = trim($__env->yieldContent('keep-flash-cards')) !== '')
+
+            @if ($keepFlashCards)
+                @if ($errors->has('report'))
+                    <div class="card cm-notice cm-notice--error" role="alert">{{ $errors->first('report') }}</div>
+                @endif
+                @if (session('report_status'))
+                    <div class="card cm-notice" role="status" aria-live="polite">{{ session('report_status') }}</div>
+                @endif
+            @else
+                @foreach (array_filter([session('status'), session('report_status')]) as $flash)
+                    <span hidden data-flash-toast data-type="success" data-message="{{ $flash }}"></span>
+                @endforeach
+                @if ($errors->has('report'))
+                    <span hidden data-flash-toast data-type="error" data-message="{{ $errors->first('report') }}"></span>
+                @endif
             @endif
             @yield('content')
         </main>

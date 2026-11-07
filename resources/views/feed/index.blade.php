@@ -10,10 +10,6 @@
             <h1>Community</h1>
         </header>
 
-        @if (session('status'))
-            <div class="card cm-notice" role="status" aria-live="polite">{{ session('status') }}</div>
-        @endif
-
         <nav class="cm-chips cm-chips--sticky" aria-label="Filter posts">
             <a href="{{ route('feed') }}" class="chip {{ $active === null ? 'chip--active' : '' }}">All</a>
             @foreach ($categories as $category)

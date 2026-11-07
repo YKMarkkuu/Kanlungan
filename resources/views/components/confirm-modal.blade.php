@@ -10,4 +10,3 @@
         </div>
     </div>
 </div>
-<div class="cm-toast" id="global-toast" role="status" aria-live="polite" hidden></div>

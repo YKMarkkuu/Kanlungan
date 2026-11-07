@@ -2,6 +2,7 @@
 
 @section('title', 'Moderation · Kanlungan')
 @section('nav', 'me')
+@section('keep-flash-cards', '1')
 
 @php
     $labels = ['warn' => 'Warn', 'remove' => 'Remove', 'restore' => 'Restore', 'mute' => 'Mute', 'ban' => 'Ban', 'unmute' => 'Unmute', 'unban' => 'Unban', 'dismiss' => 'No action', 'refer' => 'Refer to Guidance', 'handled' => 'Mark handled'];

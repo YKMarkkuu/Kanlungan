@@ -7,8 +7,6 @@
     var confirmSubmit = document.getElementById('confirm-modal-submit');
     var activeConfirmResolve = null;
     var confirmReturnFocus = null;
-    var toast = document.getElementById('global-toast');
-    var toastTimer = null;
 
     function finishConfirm(confirmed) {
         if (!activeConfirmResolve) {
@@ -92,33 +90,302 @@
         });
     });
 
-    window.showToast = function (message, isError) {
-        if (!toast) {
-            console.error('The notification toast is missing from this page.');
+    /* ==========================================================================
+       Toasts
+       One toast at a time; a new one replaces the old. Swipe down to dismiss,
+       hover (mouse) or touch pauses the timer.
+       ========================================================================== */
+
+    var TOAST_MS = 3000;
+    var TOAST_EXIT_MS = 300;
+    var TOAST_ICON_PATHS = {
+        check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+        shield: '<path d="M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6l-7-3Z"/>',
+        'shield-alert': '<path d="M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6l-7-3Z"/><path d="M12 8.5v4M12 15.5h.01"/>',
+        star: '<path d="m12 4 2.4 5 5.4.7-4 3.7 1 5.4L12 16.2 7.2 18.8l1-5.4-4-3.7 5.4-.7L12 4Z"/>',
+        bookmark: '<path d="M6 4h12v17l-6-4.5L6 21V4Z"/>',
+        close: '<path d="M6 6l12 12M18 6 6 18"/>',
+        trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13M9 7V4h6v3"/>',
+        link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+        comment: '<path d="M4 5h16v11H9l-5 4V5Z"/>',
+        flag: '<path d="M6 20V5M6 5h11l-2 4 2 4H6"/>',
+        bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16Z"/><path d="M10 20.5h4"/>'
+    };
+    var TOAST_DEFAULT_ICON = { success: 'check', error: 'shield-alert', points: 'star', info: 'bell' };
+    var toastStack = null;
+    var activeToast = null;
+
+    function toastIconSvg(name) {
+        return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" ' +
+            'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + TOAST_ICON_PATHS[name] + '</svg>';
+    }
+
+    function toastBottomOffset() {
+        var top = window.innerHeight;
+        var found = false;
+
+        ['.cm-nav__item--create', '.cm-nav', '.cm-composer', '.cm-compose__bar'].forEach(function (selector) {
+            var el = document.querySelector(selector);
+
+            if (!el) {
+                return;
+            }
+
+            var rect = el.getBoundingClientRect();
+
+            if (rect.height > 0 && rect.top < top) {
+                top = rect.top;
+                found = true;
+            }
+        });
+
+        return found ? Math.max(0, window.innerHeight - top) + 12 : null;
+    }
+
+    function dismissToast(toast) {
+        if (!toast || toast._leaving) {
             return;
         }
 
-        window.clearTimeout(toastTimer);
-        toast.textContent = message;
-        toast.classList.toggle('is-error', Boolean(isError));
-        toast.hidden = false;
-        toastTimer = window.setTimeout(function () {
-            toast.hidden = true;
-        }, 3200);
+        toast._leaving = true;
+        window.clearTimeout(toast._timer);
+        toast.classList.add('is-leaving');
+
+        window.setTimeout(function () {
+            toast.remove();
+
+            if (activeToast === toast) {
+                activeToast = null;
+            }
+        }, TOAST_EXIT_MS);
+    }
+
+    window.showToast = function (message, type, icon) {
+        message = String(message == null ? '' : message).trim();
+
+        if (message === '') {
+            return;
+        }
+
+        if (type === true) {
+            type = 'error';
+        }
+
+        if (!Object.prototype.hasOwnProperty.call(TOAST_DEFAULT_ICON, type)) {
+            type = 'success';
+        }
+
+        if (!icon || !TOAST_ICON_PATHS[icon]) {
+            icon = TOAST_DEFAULT_ICON[type];
+        }
+
+        var key = type + '|' + message;
+
+        if (activeToast && !activeToast._leaving) {
+            if (activeToast._key === key) {
+                activeToast._bump();
+                return;
+            }
+
+            dismissToast(activeToast);
+        }
+
+        if (!toastStack || !toastStack.isConnected) {
+            toastStack = document.createElement('div');
+            toastStack.className = 'cm-toast-stack';
+            toastStack.setAttribute('aria-live', 'polite');
+            toastStack.setAttribute('aria-atomic', 'true');
+            document.body.appendChild(toastStack);
+        }
+
+        var offset = toastBottomOffset();
+
+        if (offset === null) {
+            toastStack.style.removeProperty('--cm-toast-offset');
+        } else {
+            toastStack.style.setProperty('--cm-toast-offset', offset + 'px');
+        }
+
+        var toast = document.createElement('div');
+        var badge = document.createElement('span');
+        var text = document.createElement('span');
+
+        toast.className = 'cm-toast cm-toast--' + type;
+        toast._key = key;
+
+        if (type === 'error') {
+            toast.setAttribute('role', 'alert');
+        }
+
+        badge.className = 'cm-toast__icon';
+        badge.setAttribute('aria-hidden', 'true');
+        badge.innerHTML = toastIconSvg(icon);
+
+        text.className = 'cm-toast__text';
+        text.textContent = message;
+
+        toast.appendChild(badge);
+        toast.appendChild(text);
+        toastStack.appendChild(toast);
+        activeToast = toast;
+
+        var duration = Math.max(TOAST_MS, Math.min(6000, message.length * 55));
+        var remaining = duration;
+        var startedAt = 0;
+        var paused = false;
+        var startY = null;
+        var dy = 0;
+
+        function arm() {
+            startedAt = Date.now();
+            window.clearTimeout(toast._timer);
+            toast._timer = window.setTimeout(function () { dismissToast(toast); }, remaining);
+        }
+
+        function pause() {
+            if (paused) {
+                return;
+            }
+
+            paused = true;
+            window.clearTimeout(toast._timer);
+            remaining -= Date.now() - startedAt;
+        }
+
+        function resume() {
+            if (!paused) {
+                return;
+            }
+
+            paused = false;
+            remaining = Math.max(remaining, 1200);
+            arm();
+        }
+
+        toast._bump = function () {
+            paused = false;
+            remaining = duration;
+            arm();
+
+            if (toast.animate && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                toast.animate(
+                    [{ transform: 'scale(1.05)' }, { transform: 'scale(1)' }],
+                    { duration: 320, easing: 'cubic-bezier(0.34, 1.4, 0.64, 1)' }
+                );
+            }
+        };
+
+        toast.addEventListener('pointerenter', function (event) {
+            if (event.pointerType === 'mouse') {
+                pause();
+            }
+        });
+        toast.addEventListener('pointerleave', function (event) {
+            if (event.pointerType === 'mouse') {
+                resume();
+            }
+        });
+
+        toast.addEventListener('pointerdown', function (event) {
+            startY = event.clientY;
+            dy = 0;
+            pause();
+
+            if (typeof toast.setPointerCapture === 'function') {
+                try {
+                    toast.setPointerCapture(event.pointerId);
+                } catch (error) {
+                    console.error('Toast swipe dismissal is unavailable in this browser.', error);
+                }
+            }
+        });
+
+        toast.addEventListener('pointermove', function (event) {
+            if (startY === null) {
+                return;
+            }
+
+            dy = Math.max(0, event.clientY - startY);
+            toast.style.transform = 'translate3d(0, ' + dy + 'px, 0)';
+        });
+
+        function release() {
+            if (startY === null) {
+                return;
+            }
+
+            startY = null;
+
+            if (dy > 36) {
+                dismissToast(toast);
+                return;
+            }
+
+            toast.style.transition = 'transform var(--dur-base) var(--ease-spring)';
+            toast.style.transform = '';
+            window.setTimeout(function () { toast.style.transition = ''; }, 400);
+            resume();
+        }
+
+        toast.addEventListener('pointerup', release);
+        toast.addEventListener('pointercancel', release);
+
+        arm();
+    };
+
+    window.queueToast = function (message, type, icon) {
+        try {
+            sessionStorage.setItem('cm-toast', JSON.stringify({ m: message, t: type, i: icon || null }));
+        } catch (error) {
+            console.error('Could not queue a toast for the next page.', error);
+        }
     };
 
     window.copyLink = function (url) {
         if (!navigator.clipboard || !navigator.clipboard.writeText) {
-            window.showToast('Clipboard access is unavailable in this browser.', true);
+            window.showToast('Clipboard access is unavailable in this browser.', 'error');
             return;
         }
 
         navigator.clipboard.writeText(url).then(function () {
-            window.showToast('Link copied to clipboard!');
+            window.showToast('Link copied to clipboard', 'success', 'link');
         }, function () {
-            window.showToast('Could not copy link to clipboard.', true);
+            window.showToast('Could not copy link to clipboard.', 'error');
         });
     };
+
+    function guessToastIcon(message) {
+        if (/report|block/i.test(message)) {
+            return 'shield';
+        }
+
+        if (/delet|remov/i.test(message)) {
+            return 'trash';
+        }
+
+        return null;
+    }
+
+    (function flushFlashToasts() {
+        document.querySelectorAll('[data-flash-toast]').forEach(function (node) {
+            var message = node.getAttribute('data-message') || '';
+
+            window.showToast(message, node.getAttribute('data-type') || 'success', node.getAttribute('data-icon') || guessToastIcon(message));
+            node.remove();
+        });
+
+        try {
+            var queued = sessionStorage.getItem('cm-toast');
+
+            if (queued) {
+                sessionStorage.removeItem('cm-toast');
+                var pendingToast = JSON.parse(queued);
+                window.showToast(pendingToast.m, pendingToast.t, pendingToast.i);
+            }
+        } catch (error) {
+            console.error('Could not restore a queued toast.', error);
+        }
+    })();
 
     var restartOnboardingButton = document.querySelector('[data-restart-onboarding]');
 
@@ -153,7 +420,7 @@
                 window.location.href = '/onboarding';
             }).catch(function (error) {
                 console.error(error);
-                window.showToast('Could not restart the tour. Please try again.', true);
+                window.showToast('Could not restart the tour. Please try again.', 'error');
                 restartOnboardingButton.disabled = false;
             });
         });
@@ -885,6 +1152,7 @@
                         headers: { Accept: 'application/json' }
                     }).then(function (response) {
                         if (response.ok) {
+                            window.queueToast('Profile picture updated', 'success', 'check');
                             window.location.reload();
                             return;
                         }
@@ -2347,6 +2615,7 @@
                     autoGrowComment();
                     clearReply();
                     commentBody.focus();
+                    window.showToast('Comment posted', 'success', 'comment');
                     return;
                 }
 
@@ -2361,37 +2630,13 @@
        The URL comes from the button's own <form action>, so Blade stays the
        single source of truth for routes and the no-JS fallback still works. */
 
-    var reactErrorTimer = null;
-
     function reactCsrf() {
         var meta = document.querySelector('meta[name="csrf-token"]');
         return meta ? meta.getAttribute('content') : null;
     }
 
     function showReactError(message) {
-        var main = document.querySelector('main');
-        var box = document.getElementById('react-error');
-
-        if (!main) {
-            return;
-        }
-
-        if (!box) {
-            box = document.createElement('div');
-            box.id = 'react-error';
-            box.className = 'card cm-notice cm-notice--error';
-            box.setAttribute('role', 'alert');
-            main.insertBefore(box, main.children[1] || null);
-        }
-
-        box.textContent = message;
-
-        clearTimeout(reactErrorTimer);
-        reactErrorTimer = setTimeout(function () {
-            if (box.parentNode) {
-                box.parentNode.removeChild(box);
-            }
-        }, 5000);
+        window.showToast(message, 'error');
     }
 
     function readReactionCount(el) {
@@ -2529,6 +2774,11 @@
             if (res.ok && res.data.status === 'success') {
                 // Snap to the server's real count (covers two people reacting at once).
                 applyReaction(button, res.data);
+
+                if (button.getAttribute('data-react') === 'helpful') {
+                    window.showToast(res.data.is_active ? 'Marked as helpful' : 'Helpful mark removed', 'success', 'star');
+                }
+
                 return;
             }
 
@@ -2652,6 +2902,7 @@
 
             if (res.ok && res.data && res.data.status === 'success') {
                 applyBookmark(postId, Boolean(res.data.is_active));
+                window.showToast(res.data.is_active ? 'Saved to your bookmarks' : 'Removed from saved', 'success', 'bookmark');
 
                 if (item) {
                     if (res.data.is_active) {
@@ -3160,6 +3411,7 @@
                 throw new Error('Could not delete that post. Try again.');
             }
 
+            window.showToast('Post deleted', 'success', 'trash');
             collapseAway(row);
         }).catch(function (error) {
             card.classList.remove('is-deleting');
