@@ -106,7 +106,7 @@ class CommunityFlowTest extends TestCase
 
         $this->actingAs($viewer)->post("/block/post/{$blockedPost->id}")
             ->assertRedirect(route('feed'))
-            ->assertSessionHas('report_status', 'Blocked. You will no longer be able to interact with each other. Their posts and comments will still appear to protect anonymity.');
+            ->assertSessionHas('report_status', "Blocked. You will no longer see or interact with each other's posts and comments.");
 
         $this->assertSame(1, Block::where('blocker_id', $viewer->id)->where('blocked_id', $blockedAuthor->id)->count());
         $this->actingAs($viewer)->get(route('feed'))
