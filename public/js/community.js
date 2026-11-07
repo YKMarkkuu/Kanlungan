@@ -159,166 +159,385 @@
         });
     }
 
-    var onboardingAnonToggle = document.getElementById('onboarding-anon-toggle');
-    var onboardingAnonCaption = document.getElementById('onboarding-anon-caption');
-    var onboardingDemoWrappers = document.querySelectorAll('.onboarding__demo');
+    /* ==========================================================================
+       Onboarding "movie": scripted, non-interactive demos.
+       Each demo slide (data-scene) gets a director with one ghost hand. The script
+       runs while its slide has .is-active, loops, and is cancelled the moment the
+       user swipes away (onboarding.js toggles .is-active).
+       ========================================================================== */
+    (function () {
+        var root = document.querySelector('[data-onboarding]');
 
-    onboardingDemoWrappers.forEach(function (demo) {
-        demo.addEventListener('click', function (event) {
-            event.stopPropagation();
-        });
-    });
-
-    if (onboardingAnonToggle && onboardingAnonCaption) {
-        onboardingAnonToggle.addEventListener('click', function (event) {
-            event.preventDefault();
-            event.stopPropagation();
-            var isAnonymous = onboardingAnonToggle.getAttribute('aria-pressed') !== 'true';
-            onboardingAnonToggle.setAttribute('aria-pressed', String(isAnonymous));
-            onboardingAnonCaption.textContent = isAnonymous
-                ? "You'll appear as Anonymous Falcon"
-                : "You'll appear as Mark";
-        });
-    }
-
-    var onboardingHelpfulButton = document.getElementById('onboarding-helpful-btn');
-    var onboardingPointsCount = document.getElementById('onboarding-points-count');
-    var onboardingPointsEarned = document.getElementById('onboarding-points-earned');
-
-    if (onboardingHelpfulButton && onboardingPointsCount && onboardingPointsEarned) {
-        onboardingHelpfulButton.addEventListener('click', function (event) {
-            event.stopPropagation();
-            event.preventDefault();
-
-            onboardingHelpfulButton.classList.remove('is-popping');
-            void onboardingHelpfulButton.offsetWidth;
-            onboardingHelpfulButton.classList.add('is-popping');
-
-            if (onboardingHelpfulButton.getAttribute('aria-pressed') === 'true') {
-                return;
-            }
-
-            onboardingHelpfulButton.setAttribute('aria-pressed', 'true');
-            onboardingHelpfulButton.classList.add('is-active');
-            onboardingPointsCount.textContent = String(Number(onboardingPointsCount.textContent) + 3);
-            onboardingPointsEarned.hidden = false;
-        });
-    }
-
-    var onboardingReportToggle = document.getElementById('onboarding-report-menu-toggle');
-    var onboardingReportMenu = document.getElementById('onboarding-report-menu');
-    var onboardingReportOption = document.getElementById('onboarding-report-option');
-    var onboardingReportNote = document.getElementById('onboarding-report-note');
-
-    if (onboardingReportToggle && onboardingReportMenu && onboardingReportOption && onboardingReportNote) {
-        onboardingReportToggle.addEventListener('click', function (event) {
-            event.stopPropagation();
-            event.preventDefault();
-
-            var isOpen = onboardingReportToggle.getAttribute('aria-expanded') === 'true';
-            onboardingReportToggle.setAttribute('aria-expanded', String(!isOpen));
-            onboardingReportMenu.hidden = isOpen;
-        });
-
-        onboardingReportOption.addEventListener('click', function (event) {
-            event.stopPropagation();
-            event.preventDefault();
-
-            onboardingReportNote.hidden = false;
-        });
-    }
-
-    function setupOnboardingDemoLoop(button) {
-        var target = button.closest('.cm-demo-target');
-        var slide = button.closest('[data-onboarding-slide]');
-
-        if (!target || !slide) {
+        if (!root) {
             return;
         }
 
-        var timer = null;
-        var stopped = false;
-
-        function clearAnimation() {
-            if (timer !== null) {
-                window.clearTimeout(timer);
-                timer = null;
-            }
-
-            target.classList.remove('is-tapping');
-            button.classList.remove('is-rippling');
+        if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            return;
         }
 
-        function scheduleTap(delay) {
-            if (!stopped) {
-                timer = window.setTimeout(tap, delay);
-            }
+        var CANCELLED = { cancelled: true };
+        var TIP_X = 16;
+        var TIP_Y = 5;
+        var GLIDE_MS = 950;
+
+        function byId(id) {
+            return document.getElementById(id);
         }
 
-        function tap() {
-            timer = null;
+        function createDirector(slide) {
+            var stage = slide.querySelector('[data-demo-stage]');
+            var cursor = stage.querySelector('[data-demo-cursor]');
+            var token = 0;
+            var position = { x: 0, y: 0 };
 
-            if (stopped) {
+            function sleep(ms, t) {
+                return new Promise(function (resolve, reject) {
+                    window.setTimeout(function () {
+                        if (t === token) {
+                            resolve();
+                        } else {
+                            reject(CANCELLED);
+                        }
+                    }, ms);
+                });
+            }
+
+            function pointOf(el, fx, fy) {
+                var s = stage.getBoundingClientRect();
+                var r = el.getBoundingClientRect();
+
+                return {
+                    x: r.left - s.left + r.width * (fx === undefined ? 0.5 : fx),
+                    y: r.top - s.top + r.height * (fy === undefined ? 0.5 : fy)
+                };
+            }
+
+            function place(p) {
+                position = p;
+                cursor.style.transform = 'translate3d(' + (p.x - TIP_X) + 'px,' + (p.y - TIP_Y) + 'px,0)';
+            }
+
+            function restPoint() {
+                var s = stage.getBoundingClientRect();
+
+                return { x: s.width * 0.92, y: s.height * 1.04 };
+            }
+
+            function park() {
+                cursor.classList.add('is-instant');
+                cursor.classList.remove('is-visible', 'is-tapping');
+                place(restPoint());
+                void cursor.offsetWidth;
+                cursor.classList.remove('is-instant');
+            }
+
+            function glideTo(el, t, fx, fy) {
+                cursor.classList.add('is-visible');
+                place(pointOf(el, fx, fy));
+
+                return sleep(GLIDE_MS, t);
+            }
+
+            function ripple(p) {
+                var ring = document.createElement('span');
+
+                ring.className = 'cm-tap-ripple';
+                ring.style.left = p.x + 'px';
+                ring.style.top = p.y + 'px';
+                ring.addEventListener('animationend', function () {
+                    ring.remove();
+                });
+                stage.appendChild(ring);
+                window.setTimeout(function () {
+                    ring.remove();
+                }, 1200);
+            }
+
+            function tap(el, t, action) {
+                cursor.classList.add('is-tapping');
+
+                return sleep(130, t).then(function () {
+                    ripple(position);
+
+                    if (el) {
+                        el.classList.add('is-pressed');
+                    }
+
+                    if (action) {
+                        action();
+                    }
+
+                    return sleep(220, t);
+                }).then(function () {
+                    cursor.classList.remove('is-tapping');
+
+                    if (el) {
+                        el.classList.remove('is-pressed');
+                    }
+                });
+            }
+
+            function rest(t) {
+                cursor.classList.remove('is-visible');
+                place(restPoint());
+
+                return sleep(800, t);
+            }
+
+            function begin() {
+                token += 1;
+
+                return token;
+            }
+
+            function cancel() {
+                token += 1;
+                cursor.classList.remove('is-visible', 'is-tapping');
+                stage.querySelectorAll('.cm-tap-ripple').forEach(function (ring) {
+                    ring.remove();
+                });
+            }
+
+            return {
+                stage: stage,
+                sleep: sleep,
+                pointOf: pointOf,
+                park: park,
+                glideTo: glideTo,
+                tap: tap,
+                rest: rest,
+                begin: begin,
+                cancel: cancel
+            };
+        }
+
+        function swapText(el, text) {
+            if (el.textContent === text) {
                 return;
             }
 
-            if (!slide.classList.contains('is-active')) {
-                scheduleTap(500);
+            window.clearTimeout(el._swapTimer);
+            el.classList.add('is-swapping');
+            el._swapTimer = window.setTimeout(function () {
+                el.textContent = text;
+                el.classList.remove('is-swapping');
+            }, 220);
+        }
+
+        function setTextNow(el, text) {
+            window.clearTimeout(el._swapTimer);
+            el.textContent = text;
+            el.classList.remove('is-swapping');
+        }
+
+        function anonScene(slide) {
+            var d = createDirector(slide);
+            var toggle = byId('onboarding-anon-toggle');
+            var text = slide.querySelector('[data-demo-text]');
+            var ANON = "You'll appear as Anonymous Falcon";
+            var NAMED = "You'll appear as Mark";
+
+            function setAnon(on) {
+                toggle.setAttribute('aria-pressed', String(on));
+                swapText(text, on ? ANON : NAMED);
+            }
+
+            return {
+                director: d,
+                reset: function () {
+                    toggle.setAttribute('aria-pressed', 'true');
+                    toggle.classList.remove('is-pressed');
+                    setTextNow(text, ANON);
+                },
+                play: async function (t) {
+                    await d.sleep(1500, t);
+                    await d.glideTo(toggle, t, 0.5, 0.5);
+                    await d.tap(toggle, t, function () { setAnon(false); });
+                    await d.sleep(2000, t);
+                    await d.tap(toggle, t, function () { setAnon(true); });
+                    await d.sleep(700, t);
+                    await d.rest(t);
+                }
+            };
+        }
+
+        function helpfulScene(slide) {
+            var d = createDirector(slide);
+            var button = byId('onboarding-helpful-btn');
+            var count = byId('onboarding-points-count');
+            var toast = byId('onboarding-points-toast');
+            var raf = null;
+
+            function tweenCount(from, to, duration) {
+                var start = null;
+
+                window.cancelAnimationFrame(raf);
+
+                function frame(now) {
+                    if (start === null) {
+                        start = now;
+                    }
+
+                    var p = Math.min(1, (now - start) / duration);
+                    var eased = 1 - Math.pow(1 - p, 3);
+
+                    count.textContent = String(Math.round(from + (to - from) * eased));
+
+                    if (p < 1) {
+                        raf = window.requestAnimationFrame(frame);
+                    }
+                }
+
+                raf = window.requestAnimationFrame(frame);
+            }
+
+            function floatToast() {
+                var p = d.pointOf(button, 0.5, 0);
+
+                toast.style.left = p.x + 'px';
+                toast.style.top = p.y + 'px';
+                toast.classList.remove('is-floating');
+                void toast.offsetWidth;
+                toast.classList.add('is-floating');
+            }
+
+            function reset() {
+                window.cancelAnimationFrame(raf);
+                button.setAttribute('aria-pressed', 'false');
+                button.classList.remove('is-active', 'is-popping', 'is-pressed');
+                toast.classList.remove('is-floating');
+                count.textContent = '0';
+            }
+
+            return {
+                director: d,
+                reset: reset,
+                play: async function (t) {
+                    await d.sleep(1500, t);
+                    await d.glideTo(button, t, 0.5, 0.5);
+                    await d.tap(button, t, function () {
+                        button.setAttribute('aria-pressed', 'true');
+                        button.classList.remove('is-popping');
+                        void button.offsetWidth;
+                        button.classList.add('is-active', 'is-popping');
+                        floatToast();
+                        tweenCount(0, 3, 600);
+                    });
+                    await d.sleep(2500, t);
+                    reset();
+                    await d.sleep(300, t);
+                    await d.rest(t);
+                }
+            };
+        }
+
+        function reportScene(slide) {
+            var d = createDirector(slide);
+            var toggle = byId('onboarding-report-menu-toggle');
+            var menu = byId('onboarding-report-menu');
+            var option = byId('onboarding-report-option');
+            var note = byId('onboarding-report-note');
+
+            function setOpen(open) {
+                menu.classList.toggle('is-open', open);
+                toggle.setAttribute('aria-expanded', String(open));
+
+                if (!open) {
+                    option.classList.remove('is-highlighted', 'is-pressed');
+                    note.classList.remove('is-visible');
+                }
+            }
+
+            return {
+                director: d,
+                reset: function () {
+                    toggle.classList.remove('is-pressed');
+                    setOpen(false);
+                },
+                play: async function (t) {
+                    await d.sleep(1500, t);
+                    await d.glideTo(toggle, t, 0.5, 0.5);
+                    await d.tap(toggle, t, function () { setOpen(true); });
+                    await d.sleep(800, t);
+                    await d.glideTo(option, t, 0.35, 0.5);
+                    await d.tap(option, t, function () {
+                        option.classList.add('is-highlighted');
+                        note.classList.add('is-visible');
+                    });
+                    await d.sleep(2000, t);
+                    setOpen(false);
+                    await d.sleep(400, t);
+                    await d.rest(t);
+                }
+            };
+        }
+
+        var factories = { anon: anonScene, helpful: helpfulScene, report: reportScene };
+        var scenes = [];
+
+        root.querySelectorAll('[data-onboarding-slide][data-scene]').forEach(function (slide) {
+            var factory = factories[slide.getAttribute('data-scene')];
+
+            if (!factory) {
                 return;
             }
 
-            target.classList.add('is-tapping');
-            timer = window.setTimeout(function () {
-                timer = null;
+            var scene = factory(slide);
 
-                if (stopped || !slide.classList.contains('is-active')) {
-                    clearAnimation();
-                    scheduleTap(500);
-                    return;
-                }
-
-                if (button === onboardingReportToggle && onboardingReportMenu) {
-                    onboardingReportToggle.setAttribute('aria-expanded', 'false');
-                    onboardingReportMenu.hidden = true;
-                }
-
-                button.click();
-                timer = window.setTimeout(function () {
-                    timer = null;
-                    target.classList.remove('is-tapping');
-                    button.classList.remove('is-rippling');
-                    scheduleTap(3000);
-                }, 500);
-            }, 500);
-        }
-
-        button.addEventListener('click', function (event) {
-            if (event.isTrusted) {
-                stopped = true;
-                clearAnimation();
-            }
-
-            button.classList.remove('is-rippling');
-            void button.offsetWidth;
-            button.classList.add('is-rippling');
-            window.setTimeout(function () {
-                button.classList.remove('is-rippling');
-            }, 500);
-        }, true);
-
-        scheduleTap(1000);
-    }
-
-    var reduceMotion = window.matchMedia &&
-        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-    if (!reduceMotion) {
-        [onboardingAnonToggle, onboardingHelpfulButton, onboardingReportToggle].forEach(function (button) {
-            if (button) {
-                setupOnboardingDemoLoop(button);
-            }
+            scene.slide = slide;
+            scene.running = false;
+            scene.reset();
+            scenes.push(scene);
         });
-    }
+
+        function start(scene) {
+            var t = scene.director.begin();
+
+            scene.running = true;
+            scene.reset();
+            scene.director.park();
+
+            (function loop() {
+                scene.play(t).then(function () {
+                    return scene.director.sleep(1200, t);
+                }).then(loop).catch(function (error) {
+                    if (error !== CANCELLED) {
+                        console.error(error);
+                    }
+                });
+            })();
+        }
+
+        function stop(scene) {
+            scene.running = false;
+            scene.director.cancel();
+            scene.reset();
+        }
+
+        function sync() {
+            scenes.forEach(function (scene) {
+                var shouldRun = scene.slide.classList.contains('is-active') && !document.hidden;
+
+                if (shouldRun && !scene.running) {
+                    start(scene);
+                } else if (!shouldRun && scene.running) {
+                    stop(scene);
+                }
+            });
+        }
+
+        if ('MutationObserver' in window) {
+            var observer = new MutationObserver(sync);
+
+            scenes.forEach(function (scene) {
+                observer.observe(scene.slide, { attributes: true, attributeFilter: ['class'] });
+            });
+        }
+
+        document.addEventListener('visibilitychange', sync);
+        sync();
+    })();
 
     /* ---------- Notification dropdown and unread-count polling ---------- */
 
