@@ -22,6 +22,15 @@
     @yield('head')
 </head>
 <body>
+    <script>
+        try {
+            if (localStorage.getItem('kanlungan_theme') === 'dark') {
+                document.body.classList.add('dark-mode');
+            }
+        } catch (error) {
+            console.error('Could not restore the saved theme preference.', error);
+        }
+    </script>
     {{-- Mobile back button is opt-in per page:
          @section('back', 'history')            -> history.back(), falls back to the feed if there is no history
          @section('back', route('post.show', 1)) -> goes to that specific route

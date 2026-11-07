@@ -1,6 +1,44 @@
 (function () {
     'use strict';
 
+    var savedTheme = null;
+
+    try {
+        savedTheme = localStorage.getItem('kanlungan_theme');
+    } catch (error) {
+        console.error('Could not restore the saved theme preference.', error);
+    }
+
+    document.body.classList.toggle('dark-mode', savedTheme === 'dark');
+    document.querySelectorAll('[data-theme-toggle]').forEach(function (button) {
+        button.setAttribute('aria-pressed', String(savedTheme === 'dark'));
+    });
+
+    document.addEventListener('click', function (event) {
+        if (!(event.target instanceof Element)) {
+            return;
+        }
+
+        var button = event.target.closest('[data-theme-toggle]');
+
+        if (!button) {
+            return;
+        }
+
+        var isDark = !document.body.classList.contains('dark-mode');
+        document.body.classList.toggle('dark-mode', isDark);
+        document.querySelectorAll('[data-theme-toggle]').forEach(function (toggle) {
+            toggle.setAttribute('aria-pressed', String(isDark));
+        });
+
+        try {
+            localStorage.setItem('kanlungan_theme', isDark ? 'dark' : 'light');
+        } catch (error) {
+            console.error('Could not save the theme preference.', error);
+            window.showToast('Could not save your theme preference.', 'error');
+        }
+    });
+
     var confirmModal = document.getElementById('confirm-modal');
     var confirmTitle = document.getElementById('confirm-modal-title');
     var confirmMessage = document.getElementById('confirm-modal-message');

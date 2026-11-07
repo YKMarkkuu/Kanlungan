@@ -20,6 +20,15 @@
     @yield('head')
 </head>
 <body class="@yield('body-class')">
+    <script>
+        try {
+            if (localStorage.getItem('kanlungan_theme') === 'dark') {
+                document.body.classList.add('dark-mode');
+            }
+        } catch (error) {
+            console.error('Could not restore the saved theme preference.', error);
+        }
+    </script>
     <div class="page">
         <main class="guest-page @yield('guest-class')">
             <div class="container">

@@ -11,6 +11,7 @@
     --border-subtle: #d8d4cc;
     --accent: #1a6b4a;
     --accent-dark: #0f4a33;
+    --accent-foreground: var(--accent-dark);
     --accent-soft: #e6f0ea;
     --text-primary: #1e1e1e;
     --text-muted: #6a6a6a;
@@ -33,6 +34,18 @@
     --dur-fast: 180ms;
     --dur-base: 320ms;
     --dur-spring: 420ms;
+}
+
+body.dark-mode {
+    --surface-bg: #121212;
+    --surface-card: #1e1e1e;
+    --surface-hover: #2c2c2c;
+    --text-primary: #f5f3ee;
+    --text-muted: #a0a0a0;
+    --border-default: #444444;
+    --border-subtle: #333333;
+    --accent-soft: #1a3328;
+    --accent-foreground: #a7d8bd;
 }
 
 /* Real spring curve where supported (iOS 17.4+, modern Chrome); the cubic-bezier above is the fallback. */
@@ -105,7 +118,7 @@ a {
 }
 
 a:hover {
-    color: var(--accent-dark);
+    color: var(--accent-foreground);
 }
 
 /* ---------- Typography ---------- */
