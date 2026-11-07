@@ -421,6 +421,8 @@ class ModerationFlowTest extends TestCase
         $this->assertSame('content', $report->mod_subject);
         $this->assertTrue(Alert::where('user_id', $reporter->id)->where('title', 'Your report is under moderator review')->exists());
         $this->assertTrue(Alert::where('user_id', $mod->id)->where('title', 'Urgent report needs review')->exists());
+        $this->assertSame('WORRYING-POST', Alert::where('user_id', $reporter->id)->where('title', 'Your report is under moderator review')->value('snippet'));
+        $this->assertSame('WORRYING-POST', Alert::where('user_id', $mod->id)->where('title', 'Urgent report needs review')->value('snippet'));
 
         $this->actingAs(User::factory()->create())->get('/feed')
             ->assertSee('WORRYING-POST')
@@ -745,11 +747,13 @@ class ModerationFlowTest extends TestCase
         $this->actingAs($commenter)->post("/post/{$post->id}/comments", ['body' => 'Try checking the portal first', 'anonymous' => '1']);
         $alert = Alert::where('user_id', $author->id)->firstOrFail();
 
-        $this->assertSame('New comment on your post', $alert->title);
+        $this->assertStringStartsWith('New comment from Anonymous ', $alert->title);
+        $this->assertSame('Try checking the portal first', $alert->snippet);
+        $this->assertNull($alert->body);
         $this->assertNull($alert->read_at);
         $this->assertFalse(Alert::where('user_id', $commenter->id)->exists());
 
-        $this->actingAs($author)->get('/alerts')->assertOk()->assertSee('New comment on your post')->assertSee('Try checking the');
+        $this->actingAs($author)->get('/alerts')->assertOk()->assertSee('New comment from Anonymous')->assertSee('Try checking the portal first');
         $this->actingAs($author)->get("/alerts/{$alert->id}")->assertRedirect(route('post.show', $post->id).'#comment-'.Comment::firstOrFail()->id);
         $this->assertNotNull($alert->fresh()->read_at);
     }
@@ -800,7 +804,9 @@ class ModerationFlowTest extends TestCase
         $this->actingAs($author)->post("/post/{$post->id}/comments/{$first->id}/accept");
         $this->assertTrue($first->fresh()->is_accepted);
         $this->assertSame(5, $answerer->fresh()->points);
-        $this->assertTrue(Alert::where('user_id', $answerer->id)->where('title', 'Your answer was marked helpful +5')->exists());
+        $alert = Alert::where('user_id', $answerer->id)->where('title', 'Your answer was marked helpful +5')->firstOrFail();
+        $this->assertSame('answer one', $alert->snippet);
+        $this->assertNull($alert->body);
 
         // Picking another answer moves the badge and the points.
         $this->actingAs($author)->post("/post/{$post->id}/comments/{$second->id}/accept");
