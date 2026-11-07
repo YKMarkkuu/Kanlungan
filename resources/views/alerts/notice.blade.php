@@ -11,6 +11,9 @@
 
         <div class="card stack">
             <h1>{{ $alert->title }}</h1>
+            @if ($alert->snippet)
+                <p class="cm-alert__snippet cm-alert__snippet--full">“{{ $alert->snippet }}”</p>
+            @endif
             <p>{{ $alert->body }}</p>
             <p class="text-small text-muted">{{ $alert->created_at?->diffForHumans() }}</p>
             <p class="text-small text-muted">Questions about this notice? Read the <a class="cm-underline" href="{{ route('page.rules') }}">community rules</a>.</p>

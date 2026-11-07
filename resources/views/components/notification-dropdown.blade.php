@@ -26,9 +26,12 @@
                 <a href="{{ route('alerts.open', $alert->id) }}"
                    class="cm-notification-dropdown__item {{ $alert->read_at === null ? 'is-unread' : '' }}">
                     <strong>{{ $alert->title }}</strong>
-                    @if ($alert->body)
-                        <span>{{ $alert->body }}</span>
-                    @endif
+                   {{-- Keep report/moderator excerpts in Activity instead of exposing removed content across every page. --}}
+                   @if (in_array($alert->kind, ['comment', 'helpful'], true) && $alert->snippet)
+                       <span class="cm-notification-dropdown__snippet">“{{ $alert->snippet }}”</span>
+                   @elseif ($alert->body)
+                       <span>{{ $alert->body }}</span>
+                   @endif
                     <time datetime="{{ $alert->created_at?->toIso8601String() }}">
                         {{ $alert->created_at?->diffForHumans() }}
                     </time>

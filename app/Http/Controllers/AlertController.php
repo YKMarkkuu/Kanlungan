@@ -20,10 +20,12 @@ class AlertController extends Controller
             ->map(fn (Alert $a) => [
                 'id' => $a->id,
                 'kind' => $a->kind,
+                'icon' => $a->iconName(),
                 'title' => $a->title,
+                'snippet' => $a->snippet,
                 'body' => $a->body,
                 'unread' => $a->read_at === null,
-                'time' => $a->created_at?->diffForHumans(null, \Carbon\CarbonInterface::DIFF_ABSOLUTE, true),
+                'time' => $this->ago($a->created_at),
             ]);
 
         $reportedItems = $community->reportsForVoting($userId);
@@ -131,5 +133,15 @@ class AlertController extends Controller
         return response()->json([
             'count' => Alert::unreadCount((int) $request->user()->id),
         ]);
+    }
+
+    /** "Just now", "5m ago", "2h ago", "3d ago". */
+    private function ago(?\Carbon\CarbonInterface $at): string
+    {
+        if ($at === null || abs($at->diffInSeconds()) < 60) {
+            return 'Just now';
+        }
+
+        return $at->diffForHumans(null, null, true);
     }
 }

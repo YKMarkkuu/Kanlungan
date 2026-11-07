@@ -29,11 +29,15 @@
 
         <section class="cm-activity-panel" id="activity-panel-notifications" role="tabpanel"
                  aria-labelledby="activity-tab-notifications" data-activity-panel="notifications">
-            @forelse ($alerts as $alert)
-                @include('components.alert-item', ['alert' => $alert])
-            @empty
-                <div class="card cm-empty"><p class="text-muted">No alerts yet.</p></div>
-            @endforelse
+            @if ($alerts->isEmpty())
+                <x-empty-state icon="bell" title="No notifications yet" message="Comments, helpful marks and moderator updates will show up here." />
+            @else
+                <div class="cm-alert-list">
+                    @foreach ($alerts as $alert)
+                        @include('components.alert-item', ['alert' => $alert])
+                    @endforeach
+                </div>
+            @endif
         </section>
 
         <section class="cm-activity-panel" id="activity-panel-verdicts" role="tabpanel"

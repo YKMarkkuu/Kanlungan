@@ -101,13 +101,16 @@ class ReportService
                 'notice',
                 'Urgent report needs review',
                 "A {$category} report needs moderator review.",
-                route('moderation')
+                route('moderation'),
+                $target->body,
             );
             $this->alerts->notify(
                 $reporterId,
                 'report',
                 'Your report is under moderator review',
-                'A moderator will review this report directly. It will not be sent to a community vote.'
+                'A moderator will review this report directly. It will not be sent to a community vote.',
+                null,
+                $target->body,
             );
         }
 
@@ -261,6 +264,7 @@ class ReportService
         $target = $report->reportable;
         $authorId = $target?->author_id;
         $kind = $target instanceof Post ? 'post' : 'comment';
+        $snippet = $target?->body;
         $reviewed = $report->mod_status === 'reviewed';
 
         $changes = ['status' => Report::RESOLVED, 'outcome' => $outcome, 'resolved_at' => now()];
@@ -277,15 +281,15 @@ class ReportService
 
             if ($authorId !== null) {
                 $this->points->award($authorId, PointService::REPORT_UPHELD_AUTHOR, 'report_upheld_author', $report);
-                $this->alerts->notify($authorId, 'notice', 'Notice from moderators', "Your {$kind} was removed after a community vote ({$report->category}). {$this->pointsText(PointService::REPORT_UPHELD_AUTHOR)}");
+                $this->alerts->notify($authorId, 'notice', 'Notice from moderators', "Your {$kind} was removed after a community vote ({$report->category}). {$this->pointsText(PointService::REPORT_UPHELD_AUTHOR)}", snippet: $snippet);
             }
 
             if ($outcome === VoteTally::UPHELD) {
                 $this->points->award($report->reporter_id, PointService::REPORT_UPHELD_REPORTER, 'report_upheld_reporter', $report);
-                $this->alerts->notify($report->reporter_id, 'report', 'Report update', "Your report was reviewed: the community agreed. {$this->pointsText(PointService::REPORT_UPHELD_REPORTER)}");
+                $this->alerts->notify($report->reporter_id, 'report', 'Report update', "Your report was reviewed: the community agreed. {$this->pointsText(PointService::REPORT_UPHELD_REPORTER)}", snippet: $snippet);
             } else {
                 $this->points->award($report->reporter_id, PointService::WRONG_TAG, 'wrong_tag', $report);
-                $this->alerts->notify($report->reporter_id, 'report', 'Report update', "Your report was reviewed: the {$kind} was removed, but the community said the tag ({$report->category}) was wrong. {$this->pointsText(PointService::WRONG_TAG)}");
+                $this->alerts->notify($report->reporter_id, 'report', 'Report update', "Your report was reviewed: the {$kind} was removed, but the community said the tag ({$report->category}) was wrong. {$this->pointsText(PointService::WRONG_TAG)}", snippet: $snippet);
             }
 
             if (! $reviewed) {
@@ -299,14 +303,14 @@ class ReportService
             }
         } elseif ($outcome === VoteTally::FALSE_REPORT) {
             $this->points->award($report->reporter_id, PointService::FALSE_REPORT, 'false_report', $report);
-            $this->alerts->notify($report->reporter_id, 'report', 'Report update', "Your report was reviewed: the community judged it a false report, so the {$kind} stays. {$this->pointsText(PointService::FALSE_REPORT)}");
+            $this->alerts->notify($report->reporter_id, 'report', 'Report update', "Your report was reviewed: the community judged it a false report, so the {$kind} stays. {$this->pointsText(PointService::FALSE_REPORT)}", snippet: $snippet);
 
             if (! $reviewed) {
                 $changes['mod_status'] = 'pending';
                 $changes['mod_subject'] = 'reporter';
             }
         } else {
-            $this->alerts->notify($report->reporter_id, 'report', 'Report update', "Your report was reviewed: the community did not reach a clear result, so the {$kind} stays.");
+            $this->alerts->notify($report->reporter_id, 'report', 'Report update', "Your report was reviewed: the community did not reach a clear result, so the {$kind} stays.", snippet: $snippet);
         }
 
         $report->update($changes);

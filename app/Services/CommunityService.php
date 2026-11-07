@@ -10,6 +10,7 @@ use App\Models\Post;
 use App\Models\PostItem;
 use App\Models\Reaction;
 use App\Models\Report;
+use App\Models\User;
 use App\Support\Alias;
 use App\Support\RankedFeedPaginator;
 use Carbon\CarbonInterface;
@@ -313,21 +314,26 @@ class CommunityService
 
         $this->ranking->recomputeEngagement((int) $post->id);
 
-        // Alerts say what was written, never who wrote it.
+        // Alerts name the commenter exactly as the thread does (alias or display name) and quote the comment.
+        $commenterName = $this->displayName(
+            $anonymous,
+            User::whereKey($authorId)->value('display_name'),
+            $authorId,
+            (int) $post->id,
+        );
         $url = route('post.show', $post->id).'#comment-'.$comment->id;
-        $snippet = '"'.Str::limit($body, 40).'"';
         $recipients = [];
 
         if ((int) $post->author_id !== $authorId) {
-            $recipients[(int) $post->author_id] = 'New comment on your post';
+            $recipients[(int) $post->author_id] = "New comment from {$commenterName}";
         }
 
         if ($parent !== null && (int) $parent->author_id !== $authorId) {
-            $recipients[(int) $parent->author_id] = 'New reply to your comment';
+            $recipients[(int) $parent->author_id] = "{$commenterName} replied to your comment";
         }
 
         foreach ($recipients as $userId => $title) {
-            $this->alerts->notify($userId, 'comment', $title, $snippet, $url);
+            $this->alerts->notify($userId, 'comment', $title, null, $url, $body);
         }
 
         return $comment;
@@ -379,7 +385,14 @@ class CommunityService
 
             if ($isHelpfulComment) {
                 $this->points->awardHelpful($authorId, $reactable);
-                $this->alerts->notify($authorId, 'helpful', 'Your answer was marked helpful', '"'.Str::limit($reactable->body, 40).'"', route('post.show', $reactable->post_id).'#comment-'.$reactable->id);
+                $this->alerts->notify(
+                    $authorId,
+                    'helpful',
+                    'Your answer was marked helpful',
+                    null,
+                    route('post.show', $reactable->post_id).'#comment-'.$reactable->id,
+                    $reactable->body,
+                );
             }
 
             return true;
@@ -499,7 +512,14 @@ class CommunityService
 
         if ($accepted) {
             $title = 'Your answer was marked helpful'.($awardsPoints ? ' +'.PointService::ACCEPTED_RECEIVED : '');
-            $this->alerts->notify((int) $comment->author_id, 'helpful', $title, '"'.Str::limit($comment->body, 40).'"', route('post.show', $comment->post_id).'#comment-'.$comment->id);
+            $this->alerts->notify(
+                (int) $comment->author_id,
+                'helpful',
+                $title,
+                null,
+                route('post.show', $comment->post_id).'#comment-'.$comment->id,
+                $comment->body,
+            );
         }
     }
 

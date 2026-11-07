@@ -183,6 +183,7 @@ class ModerationService
             $target = $report->reportable;
             $subjectUserId = $report->mod_subject === 'reporter' ? (int) $report->reporter_id : (int) $target?->author_id;
             $kind = $target instanceof \App\Models\Post ? 'post' : 'comment';
+            $snippet = $target?->body;
             $changes = [];
 
             if (in_array($action, ['mute', 'ban'], true)
@@ -193,7 +194,7 @@ class ModerationService
             switch ($action) {
                 case 'warn':
                     User::whereKey($subjectUserId)->increment('warnings_count');
-                    $this->alerts->notify($subjectUserId, 'notice', 'Notice from moderators', "Warning: {$reason}");
+                    $this->alerts->notify($subjectUserId, 'notice', 'Notice from moderators', "Warning: {$reason}", snippet: $snippet);
                     $changes['mod_status'] = 'reviewed';
                     break;
 
@@ -217,7 +218,8 @@ class ModerationService
                         'notice',
                         $selfHarm ? 'Support is available' : 'Notice from moderators',
                         $message,
-                        $selfHarm ? route('page.help') : null
+                        $selfHarm ? route('page.help') : null,
+                        $selfHarm ? null : $snippet,
                     );
                     $changes['mod_status'] = 'reviewed';
                     break;
@@ -227,13 +229,13 @@ class ModerationService
                     if ($target !== null) {
                         $this->ranking->recomputeEngagement($target instanceof \App\Models\Post ? (int) $target->id : (int) $target->post_id);
                     }
-                    $this->alerts->notify($subjectUserId, 'notice', 'Notice from moderators', "Your {$kind} was restored by moderators. Reason: {$reason}");
+                    $this->alerts->notify($subjectUserId, 'notice', 'Notice from moderators', "Your {$kind} was restored by moderators. Reason: {$reason}", snippet: $snippet);
                     $changes['mod_status'] = 'reviewed';
                     break;
 
                 case 'mute':
                     User::whereKey($subjectUserId)->update(['muted_until' => now()->addDays(self::MUTE_DAYS)]);
-                    $this->alerts->notify($subjectUserId, 'notice', 'Notice from moderators', 'You are muted for '.self::MUTE_DAYS." days (you can read, but not post, comment, report or vote). Reason: {$reason}");
+                    $this->alerts->notify($subjectUserId, 'notice', 'Notice from moderators', 'You are muted for '.self::MUTE_DAYS." days (you can read, but not post, comment, report or vote). Reason: {$reason}", snippet: $snippet);
                     $changes['mod_status'] = 'reviewed';
                     break;
 
@@ -280,7 +282,7 @@ class ModerationService
 
             // Tell the reporter once a moderator has closed the case (not for a referral or a guidance note).
             if (($changes['mod_status'] ?? null) === 'reviewed' && $report->mod_subject !== 'reporter') {
-                $this->alerts->notify((int) $report->reporter_id, 'report', 'Report update', 'Your report was reviewed by a moderator.');
+                $this->alerts->notify((int) $report->reporter_id, 'report', 'Report update', 'Your report was reviewed by a moderator.', snippet: $snippet);
             }
 
             ModAction::create([
