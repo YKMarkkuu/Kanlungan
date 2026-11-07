@@ -42,6 +42,11 @@ class FeedRankingService
     {
         return $query
             ->whereNull('posts.removed_at')
+            ->whereNotIn('posts.author_id', function ($subquery) use ($viewerId) {
+                $subquery->select('blocked_id')
+                    ->from('blocks')
+                    ->where('blocker_id', $viewerId);
+            })
             ->whereNotExists(function ($sub) use ($viewerId) {
                 $sub->selectRaw('1')
                     ->from('reports')

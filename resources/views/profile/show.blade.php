@@ -120,15 +120,17 @@
             <h2 class="cm-settings-header" id="settings-blocked">Blocked Users</h2>
             <div class="cm-settings-list text-small">
                 @forelse ($blockedUsers as $blockedUser)
-                    <form method="POST" action="{{ route('block.destroy', $blockedUser->pivot->id) }}" class="cm-settings-item-form">
-                        @csrf
-                        <button type="submit" class="cm-settings-item cm-settings-item--row">
-                            <span>Blocked on {{ $blockedUser->pivot->created_at->format('M j, Y') }}</span>
-                            <span class="cm-settings-item--danger">Unblock</span>
-                        </button>
-                    </form>
+                    <div class="cm-settings-item cm-settings-item--row">
+                        <span>Blocked on {{ $blockedUser->created_at->format('M j, Y') }}</span>
+                        <form method="POST" action="{{ route('block.destroy', $blockedUser->block_id) }}" class="cm-settings-item-form">
+                            @csrf
+                            <button type="submit" class="cm-settings-unblock">Unblock</button>
+                        </form>
+                    </div>
                 @empty
-                    <p class="text-small text-muted">You haven't blocked anyone.</p>
+                    <div class="cm-settings-item text-muted" style="text-align: center; padding: 16px;">
+                        You haven't blocked anyone.
+                    </div>
                 @endforelse
             </div>
         </section>

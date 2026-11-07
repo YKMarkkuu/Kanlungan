@@ -29,40 +29,44 @@
 
         <section class="cm-activity-panel" id="activity-panel-notifications" role="tabpanel"
                  aria-labelledby="activity-tab-notifications" data-activity-panel="notifications">
-            @if ($alerts->isEmpty())
-                <x-empty-state icon="bell" title="No notifications yet" message="Comments, helpful marks and moderator updates will show up here." />
-            @else
-                <div class="cm-alert-list">
+            <div class="cm-alert-list">
+                @if ($alerts->isEmpty())
+                    <x-empty-state icon="bell" title="No notifications yet" message="Comments, helpful marks and moderator updates will show up here." />
+                @else
                     @foreach ($alerts as $alert)
                         @include('components.alert-item', ['alert' => $alert])
                     @endforeach
-                </div>
-            @endif
+                @endif
+            </div>
         </section>
 
         <section class="cm-activity-panel" id="activity-panel-verdicts" role="tabpanel"
                  aria-labelledby="activity-tab-verdicts" data-activity-panel="verdicts" hidden>
-            <div class="card cm-notice" role="note">
-                Help keep Kanlungan safe. Review these reports and cast your vote.
+            <div class="cm-alert-list">
+                <div class="card cm-notice" role="note">
+                    Help keep Kanlungan safe. Review these reports and cast your vote.
+                </div>
+                @include('reports._list', ['reports' => $reportedItems])
             </div>
-            @include('reports._list', ['reports' => $reportedItems])
         </section>
 
         <section class="cm-activity-panel" id="activity-panel-reports" role="tabpanel"
                  aria-labelledby="activity-tab-reports" data-activity-panel="reports" hidden>
-            @forelse ($myReports as $report)
-                <article class="card cm-my-report">
-                    <p class="cm-my-report__preview">{{ $report['preview'] }}</p>
-                    <div class="cm-my-report__meta">
-                        <time class="text-small text-muted">{{ $report['reported_at'] }}</time>
-                        <span class="cm-report-status cm-report-status--{{ $report['status_class'] }}">
-                            {{ $report['status'] }}
-                        </span>
-                    </div>
-                </article>
-            @empty
-                <div class="card cm-empty"><p class="text-muted">You haven't reported any content.</p></div>
-            @endforelse
+            <div class="cm-alert-list">
+                @forelse ($myReports as $report)
+                    <article class="card cm-my-report">
+                        <p class="cm-my-report__preview">{{ $report['preview'] }}</p>
+                        <div class="cm-my-report__meta">
+                            <time class="text-small text-muted">{{ $report['reported_at'] }}</time>
+                            <span class="cm-report-status cm-report-status--{{ $report['status_class'] }}">
+                                {{ $report['status'] }}
+                            </span>
+                        </div>
+                    </article>
+                @empty
+                    <div class="card cm-empty"><p class="text-muted">You haven't reported any content.</p></div>
+                @endforelse
+            </div>
         </section>
     </div>
 @endsection

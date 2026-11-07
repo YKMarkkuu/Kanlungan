@@ -230,8 +230,11 @@ class CommunityService
 
     public function commentCount(int $viewerId, int $postId): int
     {
+        $blockedUserIds = $this->blockedUserIds($viewerId);
+
         return Comment::query()
             ->where('post_id', $postId)
+            ->when($blockedUserIds !== [], fn ($query) => $query->whereNotIn('author_id', $blockedUserIds))
             ->count();
     }
 
@@ -525,11 +528,17 @@ class CommunityService
 
     private function postQuery(int $viewerId)
     {
+        $blockedUserIds = $this->blockedUserIds($viewerId);
+
         return Post::query()
             ->select('posts.*')
+            ->when($blockedUserIds !== [], fn ($query) => $query->whereNotIn('posts.author_id', $blockedUserIds))
             ->with(['author:id,display_name,avatar_path', 'images', 'items'])
             ->withCount([
-                'comments',
+                'comments' => fn ($query) => $query->when(
+                    $blockedUserIds !== [],
+                    fn ($comments) => $comments->whereNotIn('author_id', $blockedUserIds),
+                ),
                 'reactions as likes_count' => fn ($q) => $q->where('type', Reaction::LIKE),
             ])
             ->withExists([
@@ -540,7 +549,10 @@ class CommunityService
 
     private function commentQuery(int $viewerId)
     {
+        $blockedUserIds = $this->blockedUserIds($viewerId);
+
         return Comment::query()
+            ->when($blockedUserIds !== [], fn ($query) => $query->whereNotIn('comments.author_id', $blockedUserIds))
             ->with('author:id,display_name,avatar_path')
             ->with('post:id,author_id')
             ->withCount([
@@ -551,6 +563,16 @@ class CommunityService
                 'reactions as liked' => fn ($q) => $q->where('type', Reaction::LIKE)->where('user_id', $viewerId),
                 'reactions as helpful_marked' => fn ($q) => $q->where('type', Reaction::HELPFUL)->where('user_id', $viewerId),
             ]);
+    }
+
+    /** @return array<int, int> */
+    private function blockedUserIds(int $viewerId): array
+    {
+        return Block::query()
+            ->where('blocker_id', $viewerId)
+            ->pluck('blocked_id')
+            ->map(static fn ($id): int => (int) $id)
+            ->all();
     }
 
     /** @return array<string, mixed> */

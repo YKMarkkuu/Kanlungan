@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Block;
 use App\Models\PointLog;
 use App\Services\AccountDeletionService;
 use App\Services\CommunityService;
@@ -39,7 +40,14 @@ class ProfileController extends Controller
             'points' => $points,
             'standing' => PointService::standing($points),
             'history' => $history,
-            'blockedUsers' => $user->blockedUsers()->orderByPivot('created_at', 'desc')->get(),
+            'blockedUsers' => Block::query()
+                ->where('blocker_id', $user->id)
+                ->orderByDesc('created_at')
+                ->get(['id', 'created_at'])
+                ->map(static fn (Block $block): object => (object) [
+                    'block_id' => $block->id,
+                    'created_at' => $block->created_at,
+                ]),
         ]);
     }
 

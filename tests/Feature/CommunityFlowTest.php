@@ -83,7 +83,7 @@ class CommunityFlowTest extends TestCase
             ->assertSee('data-query-tab="verdicts"', false);
     }
 
-    public function test_blocking_an_author_keeps_content_visible_but_prevents_interactions(): void
+    public function test_blocking_an_author_hides_their_content_but_prevents_interactions(): void
     {
         [$viewer, $blockedAuthor, $otherAuthor] = User::factory()->count(3)->create();
         $blockedAuthor->forceFill(['display_name' => 'Private Blocked Name'])->save();
@@ -111,14 +111,14 @@ class CommunityFlowTest extends TestCase
         $this->assertSame(1, Block::where('blocker_id', $viewer->id)->where('blocked_id', $blockedAuthor->id)->count());
         $this->actingAs($viewer)->get(route('feed'))
             ->assertOk()
-            ->assertSee($blockedPost->body)
+            ->assertDontSee($blockedPost->body)
             ->assertSee($visiblePost->body)
             ->assertDontSee('Private Blocked Name')
-            ->assertSee('data-comments-count>2</span>', false);
-        $this->actingAs($viewer)->get("/post/{$blockedPost->id}")->assertOk();
+            ->assertSee('data-comments-count>1</span>', false);
+        $this->actingAs($viewer)->get("/post/{$blockedPost->id}")->assertNotFound();
         $this->actingAs($viewer)->get("/post/{$visiblePost->id}")
             ->assertOk()
-            ->assertSee('hidden blocked comment')
+            ->assertDontSee('hidden blocked comment')
             ->assertSee('visible comment');
         $this->actingAs($viewer)->postJson("/post/{$blockedPost->id}/comments", [
             'body' => 'comment on a blocked author post',
@@ -138,23 +138,33 @@ class CommunityFlowTest extends TestCase
         $this->actingAs($viewer)->postJson("/post/{$visiblePost->id}/comments", [
             'body' => 'new visible comment',
             'anonymous' => '1',
-        ])->assertCreated()->assertJson(['comments_count' => 3]);
+        ])->assertCreated()->assertJson(['comments_count' => 2]);
 
         $block = Block::where('blocker_id', $viewer->id)->firstOrFail();
-        $this->actingAs($viewer)->get('/me')
+        $profileResponse = $this->actingAs($viewer)->get('/me')
             ->assertOk()
             ->assertSee('Blocked Users')
             ->assertSee(route('block.destroy', $block->id))
             ->assertSee('Blocked on '.$block->created_at->format('M j, Y'))
             ->assertDontSee('Private Blocked Name')
             ->assertDontSee($blockedAuthor->email);
+        $profileResponse->assertViewHas('blockedUsers', function ($blockedUsers) use ($block): bool {
+            $blockedUser = $blockedUsers->first();
+
+            return $blockedUser !== null
+                && array_keys(get_object_vars($blockedUser)) === ['block_id', 'created_at']
+                && $blockedUser->block_id === $block->id
+                && $blockedUser->created_at->equalTo($block->created_at);
+        });
     }
 
-    public function test_blocking_prevents_interactions_in_both_directions_without_hiding_content(): void
+    public function test_blocking_hides_blocked_content_and_prevents_interactions_in_both_directions(): void
     {
         [$blocker, $blocked] = User::factory()->count(2)->create();
         $blockerPost = $this->makePost($blocker);
         $blockedPost = $this->makePost($blocked);
+        $blockerPost->update(['body' => 'blocker own post']);
+        $blockedPost->update(['body' => 'blocked authors post']);
         $blockedComment = Comment::create([
             'post_id' => $blockerPost->id,
             'author_id' => $blocked->id,
@@ -166,10 +176,10 @@ class CommunityFlowTest extends TestCase
         $this->actingAs($blocker)->get(route('feed'))
             ->assertOk()
             ->assertSee($blockerPost->body)
-            ->assertSee($blockedPost->body);
+            ->assertDontSee($blockedPost->body);
         $this->actingAs($blocker)->get("/post/{$blockerPost->id}")
             ->assertOk()
-            ->assertSee('Visible despite block');
+            ->assertDontSee('Visible despite block');
 
         foreach ([
             [$blocked, $blockerPost],
