@@ -52,10 +52,7 @@ class AuthFlowTest extends TestCase
 
         Log::shouldReceive('error')
             ->once()
-            ->with('OTP email delivery failed.', \Mockery::on(function (array $context): bool {
-                return isset($context['exception'])
-                    && $context['exception'] instanceof TransportException;
-            }));
+            ->with('Mail failed: Mail transport unavailable');
 
         $this->postJson('/auth/send-code', ['email' => $email])
             ->assertStatus(503)
