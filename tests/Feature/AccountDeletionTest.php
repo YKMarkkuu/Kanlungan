@@ -15,6 +15,7 @@ use App\Services\AlertService;
 use App\Services\PointService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -118,6 +119,8 @@ class AccountDeletionTest extends TestCase
 
     public function test_avatar_and_post_photos_are_deleted_from_disk(): void
     {
+        Storage::fake('supabase');
+
         foreach (['uploads/posts', 'uploads/avatars'] as $directory) {
             if (! is_dir(public_path($directory))) {
                 mkdir(public_path($directory), 0775, true);
@@ -139,6 +142,20 @@ class AccountDeletionTest extends TestCase
         $this->assertFileDoesNotExist(public_path($photo));
         $this->assertSame(0, $post->images()->count());
         $this->assertNull(User::findOrFail($user->id)->avatar_path);
+
+        $remoteAvatar = 'avatars/'.Str::uuid().'.jpg';
+        $remotePhoto = 'posts/'.Str::uuid().'.jpg';
+        Storage::disk('supabase')->put($remoteAvatar, 'avatar');
+        Storage::disk('supabase')->put($remotePhoto, 'photo');
+        $remoteUser = User::factory()->create(['avatar_path' => $remoteAvatar]);
+        $remotePost = $this->makePost($remoteUser);
+        $remotePost->images()->create(['path' => $remotePhoto, 'position' => 0, 'width' => 1, 'height' => 1]);
+
+        $this->deleteAs($remoteUser)->assertRedirect('/');
+
+        $this->assertFalse(Storage::disk('supabase')->exists($remoteAvatar));
+        $this->assertFalse(Storage::disk('supabase')->exists($remotePhoto));
+        $this->assertSame(0, $remotePost->images()->count());
     }
 
     public function test_private_data_is_removed_and_reports_lose_their_free_text(): void

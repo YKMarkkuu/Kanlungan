@@ -91,9 +91,10 @@
     @if ($photoCount > 0)
         <div class="cm-photos cm-photos--{{ $photoCount }}" style="{{ $photoStyle }}">
             @foreach ($photos as $index => $photo)
+                @php($photoUrl = str_starts_with($photo['path'], 'posts/') ? \Illuminate\Support\Facades\Storage::disk('supabase')->url($photo['path']) : asset($photo['path']))
                 <img class="cm-post__img"
-                     src="{{ asset($photo['path']) }}"
-                     data-lightbox-src="{{ asset($photo['path']) }}"
+                     src="{{ $photoUrl }}"
+                     data-lightbox-src="{{ $photoUrl }}"
                      alt="Photo {{ $index + 1 }} of {{ $photoCount }} attached to this post"
                      loading="lazy">
             @endforeach

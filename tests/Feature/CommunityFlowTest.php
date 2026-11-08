@@ -13,6 +13,7 @@ use App\Services\CommunityService;
 use App\Services\ReportService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
@@ -473,6 +474,7 @@ class CommunityFlowTest extends TestCase
 
     public function test_avatar_upload_is_cropped_and_hidden_on_anonymous_content(): void
     {
+        Storage::fake('supabase');
         $author = User::factory()->create();
 
         $this->actingAs($author)->post(route('profile.avatar'), [
@@ -482,8 +484,9 @@ class CommunityFlowTest extends TestCase
 
         $avatarPath = $author->fresh()->avatar_path;
         $this->assertNotNull($avatarPath);
-        $this->assertFileExists(public_path($avatarPath));
-        $imageSize = getimagesize(public_path($avatarPath));
+        $this->assertStringStartsWith('avatars/', $avatarPath);
+        $this->assertTrue(Storage::disk('supabase')->exists($avatarPath));
+        $imageSize = getimagesizefromstring(Storage::disk('supabase')->get($avatarPath));
         $this->assertSame([150, 150], [$imageSize[0], $imageSize[1]]);
 
         $anonymousPost = $this->makePost($author);
@@ -501,13 +504,18 @@ class CommunityFlowTest extends TestCase
 
         $this->actingAs($author)->get('/me')
             ->assertOk()
-            ->assertSee(asset($avatarPath))
+            ->assertSee(Storage::disk('supabase')->url($avatarPath))
             ->assertSee('Position your photo')
             ->assertSee('Drag to position and pinch to zoom')
             ->assertSee('cropper.min.js')
             ->assertDontSee('avatar-crop-x');
 
-        @unlink(public_path($avatarPath));
+        $this->actingAs($author)->post(route('profile.avatar'), [
+            'avatar' => UploadedFile::fake()->image('replacement.png', 240, 240),
+        ])->assertRedirect();
+
+        $this->assertFalse(Storage::disk('supabase')->exists($avatarPath));
+        $this->assertTrue(Storage::disk('supabase')->exists($author->fresh()->avatar_path));
     }
 
     public function test_json_comment_creation_returns_renderable_card_and_count(): void

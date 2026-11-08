@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Post;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
@@ -12,7 +13,7 @@ use RuntimeException;
 /**
  * Photos on posts. Every upload is decoded and re-encoded as a plain JPEG (max 1600px on either edge), which
  * removes EXIF data such as GPS location and the camera, so an "anonymous" post cannot leak it.
- * Saved under public/uploads/posts (no storage:link needed).
+ * Saved to the public Supabase Storage bucket.
  */
 class ImageService
 {
@@ -73,23 +74,15 @@ class ImageService
         imagecopyresampled($canvas, $image, 0, 0, 0, 0, $targetW, $targetH, $width, $height);
         unset($image);
 
-        $directory = public_path('uploads/posts');
-
-        if (! is_dir($directory) && ! mkdir($directory, 0775, true) && ! is_dir($directory)) {
-            throw new RuntimeException('Failed to create the post uploads directory.');
-        }
-
         imageinterlace($canvas, true);
 
-        $name = Str::uuid()->toString().'.jpg';
-        $saved = imagejpeg($canvas, $directory.DIRECTORY_SEPARATOR.$name, 82);
+        $objectPath = 'posts/'.Str::uuid()->toString().'.jpg';
+        $contents = $this->encodeJpeg($canvas);
         unset($canvas);
 
-        if (! $saved) {
-            throw new RuntimeException('Failed to save the uploaded photo.');
-        }
+        $this->storeJpeg($objectPath, $contents);
 
-        return ['path' => 'uploads/posts/'.$name, 'width' => $targetW, 'height' => $targetH];
+        return ['path' => $objectPath, 'width' => $targetW, 'height' => $targetH];
     }
 
     /** Deletes every photo file of a post and its rows. Used for author delete, community vote and moderator removal. */
@@ -173,26 +166,39 @@ class ImageService
             throw new RuntimeException('Failed to resize the uploaded avatar.');
         }
 
-        $directory = public_path('uploads/avatars');
-
-        if (! is_dir($directory) && ! mkdir($directory, 0775, true) && ! is_dir($directory)) {
-            imagedestroy($image);
-            imagedestroy($canvas);
-
-            throw new RuntimeException('Failed to create the avatar uploads directory.');
-        }
-
-        $name = Str::uuid()->toString().'.jpg';
-        $destination = $directory.DIRECTORY_SEPARATOR.$name;
-        $saved = imagejpeg($canvas, $destination, 82);
+        $objectPath = 'avatars/'.Str::uuid()->toString().'.jpg';
+        $contents = $this->encodeJpeg($canvas);
         imagedestroy($image);
         imagedestroy($canvas);
 
-        if (! $saved) {
-            throw new RuntimeException('Failed to save the uploaded avatar.');
+        $this->storeJpeg($objectPath, $contents);
+
+        return $objectPath;
+    }
+
+    private function encodeJpeg($image): string
+    {
+        ob_start();
+        $encoded = imagejpeg($image, null, 82);
+        $contents = ob_get_clean();
+
+        if (! $encoded || ! is_string($contents) || $contents === '') {
+            throw new RuntimeException('Failed to encode the uploaded image.');
         }
 
-        return 'uploads/avatars/'.$name;
+        return $contents;
+    }
+
+    private function storeJpeg(string $path, string $contents): void
+    {
+        $stored = Storage::disk('supabase')->put($path, $contents, [
+            'ContentType' => 'image/jpeg',
+            'CacheControl' => 'public, max-age=31536000, immutable',
+        ]);
+
+        if (! $stored) {
+            throw new RuntimeException('Failed to store the uploaded image.');
+        }
     }
 
     /**
@@ -230,6 +236,12 @@ class ImageService
             return;
         }
 
+        if (preg_match('~\Aavatars/[A-Za-z0-9-]+\.jpg\z~D', $path)) {
+            $this->deleteStoredObject($path);
+
+            return;
+        }
+
         if (! preg_match('~\Auploads/avatars/[A-Za-z0-9-]+\.jpg\z~D', $path)) {
             throw new RuntimeException('Cannot delete an avatar outside the avatar uploads directory.');
         }
@@ -251,6 +263,12 @@ class ImageService
             return;
         }
 
+        if (preg_match('~\Aposts/[A-Za-z0-9-]+\.jpg\z~D', $path)) {
+            $this->deleteStoredObject($path);
+
+            return;
+        }
+
         if (! preg_match('~\Auploads/posts/[A-Za-z0-9-]+\.jpg\z~D', $path)) {
             throw new RuntimeException('Cannot delete a photo outside the post uploads directory.');
         }
@@ -263,6 +281,13 @@ class ImageService
 
         if (! unlink($file)) {
             throw new RuntimeException("Failed to delete post photo: {$path}");
+        }
+    }
+
+    private function deleteStoredObject(string $path): void
+    {
+        if (! Storage::disk('supabase')->delete($path)) {
+            throw new RuntimeException("Failed to delete stored image: {$path}");
         }
     }
 

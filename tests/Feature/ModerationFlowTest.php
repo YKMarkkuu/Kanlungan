@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Services\ReportService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
@@ -887,6 +888,7 @@ class ModerationFlowTest extends TestCase
 
     public function test_photo_upload_is_re_encoded_and_shown(): void
     {
+        Storage::fake('supabase');
         $user = User::factory()->create();
 
         $this->actingAs($user)->post('/post', [
@@ -896,20 +898,21 @@ class ModerationFlowTest extends TestCase
 
         $post = Post::firstOrFail();
         $path = $post->images()->firstOrFail()->path;
+        $this->assertStringStartsWith('posts/', $path);
         $this->assertStringEndsWith('.jpg', $path);
-        $this->assertFileExists(public_path($path));
-        [$width, $height] = getimagesize(public_path($path));
+        $this->assertTrue(Storage::disk('supabase')->exists($path));
+        [$width, $height] = getimagesizefromstring(Storage::disk('supabase')->get($path));
         $this->assertLessThanOrEqual(1600, max($width, $height));
 
-        $this->actingAs($user)->get('/feed')->assertSee($path);
-
-        @unlink(public_path($path));
+        $this->actingAs($user)->get('/feed')
+            ->assertSee(Storage::disk('supabase')->url($path));
 
         $this->actingAs($user)->post('/post', ['category' => 'Share', 'body' => 'bad file', 'photo' => UploadedFile::fake()->create('x.pdf', 10, 'application/pdf')])->assertSessionHasErrors('photo');
     }
 
     public function test_three_large_photos_are_resized_and_a_fourth_is_rejected(): void
     {
+        Storage::fake('supabase');
         $user = User::factory()->create();
 
         $this->actingAs($user)->post('/post', [
@@ -927,22 +930,24 @@ class ModerationFlowTest extends TestCase
         $this->assertSame([0, 1, 2], $images->pluck('position')->all());
 
         foreach ($images as $image) {
-            [$width, $height] = getimagesize(public_path($image->path));
+            $this->assertTrue(Storage::disk('supabase')->exists($image->path));
+            [$width, $height] = getimagesizefromstring(Storage::disk('supabase')->get($image->path));
             $this->assertLessThanOrEqual(1600, max($width, $height));
             $this->assertSame([$width, $height], [$image->width, $image->height]);
         }
 
         $paths = $images->pluck('path')->all();
-        $this->actingAs($user)->get('/feed')->assertOk()
-            ->assertSee($paths[0])
-            ->assertSee($paths[1])
-            ->assertSee($paths[2])
+        $response = $this->actingAs($user)->get('/feed');
+        foreach ($paths as $path) {
+            $response->assertSee(Storage::disk('supabase')->url($path));
+        }
+        $response->assertOk()
             ->assertSee('Photo 3 of 3 attached to this post');
 
         $this->actingAs($user)->delete("/post/{$post->id}");
         $this->assertSame(0, $post->images()->count());
         foreach ($paths as $path) {
-            $this->assertFileDoesNotExist(public_path($path));
+            $this->assertFalse(Storage::disk('supabase')->exists($path));
         }
 
         $this->actingAs($user)->post('/post', [
