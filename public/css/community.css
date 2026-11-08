@@ -3873,3 +3873,52 @@ body.dark-mode .cm-toast__icon { color: #ffffff; }
     .cm-toast.is-leaving { animation: cm-fade-out 120ms linear forwards; }
     .cm-toast__icon { animation: none; }
 }
+
+/* ==========================================================================
+   Mobile fixed header and chip row; auto-hide movement is disabled when the
+   user has requested reduced motion.
+   ========================================================================== */
+
+@media (max-width: 768px) {
+    .cm-main {
+        padding-top: calc(var(--cm-header-h) + env(safe-area-inset-top, 0px));
+    }
+
+    .cm-main > .cm-header {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 30;
+        width: auto;
+        margin: 0;
+    }
+
+    .stack > .cm-chips--sticky {
+        position: fixed;
+        top: calc(var(--cm-header-h) + env(safe-area-inset-top, 0px));
+        left: 0;
+        right: 0;
+        z-index: 20;
+        margin: 0;
+    }
+
+    .stack:has(> .cm-chips--sticky) {
+        padding-top: 52px;
+    }
+}
+
+@media (max-width: 768px) and (prefers-reduced-motion: no-preference) {
+    .cm-main > .cm-header,
+    .stack > .cm-chips--sticky {
+        transition: top var(--dur-base) var(--ease-ios);
+    }
+
+    .cm-page.is-header-hidden .cm-main > .cm-header {
+        top: calc(var(--cm-header-h) * -1);
+    }
+
+    .cm-page.is-header-hidden .stack > .cm-chips--sticky {
+        top: 0;
+    }
+}

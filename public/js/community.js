@@ -3456,4 +3456,131 @@
             showReactError(error.message === 'Failed to fetch' ? 'Could not reach server.' : error.message);
         });
     });
+
+    /* ==========================================================================
+       Auto-hide header on scroll (mobile only)
+       Scroll down: the app bar (and the sticky chip row, via CSS) slides away.
+       Scroll up: they slide back. One class on .cm-page does everything; the
+       motion itself is CSS (transform only). Does nothing on desktop, with
+       prefers-reduced-motion, while the notification dropdown is open, or on
+       pages without the sticky header (guest pages, onboarding).
+       ========================================================================== */
+    (function () {
+        var header = document.querySelector('.cm-main > .cm-header');
+        var page = document.querySelector('.cm-page');
+
+        if (!header || !page) {
+            return;
+        }
+
+        var DELTA = 10; // px of travel in one direction before the header reacts
+        var narrow = window.matchMedia('(max-width: 768px)');
+        var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+        var hidden = false;
+        var ticking = false;
+
+        function enabled() {
+            return narrow.matches && !reduceMotion.matches;
+        }
+
+        function dropdownOpen() {
+            var dropdown = document.querySelector('[data-notification-dropdown]');
+
+            return Boolean(dropdown && !dropdown.classList.contains('hidden'));
+        }
+
+        // iOS rubber-banding reports negative values at the top and values past
+        // the end at the bottom; clamping stops the bounce from flipping direction.
+        function currentY() {
+            var max = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+
+            return Math.min(Math.max(0, window.scrollY), max);
+        }
+
+        var lastY = currentY();
+
+        function setHidden(next) {
+            if (next === hidden) {
+                return;
+            }
+
+            hidden = next;
+            page.classList.toggle('is-header-hidden', next);
+        }
+
+        function update() {
+            var y = currentY();
+            ticking = false;
+
+            // Not allowed to hide: make sure it is showing and keep tracking.
+            if (!enabled() || dropdownOpen() || y < 50) {
+                setHidden(false);
+                lastY = y;
+                return;
+            }
+
+            var delta = y - lastY;
+
+            // While hidden, track the furthest downward point so even a short
+            // upward scroll can reveal the header.
+            if (hidden) {
+                if (delta <= -2) {
+                    setHidden(false);
+                    lastY = y;
+                    return;
+                }
+
+                if (delta > 0) {
+                    lastY = y;
+                }
+
+                return;
+            }
+
+            if (Math.abs(delta) < DELTA) {
+                return;
+            }
+
+            if (delta > 0 && y > header.offsetHeight) {
+                setHidden(true); // Scrolling down
+            } else if (delta < 0) {
+                setHidden(false); // Scrolling up
+            }
+
+            lastY = y;
+        }
+
+        function resync() {
+            ticking = false;
+            setHidden(false);
+            lastY = currentY();
+        }
+
+        window.addEventListener('scroll', function () {
+            if (!ticking) {
+                ticking = true;
+                window.requestAnimationFrame(update);
+            }
+        }, { passive: true });
+
+        // Keyboard / screen-reader users tabbing into a hidden header bring it back.
+        header.addEventListener('focusin', function () {
+            setHidden(false);
+        });
+
+        // Breakpoint or motion-preference change, or a bfcache restore: start clean.
+        [narrow, reduceMotion].forEach(function (query) {
+            if (query.addEventListener) {
+                query.addEventListener('change', resync);
+            } else {
+                query.addListener(resync);
+            }
+        });
+
+        window.addEventListener('pageshow', function (event) {
+            if (event.persisted) {
+                resync();
+            }
+        });
+    })();
 })();
