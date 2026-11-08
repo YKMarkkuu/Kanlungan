@@ -6,6 +6,14 @@
     <meta name="theme-color" content="#1a6b4a">
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
+    <script>
+        try {
+            document.documentElement.classList.remove('dark-mode');
+        } catch (error) {
+            console.error('Could not clear the saved theme class.', error);
+        }
+    </script>
+
     {{-- PWA --}}
     <link rel="manifest" href="{{ asset('manifest.json') }}">
     <link rel="apple-touch-icon" href="{{ asset('images/icon-192.png') }}">
@@ -17,17 +25,12 @@
 
     <link rel="stylesheet" href="{{ asset('css/base.css') }}">
     <link rel="stylesheet" href="{{ asset('css/components.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/auth.css') }}">
     @yield('head')
 </head>
-<body class="@yield('body-class')">
+<body class="@yield('body-class')" data-force-light-theme>
     <script>
-        try {
-            if (localStorage.getItem('kanlungan_theme') === 'dark') {
-                document.body.classList.add('dark-mode');
-            }
-        } catch (error) {
-            console.error('Could not restore the saved theme preference.', error);
-        }
+        document.body.classList.remove('dark-mode');
     </script>
     <div class="page">
         <main class="guest-page @yield('guest-class')">

@@ -9,9 +9,12 @@
         console.error('Could not restore the saved theme preference.', error);
     }
 
-    document.body.classList.toggle('dark-mode', savedTheme === 'dark');
+    var forceLightTheme = document.body.hasAttribute('data-force-light-theme');
+
+    document.documentElement.classList.toggle('dark-mode', !forceLightTheme && savedTheme === 'dark');
+    document.body.classList.toggle('dark-mode', !forceLightTheme && savedTheme === 'dark');
     document.querySelectorAll('[data-theme-toggle]').forEach(function (button) {
-        button.setAttribute('aria-pressed', String(savedTheme === 'dark'));
+        button.setAttribute('aria-pressed', String(!forceLightTheme && savedTheme === 'dark'));
     });
 
     document.addEventListener('click', function (event) {
@@ -26,6 +29,7 @@
         }
 
         var isDark = !document.body.classList.contains('dark-mode');
+        document.documentElement.classList.toggle('dark-mode', isDark);
         document.body.classList.toggle('dark-mode', isDark);
         document.querySelectorAll('[data-theme-toggle]').forEach(function (toggle) {
             toggle.setAttribute('aria-pressed', String(isDark));

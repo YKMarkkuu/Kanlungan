@@ -23,7 +23,7 @@
         <div class="onboarding__slides" data-onboarding-slides>
             <article class="onboarding__slide is-active" data-onboarding-slide aria-hidden="false">
                 <div class="onboarding__illustration onboarding__illustration--welcome" aria-hidden="true">
-                    @include('components.icon', ['name' => 'home'])
+                    <x-logo />
                 </div>
                 <div class="onboarding__copy">
                     <p class="onboarding__step">01 <span>Welcome</span></p>

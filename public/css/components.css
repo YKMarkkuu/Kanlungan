@@ -224,6 +224,16 @@
     font-weight: 600;
 }
 
+/* ---------- Brand mark (<x-logo />) ---------- */
+
+.kl-logo {
+    display: block;
+    flex: none;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
 .auth-disclaimer {
     font-size: 13px;
     line-height: 1.5;

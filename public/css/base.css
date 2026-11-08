@@ -36,6 +36,7 @@
     --dur-spring: 420ms;
 }
 
+:root.dark-mode,
 body.dark-mode {
     --surface-bg: #121212;
     --surface-card: #1e1e1e;
@@ -44,8 +45,11 @@ body.dark-mode {
     --text-muted: #a0a0a0;
     --border-default: #444444;
     --border-subtle: #333333;
-    --accent-soft: #1a3328;
-    --accent-foreground: #a7d8bd;
+    --accent: #34d399;
+    --accent-dark: #10b981;
+    --accent-soft: #0f291e;
+    --accent-foreground: var(--accent);
+    --accent-on: #052e1b;
 }
 
 /* Real spring curve where supported (iOS 17.4+, modern Chrome); the cubic-bezier above is the fallback. */

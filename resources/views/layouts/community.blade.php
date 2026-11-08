@@ -51,7 +51,7 @@
                             @include('components.icon', ['name' => 'back'])
                         </a>
                     @endif
-                    <a href="{{ route('feed') }}" class="cm-brand">Kanlungan</a>
+                    <a href="{{ route('feed') }}" class="cm-brand"><x-logo />Kanlungan</a>
                 </div>
                 <div class="cm-header__actions">
                     <a href="{{ route('search') }}" class="cm-icon-btn" aria-label="Search">

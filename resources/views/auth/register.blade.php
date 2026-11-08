@@ -1,24 +1,22 @@
 @extends('layouts.guest')
 
 @section('title', 'Create account · Kanlungan')
+@section('body-class', 'auth-page')
+@section('guest-class', 'guest-page--auth')
 
 @section('content')
-    <div class="stack--lg stack" id="register">
-
-        <header class="auth-header">
-            <div class="logo-circle" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M3 11.5 12 4l9 7.5" />
-                    <path d="M5.5 10v9.5h13V10" />
-                    <path d="M10 19.5v-5h4v5" />
-                </svg>
-            </div>
-
-            <h1>Create account</h1>
-            <p class="text-muted">Verify your OLFU student email to join.</p>
+    <div class="auth-shell auth-shell--register" id="register">
+        <header class="auth-brand auth-rise" style="--auth-delay: 40ms">
+            <span class="auth-mark"><x-logo /></span>
+            <span class="auth-wordmark">Kanlungan</span>
         </header>
 
-        <div class="stack--sm stack">
+        <section class="auth-hero auth-hero--compact">
+            <h1 class="auth-title auth-title--sm auth-rise" style="--auth-delay: 120ms">Create account</h1>
+            <p class="auth-lede auth-rise" style="--auth-delay: 190ms">Verify your OLFU student email to join.</p>
+        </section>
+
+        <div class="auth-progress auth-rise" style="--auth-delay: 250ms">
             <div class="steps" aria-hidden="true">
                 <span class="steps__item is-active"></span>
                 <span class="steps__item"></span>
@@ -27,6 +25,7 @@
             <p class="text-small text-muted" id="step-label" aria-live="polite">Step 1 of 3 · Details</p>
         </div>
 
+        <div class="auth-card auth-card--static auth-rise" style="--auth-delay: 320ms">
         {{-- ================= Step 1 — Details ================= --}}
         <section data-step-panel="1" aria-label="Details">
             {{-- Submit is handled by public/js/register.js (fetch to /auth/send-code). --}}
@@ -92,7 +91,7 @@
             </p>
 
             <p class="auth-footer" style="margin-top: 24px;">
-                Already registered? <a href="{{ route('login') }}">Sign in</a>
+                Already registered? <a href="{{ route('login') }}#signin">Sign in</a>
             </p>
         </section>
 
@@ -168,7 +167,7 @@
                 <button type="submit" class="btn btn--primary btn--block" id="create-btn" disabled>Create account</button>
             </form>
         </section>
-
+    </div>
     </div>
 @endsection
 
