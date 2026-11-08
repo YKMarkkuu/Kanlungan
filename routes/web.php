@@ -2,7 +2,6 @@
 
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\OtpController;
-use App\Http\Controllers\DebugMailLogsController;
 use App\Http\Controllers\PageController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Middleware\RejectDeletedAccounts;
@@ -32,10 +31,6 @@ Route::post('/auth/verify-code', [OtpController::class, 'verifyCode'])->middlewa
 Route::post('/auth/register',    [OtpController::class, 'register'])->middleware('throttle:otp-register')->name('auth.register');
 
 Route::post('/auth/login',  [LoginController::class, 'login'])->middleware('throttle:otp-verify')->name('auth.login');
-
-Route::get('/debug-mail-logs', DebugMailLogsController::class)
-    ->middleware('throttle:5,1')
-    ->name('debug.mail-logs');
 
 Route::middleware(['auth', RejectDeletedAccounts::class])->group(function () {
     Route::post('/auth/logout', [LoginController::class, 'logout'])->name('auth.logout');

@@ -35,6 +35,4 @@ return [
         'key' => env('BREVO_API_KEY'),
     ],
 
-    'debug_log_token' => env('DEBUG_LOG_TOKEN'),
-
 ];
