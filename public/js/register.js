@@ -325,6 +325,11 @@
                 return;
             }
 
+            if (res.data && typeof res.data.message === 'string') {
+                report(res.data.message);
+                return;
+            }
+
             report(MSG_GENERIC);
         });
     }

@@ -260,6 +260,11 @@
                 return;
             }
 
+            if (res.data && typeof res.data.message === 'string') {
+                showMessage(banner, res.data.message);
+                return;
+            }
+
             showMessage(banner, MSG_GENERIC);
         });
     }
