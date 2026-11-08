@@ -9,6 +9,7 @@ use App\Http\Requests\Auth\VerifyCodeRequest;
 use App\Models\User;
 use App\Services\OtpService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Auth;
 
 class OtpController extends Controller
 {
@@ -35,16 +36,16 @@ class OtpController extends Controller
     }
 
     /**
-     * Design A: verify the code and create the account in one request.
+     * Design A: verify the code, create the account and log the user in, in one request.
      * No transaction (one insert + one delete). If a unique-key race ever
-     * fires, catch QueryException here later. Does not log the user in.
+     * fires, catch QueryException here later.
      *
      * The terms checkbox is validated before OTP verification, and the server
      * records the timestamp and current terms version.
      *
      * display_name is optional. When blank, name falls back to the email local
-     * part and display_name stays null. On success a flash message is set for
-     * the login page, which the client redirects to.
+     * part and display_name stays null. On success the session is started (same
+     * as LoginController::login) and the client is sent straight to onboarding.
      */
     public function register(RegisterRequest $request): JsonResponse
     {
@@ -70,7 +71,7 @@ class OtpController extends Controller
         // TODO: name column is vestigial; replace or drop once user profiles ship.
         $name = $displayName ?? explode('@', $email)[0];
 
-        User::create([
+        $user = User::create([
             'name' => $name,
             'email' => $email,
             'display_name' => $displayName,
@@ -81,11 +82,18 @@ class OtpController extends Controller
             'terms_version' => config('kanlungan.terms_version'),
         ]);
 
+        // The code is spent; don't allow replay.
         OtpService::invalidate($email);
 
-        // Shown on the login page after the client redirects to /.
-        session()->flash('status', 'Welcome to Kanlungan. Sign in to continue.');
+        // The OTP was just verified, so the student has already proven inbox access.
+        // No "remember me", same as login. Regenerate to prevent session fixation.
+        Auth::login($user, false);
+        $request->session()->regenerate();
 
-        return response()->json(['status' => 'registered'], 201);
+        // has_completed_onboarding defaults to false, so /onboarding will render.
+        return response()->json([
+            'status' => 'registered',
+            'redirect' => route('onboarding'),
+        ], 201);
     }
 }

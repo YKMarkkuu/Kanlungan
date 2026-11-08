@@ -664,11 +664,13 @@
         }).then(function (res) {
             busy = false;
 
-            // Success: the server has flashed the welcome message; the login
-            // page renders it. The button stays in its busy state while the
-            // browser navigates.
+            // Success: the server has created the account and started the session.
+            // Follow its redirect (/onboarding). The button stays in its busy state
+            // while the browser navigates. The fallback only matters if an old
+            // response without `redirect` ever arrives; the guest/auth middleware
+            // sorts out the rest.
             if (res.status === 201 && res.data.status === 'registered') {
-                window.location.href = '/';
+                window.location.href = res.data.redirect || '/onboarding';
                 return;
             }
 

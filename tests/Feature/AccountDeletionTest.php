@@ -303,6 +303,7 @@ class AccountDeletionTest extends TestCase
         $user = User::factory()->create(['email' => $email, 'student_id' => '11111111111']);
 
         $this->deleteAs($user)->assertRedirect('/');
+        $this->assertGuest();
 
         OtpCode::create([
             'email' => $email,
@@ -318,7 +319,10 @@ class AccountDeletionTest extends TestCase
         ])->assertCreated();
 
         $this->assertDatabaseHas('users', ['email' => $email, 'student_id' => '11111111111']);
-        $this->assertNotSame($user->id, User::where('email', $email)->value('id'));
+
+        $newUser = User::where('email', $email)->firstOrFail();
+        $this->assertNotSame($user->id, $newUser->id);
+        $this->assertAuthenticatedAs($newUser);
     }
 
     public function test_tombstones_never_earn_points_or_receive_alerts_again(): void

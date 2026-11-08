@@ -59,7 +59,7 @@ class AuthFlowTest extends TestCase
             ->assertExactJson(['status' => 'locked_out']);
     }
 
-    public function test_register_creates_user_and_reports_duplicate_email_or_student_id(): void
+    public function test_register_creates_user_logs_them_in_and_reports_duplicate_email_or_student_id(): void
     {
         $email = 'student3456pam@student.fatima.edu.ph';
         $studentId = '12345678901';
@@ -71,7 +71,10 @@ class AuthFlowTest extends TestCase
             'student_id' => $studentId,
             'display_name' => 'Test Student',
             'terms' => true,
-        ])->assertCreated()->assertExactJson(['status' => 'registered']);
+        ])->assertCreated()->assertExactJson([
+            'status' => 'registered',
+            'redirect' => route('onboarding'),
+        ]);
 
         $this->assertDatabaseHas('users', [
             'email' => $email,
@@ -82,6 +85,10 @@ class AuthFlowTest extends TestCase
             'terms_version' => config('kanlungan.terms_version'),
         ]);
         $this->assertNotNull(User::where('email', $email)->value('accepted_terms_at'));
+        $this->assertAuthenticatedAs(User::where('email', $email)->firstOrFail());
+        $this->assertSame(0, OtpCode::where('email', $email)->count());
+
+        auth()->logout();
 
         $this->createOtp($email);
         $this->postJson('/auth/register', [
@@ -90,6 +97,7 @@ class AuthFlowTest extends TestCase
             'student_id' => '10987654321',
             'terms' => true,
         ])->assertUnprocessable()->assertExactJson(['status' => 'email_taken']);
+        $this->assertGuest();
 
         $duplicateStudentEmail = 'student4567pam@student.fatima.edu.ph';
         $this->createOtp($duplicateStudentEmail);
@@ -99,6 +107,44 @@ class AuthFlowTest extends TestCase
             'student_id' => $studentId,
             'terms' => true,
         ])->assertUnprocessable()->assertExactJson(['status' => 'student_id_taken']);
+        $this->assertGuest();
+        $this->assertDatabaseMissing('users', ['email' => $duplicateStudentEmail]);
+    }
+
+    public function test_registering_goes_straight_to_onboarding_without_a_second_login(): void
+    {
+        $email = 'student6789pam@student.fatima.edu.ph';
+        $this->createOtp($email);
+
+        $this->postJson('/auth/register', [
+            'email' => $email,
+            'code' => '123456',
+            'student_id' => '34567890123',
+            'terms' => true,
+        ])->assertCreated()->assertSessionMissing('status');
+
+        $this->get('/onboarding')
+            ->assertOk()
+            ->assertSee('Welcome to Kanlungan.');
+
+        $this->post('/onboarding/complete')->assertRedirect(route('feed'));
+        $this->get('/feed')->assertOk();
+    }
+
+    public function test_a_wrong_code_does_not_create_or_log_in_anyone(): void
+    {
+        $email = 'student7890pam@student.fatima.edu.ph';
+        $this->createOtp($email);
+
+        $this->postJson('/auth/register', [
+            'email' => $email,
+            'code' => '654321',
+            'student_id' => '45678901234',
+            'terms' => true,
+        ])->assertOk()->assertExactJson(['status' => 'mismatch']);
+
+        $this->assertGuest();
+        $this->assertDatabaseMissing('users', ['email' => $email]);
     }
 
     public function test_login_authenticates_registered_user_and_reports_unregistered_email(): void

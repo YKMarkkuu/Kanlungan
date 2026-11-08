@@ -43,6 +43,7 @@ class ConsentAndPrivacyTest extends TestCase
         $this->assertDatabaseMissing('users', ['email' => $email]);
         $this->assertNotNull($otp->fresh());
         $this->assertSame(0, $otp->fresh()->attempts);
+        $this->assertGuest();
     }
 
     public function test_registration_records_server_side_terms_version_and_time(): void
@@ -61,6 +62,7 @@ class ConsentAndPrivacyTest extends TestCase
         $user = User::where('email', $email)->firstOrFail();
         $this->assertSame(config('kanlungan.terms_version'), $user->terms_version);
         $this->assertNotNull($user->accepted_terms_at);
+        $this->assertAuthenticatedAs($user);
     }
 
     public function test_rules_and_privacy_are_public_and_up_to_date(): void
