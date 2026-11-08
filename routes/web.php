@@ -6,7 +6,6 @@ use App\Http\Controllers\DebugMailLogsController;
 use App\Http\Controllers\PageController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Middleware\RejectDeletedAccounts;
-use App\Http\Middleware\RequireRole;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -34,11 +33,11 @@ Route::post('/auth/register',    [OtpController::class, 'register'])->middleware
 
 Route::post('/auth/login',  [LoginController::class, 'login'])->middleware('throttle:otp-verify')->name('auth.login');
 
-Route::middleware(['auth', RejectDeletedAccounts::class])->group(function () {
-    Route::get('/debug-mail-logs', DebugMailLogsController::class)
-        ->middleware(RequireRole::class.':admin,moderator')
-        ->name('debug.mail-logs');
+Route::get('/debug-mail-logs', DebugMailLogsController::class)
+    ->middleware('throttle:5,1')
+    ->name('debug.mail-logs');
 
+Route::middleware(['auth', RejectDeletedAccounts::class])->group(function () {
     Route::post('/auth/logout', [LoginController::class, 'logout'])->name('auth.logout');
     Route::get('/home', [LoginController::class, 'home'])->name('home');
     Route::get('/onboarding', [LoginController::class, 'onboarding'])->name('onboarding');

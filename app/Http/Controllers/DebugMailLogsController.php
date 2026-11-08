@@ -3,24 +3,36 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class DebugMailLogsController extends Controller
 {
     private const MAX_BYTES = 262144;
     private const MAX_ENTRIES = 20;
 
-    public function __invoke(): JsonResponse
+    public function __invoke(Request $request): JsonResponse
     {
+        $configuredToken = config('services.debug_log_token');
+        $providedToken = $request->query('token');
+
+        abort_unless(
+            is_string($configuredToken)
+            && $configuredToken !== ''
+            && is_string($providedToken)
+            && hash_equals($configuredToken, $providedToken),
+            403
+        );
+
         $path = storage_path('logs/laravel.log');
 
         if (! is_file($path)) {
-            return response()->json(['message' => 'The application log is not available.'], 404);
+            return $this->response(['message' => 'The application log is not available.'], 404);
         }
 
         $file = fopen($path, 'rb');
 
         if ($file === false) {
-            return response()->json(['message' => 'The application log is not readable.'], 503);
+            return $this->response(['message' => 'The application log is not readable.'], 503);
         }
 
         $size = filesize($path);
@@ -28,7 +40,7 @@ class DebugMailLogsController extends Controller
         if ($size === false || fseek($file, max(0, $size - self::MAX_BYTES)) !== 0) {
             fclose($file);
 
-            return response()->json(['message' => 'The application log could not be read.'], 503);
+            return $this->response(['message' => 'The application log could not be read.'], 503);
         }
 
         if ($size > self::MAX_BYTES) {
@@ -45,8 +57,17 @@ class DebugMailLogsController extends Controller
 
         fclose($file);
 
-        return response()->json([
+        return $this->response([
+            'notice' => 'Temporary diagnostic endpoint. Remove it after debugging.',
             'errors' => array_reverse(array_slice($entries, -self::MAX_ENTRIES)),
+        ]);
+    }
+
+    private function response(array $data, int $status = 200): JsonResponse
+    {
+        return response()->json($data, $status)->withHeaders([
+            'Cache-Control' => 'no-store, private',
+            'Referrer-Policy' => 'no-referrer',
         ]);
     }
 

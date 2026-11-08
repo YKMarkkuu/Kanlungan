@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Tests\TestCase;
@@ -11,12 +10,19 @@ class DebugMailLogsTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_debug_mail_logs_requires_admin_or_moderator_role(): void
+    public function test_debug_mail_logs_requires_a_configured_matching_token(): void
     {
-        $this->get('/debug-mail-logs')->assertRedirect(route('login'));
+        config(['services.debug_log_token' => 'test-debug-token']);
 
-        $student = User::factory()->create();
-        $this->actingAs($student)->get('/debug-mail-logs')->assertForbidden();
+        $this->get('/debug-mail-logs')->assertForbidden();
+        $this->get('/debug-mail-logs?token=wrong-token')->assertForbidden();
+    }
+
+    public function test_debug_mail_logs_is_denied_when_no_token_is_configured(): void
+    {
+        config(['services.debug_log_token' => null]);
+
+        $this->get('/debug-mail-logs?token=anything')->assertForbidden();
     }
 
     public function test_debug_mail_logs_returns_recent_mail_errors_with_sensitive_values_redacted(): void
@@ -33,11 +39,12 @@ class DebugMailLogsTest extends TestCase
                 '[2026-11-08 10:02:00] production.ERROR: Mail failed: Sender not verified',
             ]));
 
-            $admin = User::factory()->create(['role' => 'admin']);
+            config(['services.debug_log_token' => 'test-debug-token']);
 
-            $this->actingAs($admin)->getJson('/debug-mail-logs')
+            $this->getJson('/debug-mail-logs?token=test-debug-token')
                 ->assertOk()
                 ->assertExactJson([
+                    'notice' => 'Temporary diagnostic endpoint. Remove it after debugging.',
                     'errors' => [
                         '[2026-11-08 10:02:00] production.ERROR: Mail failed: Sender not verified',
                         '[2026-11-08 10:01:00] production.ERROR: Mail failed: Unauthorized for [REDACTED_EMAIL] key=[REDACTED_SECRET] code=[REDACTED_CODE]',
