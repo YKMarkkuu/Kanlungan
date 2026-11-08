@@ -37,9 +37,11 @@
             <input type="hidden" name="parent_id" id="parent-id" value="">
             <input type="hidden" name="anonymous" id="anon-field" value="1">
 
-            <p class="text-small text-muted cm-composer__reply" id="reply-note" hidden>
-                <span id="reply-name"></span>
-                <button type="button" class="link-btn" id="reply-cancel">Cancel</button>
+            <p class="cm-composer__reply" id="reply-note" role="status" hidden>
+                <span class="cm-composer__reply-text" id="reply-name"></span>
+                <button type="button" class="cm-icon-btn cm-composer__reply-cancel" id="reply-cancel" aria-label="Cancel reply" title="Cancel reply">
+                    @include('components.icon', ['name' => 'close'])
+                </button>
             </p>
             @error('body') <p class="field__error">{{ $message }}</p> @enderror
             <p class="field__error" id="comment-error" role="alert" aria-live="polite" hidden></p>

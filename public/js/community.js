@@ -1746,6 +1746,7 @@
         var postBtn = document.getElementById('post-btn');
         var anon = document.getElementById('anonymous');
         var anonHint = document.getElementById('anon-hint');
+        var composeRow = postForm.querySelector('.cm-compose__row');
         var marketFields = document.querySelector('[data-market-fields]');
         var conditionInput = document.getElementById('condition');
         var marketNameHint = document.getElementById('market-name-hint');
@@ -1776,6 +1777,8 @@
         };
 
         var syncAnon = function () {
+            composeRow.classList.toggle('is-anonymous', anon.checked);
+
             if (marketOn) {
                 anonHint.textContent = postForm.getAttribute('data-has-name') === '1'
                     ? 'Listings always show your display name.'
@@ -2476,6 +2479,10 @@
             commentViewport.addEventListener('resize', syncCommentKeyboard);
             commentViewport.addEventListener('scroll', syncCommentKeyboard);
         }
+
+        toggle.addEventListener('pointerdown', function (event) {
+            event.preventDefault();
+        });
 
         toggle.addEventListener('click', function () {
             var on = anonField.value !== '1';

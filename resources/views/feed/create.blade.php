@@ -66,7 +66,10 @@
 
         <div class="cm-compose cm-compose--canvas cm-animate-in" style="--cm-delay: 50ms">
             <div class="cm-compose__row">
-                <x-avatar :avatar-path="auth()->user()->avatar_path" :name="auth()->user()->display_name" class="cm-compose__avatar" />
+                <x-avatar :avatar-path="auth()->user()->avatar_path" :name="auth()->user()->display_name" class="cm-compose__avatar cm-compose__avatar--user" data-compose-avatar-user />
+                <span class="cm-avatar cm-compose__avatar cm-compose__avatar--anonymous" data-compose-avatar-anonymous aria-hidden="true">
+                    @include('components.icon', ['name' => 'mask'])
+                </span>
 
                 <div class="cm-compose__main">
                     <p class="text-small text-muted cm-compose__as" id="anon-hint"></p>
