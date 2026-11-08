@@ -110,9 +110,6 @@
                 <a class="cm-settings-item" href="{{ route('page.help') }}">Help</a>
                 <button type="button" class="cm-settings-item" data-theme-toggle aria-pressed="false">Dark Mode <span class="cm-toggle-switch" aria-hidden="true"></span></button>
                 <button type="button" class="cm-settings-item" data-restart-onboarding>How Kanlungan works</button>
-                @if (in_array($role, ['moderator', 'admin', 'guidance'], true))
-                    <a class="cm-settings-item" href="{{ route('moderation') }}">Moderation queue</a>
-                @endif
             </div>
         </section>
 

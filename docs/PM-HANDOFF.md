@@ -160,4 +160,19 @@ Next Session:
 - **Notifications UI:** Build the visual bell/dropdown for alerts.
 - **Profile Avatars:** Add actual image uploads for user avatars.
 - **PWA Setup:** Service worker, manifest, install prompt.
-- **Guidance Case Files:** Dashboard for Guidance staff.
+- ~~Guidance Case Files~~ Done: see the staff dashboard section below.
+
+
+# PM Session Handoff
+
+Last updated: 2026-10-22 (staff dashboard)
+
+## Staff dashboard: DONE — see `docs/STAFF-DASHBOARD.md`
+- `/staff` for admin and guidance: overview, reports queue, case page, restricted accounts, audit log. Own sign-in at `/staff/login`; accounts made with `php artisan staff:create`.
+- Staff only see reported content, under aliases. Reveal (admin/guidance/dpo) needs a reason, is logged, and is shown for 30 minutes to the revealer only.
+- Staff are blocked from student pages (`StudentsOnly`); students are blocked from `/staff`.
+- New report reasons: Sexual content, Profanity.
+- Guidance can now decide (not just mark handled): `ModerationService::GUIDANCE_CAN_DECIDE`.
+- Tests: 147 passing on MySQL and PostgreSQL (28 in `StaffDashboardTest`). Existing `ModerationFlowTest` updated for the new URLs and privacy rules (staff no longer see the reporter's name).
+- Closed debt: `User` casts for `muted_until` / `banned_at` / `points`. "Guidance tab reachable by URL for moderators" no longer applies (old tabs removed).
+- Dead code removed: `ModerationController`, `moderation/index.blade.php`, `ModerationService::queue/history/card`.

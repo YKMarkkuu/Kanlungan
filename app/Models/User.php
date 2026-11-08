@@ -49,6 +49,10 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
         'verified_at' => 'datetime',
+        'muted_until' => 'datetime',
+        'banned_at' => 'datetime',
+        'points' => 'integer',
+        'warnings_count' => 'integer',
         'accepted_terms_at' => 'datetime',
         'deleted_at' => 'datetime',
         'has_completed_onboarding' => 'boolean',

@@ -58,6 +58,11 @@ class LoginController extends Controller
 
     public function home(Request $request): RedirectResponse
     {
+        // Staff (admin / guidance / moderator) never use the student app: they go to their own dashboard.
+        if (in_array($request->user()->role, \App\Services\ModerationService::STAFF, true)) {
+            return redirect()->route('staff.dashboard');
+        }
+
         return redirect()->route($request->user()->has_completed_onboarding ? 'feed' : 'onboarding');
     }
 

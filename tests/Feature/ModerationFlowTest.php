@@ -284,8 +284,8 @@ class ModerationFlowTest extends TestCase
         // Removed post is gone from the feed.
         $this->actingAs($reporter)->get('/feed')->assertDontSee('BAD-POST');
         // Guidance sees it, a student does not get in.
-        $this->actingAs($guidance)->get('/moderation')->assertOk()->assertSee('BAD-POST');
-        $this->actingAs($reporter)->get('/moderation')->assertForbidden();
+        $this->actingAs($guidance)->get('/staff/reports?view=referred')->assertOk()->assertSee('BAD-POST');
+        $this->actingAs($reporter)->get('/staff/reports')->assertForbidden();
     }
 
     public function test_agree_without_many_votes_is_not_referred_to_guidance(): void
@@ -334,7 +334,7 @@ class ModerationFlowTest extends TestCase
         $moderatorReport = Report::latest('id')->firstOrFail();
 
         $this->actingAs($moderator)
-            ->post("/moderation/{$moderatorReport->id}", ['action' => 'remove', 'reason' => 'Remove harmful content'])
+            ->post("/staff/reports/{$moderatorReport->id}/act", ['action' => 'remove', 'reason' => 'Remove harmful content'])
             ->assertSessionHasNoErrors();
 
         $this->assertNotNull($moderatorPost->fresh()->removed_at);
@@ -363,14 +363,15 @@ class ModerationFlowTest extends TestCase
         // Back to normal: no red glow, still in the feed.
         $this->actingAs($author)->get('/feed')->assertSee('FINE-POST')->assertDontSee('cm-reported');
 
-        // Moderator sees the reporter, must give a reason, then can warn them.
-        $this->actingAs($mod)->get('/moderation')->assertOk()
-            ->assertSee('Rita Reporter')
-            ->assertSee('False report')
+        // Staff judge the reporter without being told who it is, must give a reason, then can warn them.
+        $this->actingAs($mod)->get("/staff/reports/{$report->id}")->assertOk()
+            ->assertSee('Possible false report')
+            ->assertSee('The student who reported this')
+            ->assertDontSee('Rita Reporter')
             ->assertDontSee('Rita Legal Name')
             ->assertDontSee($reporter->email);
-        $this->actingAs($mod)->post("/moderation/{$report->id}", ['action' => 'warn', 'reason' => ''])->assertSessionHasErrors('reason');
-        $this->actingAs($mod)->post("/moderation/{$report->id}", ['action' => 'warn', 'reason' => 'Do not file false reports.'])->assertSessionHasNoErrors();
+        $this->actingAs($mod)->post("/staff/reports/{$report->id}/act", ['action' => 'warn', 'reason' => ''])->assertSessionHasErrors('reason');
+        $this->actingAs($mod)->post("/staff/reports/{$report->id}/act", ['action' => 'warn', 'reason' => 'Do not file false reports.'])->assertSessionHasNoErrors();
 
         $this->assertSame(1, (int) User::find($reporter->id)->warnings_count);
         $this->assertSame('reviewed', $report->fresh()->mod_status);
@@ -435,9 +436,13 @@ class ModerationFlowTest extends TestCase
         $this->actingAs(User::factory()->create())->post("/reports/{$report->id}/vote", ['choice' => 'agree'])
             ->assertSessionHasErrors('report');
 
-        $this->actingAs($mod)->get('/moderation')->assertOk()->assertSee('WORRYING-POST')->assertSee('Critical')->assertSee('sounds serious')->assertSee('Refer to Guidance');
-        $this->actingAs($mod)->get('/moderation')->assertDontSee('vote still escalated');
-        $this->actingAs($mod)->get('/moderation?severity=medium')->assertDontSee('WORRYING-POST');
+        $report = Report::firstOrFail();
+
+        $this->actingAs($mod)->get('/staff/reports')->assertOk()->assertSee('WORRYING-POST')->assertSee('Critical');
+        $this->actingAs($mod)->get("/staff/reports/{$report->id}")->assertOk()->assertSee('sounds serious')->assertSee('Refer to Guidance');
+        $this->actingAs($mod)->get('/staff/reports?severity=medium')->assertDontSee('WORRYING-POST');
+        // A safety report goes straight to staff; it is never shown as waiting for a community vote.
+        $this->actingAs($mod)->get("/staff/reports/{$report->id}")->assertDontSee('The community is still voting');
     }
 
     public function test_critical_reports_are_ordered_before_the_queue_limit(): void
@@ -468,10 +473,11 @@ class ModerationFlowTest extends TestCase
             'mod_subject' => 'content',
         ]);
 
-        $queue = app(\App\Services\ModerationService::class)->queue('queue', null);
+        $page = app(\App\Services\StaffDashboardService::class)->list('review', null, null);
 
-        $this->assertCount(100, $queue);
-        $this->assertSame($criticalReport->id, $queue->first()['id']);
+        // First page is full, and the critical report (created last) is still on top of it.
+        $this->assertCount(15, $page->items());
+        $this->assertSame($criticalReport->id, $page->items()[0]['id']);
     }
 
     public function test_dismiss_resolves_report_and_prevents_community_resolution(): void
@@ -496,7 +502,7 @@ class ModerationFlowTest extends TestCase
         }
 
         $this->actingAs($moderator)
-            ->post("/moderation/{$report->id}", ['action' => 'dismiss', 'reason' => 'No violation found'])
+            ->post("/staff/reports/{$report->id}/act", ['action' => 'dismiss', 'reason' => 'No violation found'])
             ->assertSessionHasNoErrors();
 
         $report = $report->fresh();
@@ -519,7 +525,7 @@ class ModerationFlowTest extends TestCase
         $this->assertNull($post->fresh()->removed_at);
     }
 
-    public function test_moderator_can_refer_remove_and_restore_and_guidance_can_mark_handled(): void
+    public function test_moderator_can_refer_remove_and_guidance_can_mark_handled(): void
     {
         $author = User::factory()->create();
         $reporter = User::factory()->create();
@@ -530,21 +536,21 @@ class ModerationFlowTest extends TestCase
         $this->actingAs($reporter)->post("/report/post/{$post->id}", ['category' => 'Threats']);
         $report = Report::firstOrFail();
 
-        $this->actingAs($mod)->post("/moderation/{$report->id}", ['action' => 'refer', 'reason' => 'Possible danger'])->assertSessionHasNoErrors();
+        $this->actingAs($mod)->post("/staff/reports/{$report->id}/act", ['action' => 'refer', 'reason' => 'Possible danger'])->assertSessionHasNoErrors();
         $this->assertNotNull($report->fresh()->referred_guidance_at);
         $this->assertTrue(Alert::where('user_id', $guidance->id)->exists());
 
-        $this->actingAs($mod)->post("/moderation/{$report->id}", ['action' => 'remove', 'reason' => 'Threat'])->assertSessionHasNoErrors();
+        $this->actingAs($mod)->post("/staff/reports/{$report->id}/act", ['action' => 'remove', 'reason' => 'Threat'])->assertSessionHasNoErrors();
         $this->assertNotNull($post->fresh()->removed_at);
         $this->assertSame('moderator', $post->fresh()->removed_by);
 
-        // Guidance can only mark handled, not remove/ban.
-        $this->actingAs($guidance)->post("/moderation/{$report->id}", ['action' => 'ban', 'reason' => 'nope'])->assertSessionHasErrors('report');
-        $this->actingAs($guidance)->post("/moderation/{$report->id}", ['action' => 'handled', 'reason' => 'Student contacted'])->assertSessionHasNoErrors();
+        // Only admin / guidance can close out a referred case, not a moderator.
+        $this->actingAs($mod)->post("/staff/reports/{$report->id}/act", ['action' => 'handled', 'reason' => 'nope'])->assertSessionHasErrors('report');
+        $this->actingAs($guidance)->post("/staff/reports/{$report->id}/act", ['action' => 'handled', 'reason' => 'Student contacted'])->assertSessionHasNoErrors();
         $this->assertNotNull($report->fresh()->guidance_handled_at);
 
-        // History lists every action with its reason.
-        $this->actingAs($mod)->get('/moderation?tab=history')->assertSee('Possible danger')->assertSee('Student contacted');
+        // The audit log lists every action with its reason.
+        $this->actingAs($mod)->get('/staff/activity')->assertSee('Possible danger')->assertSee('Student contacted');
     }
 
     public function test_moderator_cannot_restore_a_post_deleted_by_its_author(): void
@@ -562,7 +568,7 @@ class ModerationFlowTest extends TestCase
         $removedAt = $post->fresh()->removed_at;
         $this->assertSame('author', $post->fresh()->removed_by);
 
-        $this->actingAs($moderator)->post("/moderation/{$report->id}", [
+        $this->actingAs($moderator)->post("/staff/reports/{$report->id}/act", [
             'action' => 'restore',
             'reason' => 'Reviewing the reported content',
         ])->assertSessionHasErrors('report');
@@ -589,13 +595,13 @@ class ModerationFlowTest extends TestCase
             'mod_subject' => 'content',
         ]);
 
-        $this->actingAs($moderator)->get('/moderation')
+        $this->actingAs($moderator)->get("/staff/reports/{$report->id}")
             ->assertOk()
-            ->assertSee('Override Category (if reporter chose wrong)')
-            ->assertSee('value="Spam" selected', false)
+            ->assertSee('Reason category (change it if the reporter chose wrong)')
+            ->assertSee('value="Spam"', false)
             ->assertSee('value="Self-harm"', false);
 
-        $this->actingAs($moderator)->post("/moderation/{$report->id}", [
+        $this->actingAs($moderator)->post("/staff/reports/{$report->id}/act", [
             'action' => 'refer',
             'reason' => 'Safety review needed',
             'override_category' => 'Self-harm',
@@ -608,7 +614,7 @@ class ModerationFlowTest extends TestCase
         $this->assertNull($report->fresh()->voting_ends_at);
         $this->assertTrue(Alert::where('user_id', $guidance->id)->where('body', 'A post reported for Self-harm was referred to Guidance.')->exists());
 
-        $this->actingAs($moderator)->post("/moderation/{$report->id}", [
+        $this->actingAs($moderator)->post("/staff/reports/{$report->id}/act", [
             'action' => 'remove',
             'reason' => 'Connect the student with support',
         ])->assertSessionHasNoErrors();
@@ -623,7 +629,7 @@ class ModerationFlowTest extends TestCase
         $this->actingAs($reporter)->get(route('alerts'))->assertSee('Reviewed by Moderator');
     }
 
-    public function test_admin_can_unmask_reporter_or_content_author_and_the_action_is_logged(): void
+    public function test_admin_can_reveal_reporter_or_content_author_and_the_action_is_logged(): void
     {
         $author = User::factory()->create();
         $reporter = User::factory()->create();
@@ -637,9 +643,9 @@ class ModerationFlowTest extends TestCase
         );
 
         $this->actingAs($admin)
-            ->post("/moderation/{$falseReport->id}/unmask", ['reason' => 'Privacy investigation'])
-            ->assertSessionHas('report_status', "Identity unmasked: {$reporter->email}")
-            ->assertDontSee($reporter->email);
+            ->post("/staff/reports/{$falseReport->id}/reveal", ['reason' => 'Privacy investigation'])
+            ->assertSessionHas('staff_status');
+        $this->actingAs($admin)->get("/staff/reports/{$falseReport->id}")->assertSee($reporter->email);
 
         $this->assertDatabaseHas('mod_actions', [
             'report_id' => $falseReport->id,
@@ -656,9 +662,9 @@ class ModerationFlowTest extends TestCase
         $contentReport = Report::latest('id')->firstOrFail();
 
         $this->actingAs($admin)
-            ->post("/moderation/{$contentReport->id}/unmask", ['reason' => 'Safety investigation'])
-            ->assertSessionHas('report_status', "Identity unmasked: {$contentAuthor->email}")
-            ->assertDontSee($contentAuthor->email);
+            ->post("/staff/reports/{$contentReport->id}/reveal", ['reason' => 'Safety investigation'])
+            ->assertSessionHas('staff_status');
+        $this->actingAs($admin)->get("/staff/reports/{$contentReport->id}")->assertSee($contentAuthor->email);
 
         $this->assertDatabaseHas('mod_actions', [
             'report_id' => $contentReport->id,
@@ -709,16 +715,17 @@ class ModerationFlowTest extends TestCase
             'mod_subject' => 'content',
         ]);
 
-        $this->actingAs($moderator)->get('/moderation')
-            ->assertOk()
-            ->assertSee('Unmute')
-            ->assertSee('Unban');
+        $this->actingAs($moderator)->get("/staff/reports/{$mutedReport->id}")->assertOk()->assertSee('Unmute');
+        $this->actingAs($moderator)->get("/staff/reports/{$bannedReport->id}")->assertOk()->assertSee('Unban');
+        $this->actingAs($moderator)->get('/staff/sanctions')->assertOk()
+            ->assertSee(app(\App\Services\StaffDashboardService::class)->accountRef($mutedUser->id))
+            ->assertSee(app(\App\Services\StaffDashboardService::class)->accountRef($bannedUser->id));
 
         $this->actingAs($moderator)
-            ->post("/moderation/{$mutedReport->id}", ['action' => 'unmute', 'reason' => 'Mute no longer needed'])
+            ->post("/staff/reports/{$mutedReport->id}/act", ['action' => 'unmute', 'reason' => 'Mute no longer needed'])
             ->assertSessionHasNoErrors();
         $this->actingAs($moderator)
-            ->post("/moderation/{$bannedReport->id}", ['action' => 'unban', 'reason' => 'Ban no longer needed'])
+            ->post("/staff/reports/{$bannedReport->id}/act", ['action' => 'unban', 'reason' => 'Ban no longer needed'])
             ->assertSessionHasNoErrors();
 
         $this->assertNull($mutedUser->fresh()->muted_until);
@@ -855,7 +862,8 @@ class ModerationFlowTest extends TestCase
         $this->actingAs($user)->get('/privacy')->assertOk();
         $this->actingAs($user)->get('/help')->assertOk()->assertSee('1553');
         $this->actingAs($user)->get('/me')->assertDontSee('Moderation queue');
-        $this->actingAs(User::factory()->create(['role' => 'moderator']))->get('/me')->assertSee('Moderation queue');
+        // Staff do not use the student app: they are sent to their own dashboard.
+        $this->actingAs(User::factory()->create(['role' => 'moderator']))->get('/me')->assertRedirect(route('staff.dashboard'));
     }
 
     public function test_profile_shows_five_point_history_rows_and_full_history_has_its_own_page(): void

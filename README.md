@@ -31,7 +31,7 @@ Kanlungan is a web app (PWA) where enrolled OLFU Pampanga students can ask for h
 - **Anonymous-optional** — you choose per post/comment whether to show your name.
 - **Moderated** — community voting handles standard reports; self-harm and threat reports go directly to moderators.
 - **Purposeful points** — Helpful reactions and accepted answers earn points only on Ask, Help, and Academic posts. Helpful points are capped at 50 per day (Asia/Manila); Likes are cosmetic.
-- **Accountable** — anonymous to peers, but the system still records the author for safety and legal reasons. Unmasking requires an admin/DPO with a logged reason.
+- **Accountable** — anonymous to peers, but the system still records the author for safety and legal reasons. Unmasking (admin, guidance or DPO) needs a logged reason.
 - **Local-first** — built for the OLFU Pampanga campus community.
 
 ## What this is not
@@ -260,11 +260,11 @@ Roles are managed with spatie/laravel-permission. Planned roles:
 Role	Can do
 student	Post, comment, react, report
 moderator	Review reports, hide/remove content, warn/mute
-guidance	View referred case files only
+guidance	Decide on reported posts/comments; reveal identities with a logged reason
 admin	Manage users, roles, categories, all moderation actions
 dpo	Unmask identities with logged reason, audit access
 
-Rule: Unmasking a user requires the dpo or admin role and a required reason. Every unmask is written to an audit log.
+Rule: Unmasking a user requires the admin, guidance or dpo role and a required reason. See docs/STAFF-DASHBOARD.md. Every unmask is written to an audit log.
 Environment variables
 
 .env is gitignored. When you add a new required key, also add it to .env.example (without the real value) so teammates know to set it.

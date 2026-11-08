@@ -275,12 +275,12 @@ class AccountDeletionTest extends TestCase
             'mod_subject' => 'content',
         ]);
 
-        $this->actingAs($admin)->get(route('moderation'))->assertOk()
+        $this->actingAs($admin)->get(route('staff.case', $report))->assertOk()
             ->assertSee('name="action" value="dismiss"', false)
             ->assertDontSee('name="action" value="warn"', false)
             ->assertDontSee('name="action" value="restore"', false);
 
-        $this->actingAs($admin)->post(route('moderation.unmask', $report), [
+        $this->actingAs($admin)->post(route('staff.reveal', $report), [
             'reason' => 'privacy review',
         ])->assertSessionHasErrors('report');
     }

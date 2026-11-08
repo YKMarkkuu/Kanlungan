@@ -5,6 +5,7 @@ use App\Http\Controllers\Auth\OtpController;
 use App\Http\Controllers\PageController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Middleware\RejectDeletedAccounts;
+use App\Http\Middleware\StudentsOnly;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -35,9 +36,9 @@ Route::post('/auth/login',  [LoginController::class, 'login'])->middleware('thro
 Route::middleware(['auth', RejectDeletedAccounts::class])->group(function () {
     Route::post('/auth/logout', [LoginController::class, 'logout'])->name('auth.logout');
     Route::get('/home', [LoginController::class, 'home'])->name('home');
-    Route::get('/onboarding', [LoginController::class, 'onboarding'])->name('onboarding');
-    Route::post('/onboarding/complete', [LoginController::class, 'completeOnboarding'])->name('onboarding.complete');
-    Route::post('/onboarding/restart', [ProfileController::class, 'restartOnboarding'])->name('onboarding.restart');
+    Route::get('/onboarding', [LoginController::class, 'onboarding'])->middleware(StudentsOnly::class)->name('onboarding');
+    Route::post('/onboarding/complete', [LoginController::class, 'completeOnboarding'])->middleware(StudentsOnly::class)->name('onboarding.complete');
+    Route::post('/onboarding/restart', [ProfileController::class, 'restartOnboarding'])->middleware(StudentsOnly::class)->name('onboarding.restart');
 
     Route::post('/me/delete', [ProfileController::class, 'destroyAccount'])
         ->middleware('throttle:3,1,account-delete')
@@ -45,3 +46,5 @@ Route::middleware(['auth', RejectDeletedAccounts::class])->group(function () {
 
     require __DIR__.'/community.php';
 });
+
+require __DIR__.'/staff.php';
