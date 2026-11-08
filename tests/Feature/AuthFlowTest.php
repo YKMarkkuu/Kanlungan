@@ -6,7 +6,9 @@ use App\Models\OtpCode;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Symfony\Component\Mailer\Exception\TransportException;
 use Tests\TestCase;
 
 class AuthFlowTest extends TestCase
@@ -33,6 +35,33 @@ class AuthFlowTest extends TestCase
 
         $this->postJson('/auth/send-code', ['email' => $limitedEmail])
             ->assertStatus(429);
+    }
+
+    public function test_send_code_reports_delivery_failure_and_keeps_generated_otp(): void
+    {
+        $email = 'student8765pam@student.fatima.edu.ph';
+        $mailer = \Mockery::mock();
+        $mailer->shouldReceive('send')
+            ->once()
+            ->andThrow(new TransportException('Mail transport unavailable'));
+
+        Mail::shouldReceive('to')
+            ->once()
+            ->with($email)
+            ->andReturn($mailer);
+
+        Log::shouldReceive('error')
+            ->once()
+            ->with('OTP email delivery failed.', \Mockery::on(function (array $context): bool {
+                return isset($context['exception'])
+                    && $context['exception'] instanceof TransportException;
+            }));
+
+        $this->postJson('/auth/send-code', ['email' => $email])
+            ->assertStatus(503)
+            ->assertExactJson(['status' => 'delivery_failed']);
+
+        $this->assertDatabaseHas('otp_codes', ['email' => $email]);
     }
 
     public function test_verify_code_returns_ok_or_mismatch_and_counts_wrong_attempts_until_locked_out(): void

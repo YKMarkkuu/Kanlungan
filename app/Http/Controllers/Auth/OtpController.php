@@ -16,7 +16,9 @@ class OtpController extends Controller
     public function sendCode(SendCodeRequest $request): JsonResponse
     {
         // Email is already trimmed + lowercased by prepareForValidation().
-        OtpService::send($request->validated('email'));
+        if (! OtpService::send($request->validated('email'))) {
+            return response()->json(['status' => 'delivery_failed'], 503);
+        }
 
         return response()->json(['status' => 'sent'], 200);
     }

@@ -5,7 +5,9 @@ namespace App\Services;
 use App\Mail\OtpCodeMail;
 use App\Models\OtpCode;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 
 /**
  * Thin wrapper around OtpCode for sending and checking email codes.
@@ -21,13 +23,23 @@ class OtpService
     /**
      * Generate a fresh OTP for the email and mail it.
      */
-    public static function send(string $email): void
+    public static function send(string $email): bool
     {
         $email = self::normalize($email);
 
         $generated = OtpCode::generateForEmail($email);
 
-        Mail::to($email)->send(new OtpCodeMail($generated['plain'], $email));
+        try {
+            Mail::to($email)->send(new OtpCodeMail($generated['plain'], $email));
+        } catch (TransportExceptionInterface $exception) {
+            Log::error('OTP email delivery failed.', [
+                'exception' => $exception,
+            ]);
+
+            return false;
+        }
+
+        return true;
     }
 
     /**
