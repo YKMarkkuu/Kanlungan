@@ -30,6 +30,10 @@ RUN composer install --no-dev --optimize-autoloader --no-interaction \
 COPY start.sh /var/www/html/start.sh
 RUN chmod +x start.sh
 
+RUN mkdir -p /var/www/html/public/uploads/avatars /var/www/html/public/uploads/posts \
+    && chown -R www-data:www-data /var/www/html/public/uploads \
+    && chmod -R 775 /var/www/html/public/uploads
+
 EXPOSE 80
 
 CMD ["/bin/bash", "start.sh"]
