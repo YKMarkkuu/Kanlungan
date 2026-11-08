@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Post;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
@@ -15,6 +16,8 @@ use RuntimeException;
  */
 class ImageService
 {
+    private const SUPPORTED_MIMES = ['image/jpeg', 'image/png', 'image/webp'];
+
     private const MAX_EDGE = 1600;
 
     /** getimagesize() reads only the header, so this check happens before GD allocates ~4 bytes per pixel. */
@@ -30,9 +33,7 @@ class ImageService
      */
     public function storePostPhoto(UploadedFile $file): array
     {
-        if (! extension_loaded('gd')) {
-            throw ValidationException::withMessages(['photos' => 'Photos are not available on this server (PHP GD is missing).']);
-        }
+        $this->ensureGdAvailable('photos');
 
         $source = $file->getRealPath();
 
@@ -40,12 +41,7 @@ class ImageService
             throw ValidationException::withMessages(['photos' => 'That file could not be read.']);
         }
 
-        $info = @getimagesize($source);
-
-        if ($info === false) {
-            throw ValidationException::withMessages(['photos' => 'That file is not a valid image.']);
-        }
-
+        $info = $this->imageInfo($source, 'photos');
         if ($info[0] * $info[1] > self::MAX_SOURCE_PIXELS) {
             throw ValidationException::withMessages(['photos' => 'That photo has too many pixels to process. Try a smaller one.']);
         }
@@ -126,9 +122,7 @@ class ImageService
 
     public function storeAvatar(UploadedFile $file): string
     {
-        if (! extension_loaded('gd')) {
-            throw ValidationException::withMessages(['avatar' => 'Photo uploads are not available on this server (PHP GD is missing).']);
-        }
+        $this->ensureGdAvailable('avatar');
 
         $path = $file->getRealPath();
 
@@ -136,6 +130,7 @@ class ImageService
             throw ValidationException::withMessages(['avatar' => 'That file could not be read.']);
         }
 
+        $this->imageInfo($path, 'avatar');
         $image = @imagecreatefromstring((string) file_get_contents($path));
 
         if ($image === false) {
@@ -198,6 +193,35 @@ class ImageService
         }
 
         return 'uploads/avatars/'.$name;
+    }
+
+    /**
+     * @return array{0: int, 1: int, 2: int, 'mime': string}
+     */
+    private function imageInfo(string $path, string $attribute): array
+    {
+        $info = @getimagesize($path);
+
+        if ($info === false || ! in_array($info['mime'] ?? null, self::SUPPORTED_MIMES, true)) {
+            throw ValidationException::withMessages([$attribute => 'Please choose a valid JPG, PNG or WebP image.']);
+        }
+
+        return $info;
+    }
+
+    private function ensureGdAvailable(string $attribute): void
+    {
+        if (extension_loaded('gd')) {
+            return;
+        }
+
+        Log::error('Image upload unavailable: PHP GD extension is missing.');
+
+        $message = $attribute === 'photos'
+            ? 'Photos are temporarily unavailable. Please try again later.'
+            : 'Photo uploads are temporarily unavailable. Please try again later.';
+
+        throw ValidationException::withMessages([$attribute => $message]);
     }
 
     public function deleteAvatar(?string $path): void

@@ -10,14 +10,33 @@ use App\Models\User;
 use App\Services\OtpService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
+use Throwable;
 
 class OtpController extends Controller
 {
     public function sendCode(SendCodeRequest $request): JsonResponse
     {
         // Email is already trimmed + lowercased by prepareForValidation().
-        if (! OtpService::send($request->validated('email'))) {
-            return response()->json(['status' => 'delivery_failed'], 503);
+        try {
+            if (! OtpService::send($request->validated('email'))) {
+                return response()->json([
+                    'status' => 'delivery_failed',
+                    'message' => 'We could not send your code right now. Please try again shortly.',
+                ], 503);
+            }
+        } catch (Throwable $exception) {
+            $reference = (string) Str::uuid();
+            Log::error('OTP send request failed.', [
+                'reference' => $reference,
+                'exception' => $exception,
+            ]);
+
+            return response()->json([
+                'status' => 'error',
+                'message' => 'We could not send your code right now. Please try again. Reference: ' . $reference,
+            ], 500);
         }
 
         return response()->json(['status' => 'sent'], 200);

@@ -5,11 +5,14 @@ RUN { echo 'upload_max_filesize=5M'; echo 'post_max_size=16M'; echo 'memory_limi
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     libpng-dev \
+    libjpeg62-turbo-dev \
+    libwebp-dev \
     libzip-dev \
     zip \
     unzip \
     git \
     curl \
+    && docker-php-ext-configure gd --with-jpeg --with-webp \
     && docker-php-ext-install pdo_pgsql pdo_mysql gd zip \
     && rm -rf /var/lib/apt/lists/*
 

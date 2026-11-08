@@ -56,7 +56,10 @@ class AuthFlowTest extends TestCase
 
         $this->postJson('/auth/send-code', ['email' => $email])
             ->assertStatus(503)
-            ->assertExactJson(['status' => 'delivery_failed']);
+            ->assertExactJson([
+                'status' => 'delivery_failed',
+                'message' => 'We could not send your code right now. Please try again shortly.',
+            ]);
 
         $this->assertDatabaseHas('otp_codes', ['email' => $email]);
     }
