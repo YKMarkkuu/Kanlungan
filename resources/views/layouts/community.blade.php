@@ -85,6 +85,9 @@
                     <a href="{{ route('search') }}" class="cm-icon-btn" aria-label="Search">
                         @include('components.icon', ['name' => 'search'])
                     </a>
+                    <button type="button" class="cm-icon-btn" aria-label="Help" title="Help" data-restart-onboarding>
+                        @include('components.icon', ['name' => 'help'])
+                    </button>
                     @include('components.notification-dropdown', ['alerts' => $headerAlerts, 'unread' => $unread])
                 </div>
             </header>

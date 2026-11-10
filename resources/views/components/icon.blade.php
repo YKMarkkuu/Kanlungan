@@ -3,6 +3,7 @@
     @switch($name)
         @case('home') <path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1V10Z" /> @break
         @case('search') <circle cx="11" cy="11" r="6.5" /><path d="m16 16 4 4" /> @break
+        @case('help') <circle cx="12" cy="12" r="9" /><path d="M9.6 9a2.5 2.5 0 1 1 4.3 1.8c-1 .9-1.9 1.3-1.9 2.7" /><path d="M12 17h.01" /> @break
         @case('bell') <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16Z" /><path d="M10 20.5h4" /> @break
         @case('user') <circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /> @break
         @case('plus') <path d="M12 5v14M5 12h14" /> @break

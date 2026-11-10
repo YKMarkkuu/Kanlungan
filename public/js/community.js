@@ -477,9 +477,7 @@
     }
 
     function initRestartOnboarding() {
-        var restartOnboardingButton = document.querySelector('[data-restart-onboarding]');
-
-        if (restartOnboardingButton) {
+        document.querySelectorAll('[data-restart-onboarding]').forEach(function (restartOnboardingButton) {
             restartOnboardingButton.addEventListener('click', function () {
                 var tokenMeta = document.querySelector('meta[name="csrf-token"]');
                 var headers = {
@@ -514,7 +512,7 @@
                     restartOnboardingButton.disabled = false;
                 });
             });
-        }
+        });
     }
 
     /* ==========================================================================
