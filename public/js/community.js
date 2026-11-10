@@ -2202,6 +2202,7 @@
                     return;
                 }
 
+                showPageOverlay();
                 postSubmitting = true;
                 showInlineError(postError, '');
                 setSending(postBtn, 'Posting\u2026');
@@ -2222,6 +2223,7 @@
                     }
 
                     postSubmitting = false;
+                    hidePageOverlay();
                     clearSending(postBtn);
                     syncPostBtn();
                     composerFailure(res, postError);
@@ -3819,10 +3821,6 @@
     document.addEventListener('htmx:beforeRequest', function (event) {
         var detail = event.detail;
         var trigger = detail && detail.elt;
-
-        if (detail && detail.target && detail.target.tagName === 'MAIN') {
-            showPageOverlay();
-        }
 
         if (trigger && trigger.matches && trigger.matches(NAVIGATION_FEEDBACK_SELECTOR) && trigger.classList.contains('is-loading')) {
             return;

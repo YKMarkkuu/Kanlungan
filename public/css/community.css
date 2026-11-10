@@ -4022,9 +4022,9 @@ body.dark-mode .input:focus {
 .cm-page-overlay {
     position: fixed;
     inset: 0;
-    display: grid;
-    place-items: center;
-    background: var(--surface-bg);
+    background-color: color-mix(in srgb, var(--surface-bg) 50%, transparent);
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
     opacity: 0;
     pointer-events: none;
     z-index: 9999;
@@ -4036,22 +4036,8 @@ body.dark-mode .input:focus {
     pointer-events: auto;
 }
 
-.cm-page-overlay__spinner {
-    width: 32px;
-    height: 32px;
-    border: 3px solid var(--border-default);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: cm-page-overlay-spin 700ms linear infinite;
-}
-
-@keyframes cm-page-overlay-spin {
-    to { transform: rotate(360deg); }
-}
-
 @media (prefers-reduced-motion: reduce) {
     .cm-page-overlay { transition: none; }
-    .cm-page-overlay__spinner { animation: none; }
 }
 
 .cm-progress {
