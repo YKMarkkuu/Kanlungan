@@ -4370,6 +4370,11 @@
 
     function initPage() {
         var main = document.querySelector('main');
+        var nav = document.getElementById('cm-nav');
+
+        if (nav) {
+            nav.hidden = !!(main && main.hasAttribute('data-hide-nav'));
+        }
 
         // <main> is replaced wholesale on every swap, so a marker on it means "this page is already bound"
         // (htmx can fire afterSettle more than once for one navigation, e.g. for the out-of-band nav swap).

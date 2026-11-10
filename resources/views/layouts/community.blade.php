@@ -53,6 +53,7 @@
          @section('back', route('post.show', 1)) -> goes to that specific route
          Hidden on desktop by CSS. --}}
     @php($back = trim($__env->yieldContent('back')))
+    @php($hideNav = trim($__env->yieldContent('hide-nav')) !== '')
 
     {{-- hx-boost turns every <a> inside into an AJAX fetch: the response is a full page, htmx keeps only its
          <main> (hx-select) and swaps it in. The bottom nav lives outside <main>, so it is swapped out-of-band
@@ -64,7 +65,7 @@
          hx-select-oob="#cm-nav"
          hx-swap="outerHTML show:window:top"
          hx-push-url="true">
-        <main class="container cm-main @yield('main-class')">
+        <main class="container cm-main @yield('main-class')" @if ($hideNav) data-hide-nav @endif>
             @php($unread = auth()->check() ? \App\Models\Alert::unreadCount(auth()->id()) : 0)
             @php($headerAlerts = auth()->check() ? \App\Models\Alert::where('user_id', auth()->id())->latest('id')->limit(5)->get() : collect())
             <header class="cm-header">
@@ -112,7 +113,6 @@
              pages that need the whole screen (create post, comment box) set @section('hide-nav') and get
              the `hidden` attribute instead of no nav at all.
              @section('nav', 'home|search|alerts|me') highlights a tab. --}}
-        @php($hideNav = trim($__env->yieldContent('hide-nav')) !== '')
         @php($tab = trim($__env->yieldContent('nav')))
         <nav class="cm-nav" id="cm-nav" aria-label="Main navigation" @if ($hideNav) hidden @endif>
             <a href="{{ route('feed') }}" class="cm-nav__item {{ $tab === 'home' ? 'is-active' : '' }}" aria-label="Home" @if ($tab === 'home') aria-current="page" @endif>@include('components.icon', ['name' => 'home'])</a>
