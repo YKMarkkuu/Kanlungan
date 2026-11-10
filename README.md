@@ -1,280 +1,69 @@
 # Kanlungan
 
-> Verified, anonymous-optional, campus-only safe space for OLFU Pampanga students.
+Kanlungan is a verified, campus-only safe space for OLFU Pampanga students. Students can participate under their display name or use per-thread anonymous aliases, within a community designed for support, accountability, and safety.
 
-Kanlungan is a web app (PWA) where enrolled OLFU Pampanga students can ask for help, share experiences, vent, and support each other — anonymously or not. It replaces the open Facebook page setup with a verified, moderated, accountable community.
+Kanlungan is a web application and installable Progressive Web App (PWA). Access is intended for eligible OLFU Pampanga students; Kanlungan is not an official university system unless and until the university formally approves it.
 
-**Status:** Early development. Not deployed. Local dev only.
+## Core Features
 
----
+- **OTP authentication:** Passwordless sign-in using a one-time code sent to an eligible OLFU student email address.
+- **HTMX navigation:** Page navigation swaps server-rendered Blade content without a full-page reload, with standard navigation available as a fallback.
+- **Anonymous aliases:** Students can choose anonymity for posts and comments. The application retains account attribution for moderation and accountability.
+- **Community moderation:** Report workflows, moderator review, content actions, and restricted access to identity unmasking.
+- **Privacy and DPA-aware safeguards:** Student-only access, limited disclosure of identity, and logged unmasking actions support responsible handling of personal information. This description is not a certification of compliance; production use should be reviewed with the university and its Data Protection Officer (DPO).
 
-## Table of contents
+## Technology Stack
 
-- [What this is](#what-this-is)
-- [What this is not](#what-this-is-not)
-- [Stack](#stack)
-- [Local setup (first time)](#local-setup-first-time)
-- [Daily workflow](#daily-workflow)
-- [Project structure](#project-structure)
-- [Team rules](#team-rules)
-- [Branching and commits](#branching-and-commits)
-- [Roles and permissions](#roles-and-permissions)
-- [Environment variables](#environment-variables)
-- [Troubleshooting](#troubleshooting)
-- [Roadmap](#roadmap)
+| Area | Technology |
+| --- | --- |
+| Application framework | Laravel 10 |
+| Server-rendered UI | Blade templates |
+| Navigation and interactions | HTMX and vanilla JavaScript |
+| Styling | Vanilla CSS |
+| Production database | PostgreSQL, hosted through Supabase |
+| Local development database | MySQL |
+| Transactional email | Brevo API |
+| Hosting | Render |
+| Web application format | Progressive Web App (PWA) |
 
----
+## Local Setup
 
-## What this is
+The following instructions use PowerShell and a local MySQL database. The production environment uses PostgreSQL; set its connection variables in the deployment environment rather than using the local MySQL values below.
 
-- A **verified** space — only OLFU Pampanga students can sign up and post.
-- **Anonymous-optional** — you choose per post/comment whether to show your name.
-- **Moderated** — community voting handles standard reports; self-harm and threat reports go directly to moderators.
-- **Purposeful points** — Helpful reactions and accepted answers earn points only on Ask, Help, and Academic posts. Helpful points are capped at 50 per day (Asia/Manila); Likes are cosmetic.
-- **Accountable** — anonymous to peers, but the system still records the author for safety and legal reasons. Unmasking requires an admin/DPO with a logged reason.
-- **Local-first** — built for the OLFU Pampanga campus community.
+### Prerequisites
 
-## What this is not
+- PHP 8.1 or later with the extensions required by Laravel and your selected database driver
+- Composer
+- Git
+- MySQL for local development (Laragon includes MySQL and HeidiSQL)
 
-- Not an official OLFU system (until approved).
-- Not truly anonymous — see "Accountable" above.
-- Not a replacement for emergency services or professional help.
-- Not affiliated with Facebook, Discord, or any of those platforms.
-
----
-
-## Stack
-
-| Layer | Choice |
-|---|---|
-| Framework | Laravel 10 (PHP 8.1+) |
-| Database | MySQL (via Laragon) |
-| Frontend | Blade + vanilla CSS + vanilla JS |
-| Build step | None — no Tailwind, no React, no Vite usage |
-| Real-time | (TBD — likely Laravel Reverb if needed) |
-| Auth | Laravel Breeze (Blade), to be customized |
-| Roles | Spatie Laravel Permission |
-| Local dev | Laragon 6.0 on Windows + PowerShell |
-| PWA | `erag/laravel-pwa` (not yet installed) |
-
-**Important:** This project does **not** use Tailwind. Any Tailwind classes you see in default Breeze scaffolding will render as nothing. Replace them with project CSS.
-
----
-
-## Local setup (first time)
-
-Follow these in order. Don't skip steps.
-
-### 1. Prerequisites
-
-Install these first if you don't have them:
-
-- [Laragon 6.0](https://laragon.org/download/) (free version is fine)
-- Git for Windows
-- VS Code (optional but recommended)
-
-Open Laragon and click **Start All** so Apache and MySQL are running.
-
-### 2. Clone the repo
-
-Open the Laragon Terminal and run:
+### 1. Clone the repository
 
 ```powershell
 cd C:\laragon\www
 git clone https://github.com/YKMarkkuu/Kanlungan.git
-cd Kanlungan
+Set-Location .\Kanlungan
+```
 
-3. Install PHP dependencies
-powershell
+### 2. Install PHP dependencies
 
+```powershell
 composer install
+```
 
-4. Set up the environment file
+### 3. Create and configure the environment file
 
-.env is gitignored, so every clone needs its own copy.
-powershell
+Create a local `.env` file and generate an application key:
 
+```powershell
 Copy-Item .env.example .env
 php artisan key:generate
+```
 
-5. Create the database
+Edit `.env` and set the local URL and MySQL connection. Use `MAIL_MAILER=log` only for local development; production must use the configured Brevo mail transport and credentials.
 
-    Open Laragon → click Database (HeidiSQL opens).
-
-    Right-click the Laragon.MySQL connection in the left tree.
-
-    Click Create new → Database.
-
-    Name: kanlungan
-
-    Charset: utf8mb4
-
-    Collation: utf8mb4_unicode_ci
-
-    Click OK.
-
-6. Point .env at your database
-
-Open .env in VS Code and confirm these values:
-text
-
-DB_CONNECTION=mysql
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_DATABASE=kanlungan
-DB_USERNAME=root
-DB_PASSWORD=
-
-Laragon's default MySQL user is root with an empty password. Leave DB_PASSWORD blank.
-7. Run migrations
-powershell
-
-php artisan migrate
-
-You should see four tables created: users, password_reset_tokens, failed_jobs, personal_access_tokens.
-8. Serve the app
-powershell
-
-php artisan serve
-
-Open http://127.0.0.1:8000. You should see the Laravel welcome page.
-
-Done. You now have Kanlungan running locally.
-Daily workflow
-
-Every time you sit down to code:
-powershell
-
-cd C:\laragon\www\Kanlungan
-git pull
-php artisan serve
-
-When you're done for the day:
-powershell
-
-git status
-git add .
-git commit -m "type(scope): short description"
-git push
-
-Never commit directly to main. Always work on a branch and open a pull request.
-Project structure
-text
-
-app/
-├── Http/
-│   ├── Controllers/     # Request handlers
-│   ├── Middleware/      # Auth, role checks, etc.
-│   └── Requests/        # Form validation
-├── Models/              # Eloquent models (User, Post, Report, ...)
-├── Policies/            # Authorization rules per model
-├── Services/            # Business logic (e.g., moderation, points)
-└── Providers/           # Service container bindings
-
-config/                  # Framework config (don't edit unless needed)
-
-database/
-├── migrations/          # Schema changes — one file per change
-├── seeders/             # Seed data (roles, test users, categories)
-└── factories/           # Test model factories
-
-public/
-├── css/                 # Vanilla CSS — base, components, utilities
-├── js/                  # Vanilla JS — one file per feature
-└── index.php            # Entry point
-
-resources/
-└── views/               # Blade templates
-    ├── layouts/         # Master layouts
-    ├── partials/        # Reusable view pieces
-    └── ...              # Feature folders
-
-routes/
-├── web.php              # Browser routes
-└── api.php              # API routes (if any)
-
-tests/
-├── Feature/             # End-to-end tests
-└── Unit/                # Isolated logic tests
-
-Rule: Feature code goes in the folder that matches its concern. Don't dump everything in Controllers/ or views/.
-Team rules
-
-    Every task is a GitHub Issue. No issue, no work. Assign yourself before starting.
-
-    No direct push to main. All changes go through a pull request.
-
-    One commit, one concern. Don't bundle unrelated changes into one commit.
-
-    Pull before you start. Always git pull when you sit down.
-
-    Commit often, push daily. Don't hoard local changes.
-
-    Never commit .env or vendor/. They're gitignored for a reason.
-
-    No contribution = no credit. If you didn't commit, you didn't work on it.
-
-    Ask before restructuring. Don't move files or rename folders without flagging it first.
-
-Branching and commits
-Branch naming
-Type	Pattern	Example
-Feature	feature/short-name	feature/anonymous-posts
-Fix	fix/short-name	fix/suspend-not-sticking
-Docs	docs/short-name	docs/setup-guide
-Chore	chore/short-name	chore/install-breeze
-Commit message format
-
-Use Conventional Commits:
-text
-
-type(scope): short description
-
-Optional body explaining what and why.
-
-Optional footer (e.g., "Closes #12")
-
-Types: feat, fix, docs, chore, refactor, test, style, perf
-
-Examples:
-text
-
-feat(auth): add student login with email OTP
-fix(reports): make suspend action persist across sessions
-docs(readme): add local setup guide for teammates
-chore(deps): install spatie/laravel-permission
-
-Pull request flow
-powershell
-
-git checkout main
-git pull
-git checkout -b feature/your-feature
-# ... do work, commit ...
-git push -u origin feature/your-feature
-
-Then open a PR on GitHub. At least one teammate reviews before merging into main.
-Roles and permissions
-
-Roles are managed with spatie/laravel-permission. Planned roles:
-Role	Can do
-student	Post, comment, react, report
-moderator	Review reports, hide/remove content, warn/mute
-guidance	View referred case files only
-admin	Manage users, roles, categories, all moderation actions
-dpo	Unmask identities with logged reason, audit access
-
-Rule: Unmasking a user requires the dpo or admin role and a required reason. Every unmask is written to an audit log.
-Environment variables
-
-.env is gitignored. When you add a new required key, also add it to .env.example (without the real value) so teammates know to set it.
-
-Current required keys:
-text
-
-APP_NAME=Kanlungan
+```dotenv
 APP_ENV=local
-APP_KEY=                       # php artisan key:generate
 APP_DEBUG=true
 APP_URL=http://127.0.0.1:8000
 
@@ -285,77 +74,132 @@ DB_DATABASE=kanlungan
 DB_USERNAME=root
 DB_PASSWORD=
 
-MAIL_MAILER=log                # dev only; production will use real SMTP
+MAIL_MAILER=log
+```
 
-Never commit real credentials, API keys, or student data.
-Troubleshooting
-"Your app key is missing"
+Never commit `.env`, API keys, database passwords, OTPs, or real student data.
 
-Run:
-powershell
+### 4. Create the local MySQL database
 
+With Laragon's MySQL running and its client available in PowerShell, create the database with:
+
+```powershell
+mysql -u root -e "CREATE DATABASE kanlungan CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+```
+
+Alternatively, create a database named `kanlungan` with the `utf8mb4` character set and `utf8mb4_unicode_ci` collation in HeidiSQL. If your local MySQL account has a password, update `DB_PASSWORD` in `.env`.
+
+### 5. Run database migrations
+
+```powershell
+php artisan migrate
+```
+
+### 6. Start the development server
+
+```powershell
+php artisan serve
+```
+
+Open [http://127.0.0.1:8000](http://127.0.0.1:8000) in your browser.
+
+### Optional: run the test suite
+
+Configure a test database in `phpunit.xml` or your test environment before running:
+
+```powershell
+php artisan test
+```
+
+## Architecture and Project Structure
+
+Kanlungan follows Laravel's MVC conventions. Controllers handle HTTP requests, Eloquent models represent persisted data, and Blade templates render HTML on the server. HTMX enhances navigation and selected interactions by exchanging HTML fragments; the core UI uses vanilla CSS and JavaScript rather than a client-side framework.
+
+| Directory | Responsibility |
+| --- | --- |
+| `app/` | Application code, including models, HTTP controllers and middleware, services, and providers. |
+| `resources/views/` | Blade layouts, pages, and reusable view components. The community layout configures HTMX navigation and fragment swapping. |
+| `public/` | Public entry point and static assets, including CSS, JavaScript, images, and the PWA service worker. |
+| `routes/` | Web and API route definitions. |
+| `database/` | Schema migrations, seeders, and model factories. |
+| `tests/` | Feature and unit tests. |
+| `config/` | Laravel and application configuration. |
+
+## Roles and Permissions
+
+Role checks are applied to protected routes and actions. Actual access depends on the configured role and the relevant route authorization.
+
+| Role | Typical access |
+| --- | --- |
+| **Student** | Create posts and comments, react, report content, and use community features. |
+| **Moderator** | Review reports and take moderation actions. |
+| **Guidance** | Access the moderation queue and moderation actions available to that role. A guidance case-file system is not currently part of the application. |
+| **Admin** | Perform administrative moderation actions and access identity unmasking where authorized. |
+| **DPO** | Access identity unmasking for privacy oversight. Unmasking requires a reason and is audited. |
+
+Anonymous aliases hide identity from other community members; they do not make activity anonymous to the application. Identity unmasking must be limited to authorized personnel and used only for a documented reason.
+
+## Production and Deployment Notes
+
+The deployed application is hosted on Render and uses PostgreSQL through Supabase and Brevo for transactional email. Configure environment variables and credentials in the hosting provider's secret/environment settings; do not store production secrets in the repository.
+
+For production deployments:
+
+- Set `APP_ENV=production`, `APP_DEBUG=false`, and the correct HTTPS `APP_URL`.
+- Configure PostgreSQL connection details and any required SSL settings for the Supabase database.
+- Configure Brevo mail delivery and verify the sender/domain before sending OTP messages.
+- Run reviewed database migrations as part of the release process.
+- Use durable object storage for uploaded files where required by the deployment.
+- Review privacy notices, retention, access controls, incident response, and operational procedures with the university and DPO before processing real student data.
+
+## Troubleshooting
+
+### `No application encryption key has been specified`
+
+Generate a local key, then restart the development server:
+
+```powershell
 php artisan key:generate
+```
 
-"The database 'kanlungan' does not exist"
+Do not replace an existing production `APP_KEY` casually; changing it can invalidate encrypted application data and sessions.
 
-You haven't created the database in HeidiSQL. See step 5.
-Changes to .env aren't taking effect
+### Changes to `.env` are not taking effect
 
-Laravel caches config. Clear it:
-powershell
+Clear cached configuration and restart the app:
 
+```powershell
 php artisan config:clear
 php artisan cache:clear
-
-"require(vendor/autoload.php): Failed to open stream"
-
-You haven't run composer install yet. Do that.
-Push rejected — "remote contains work that you do not have locally"
-
-Someone else pushed. Pull first:
-powershell
-
-git pull --rebase
-
-Then push.
-code . doesn't work in PowerShell
-
-Open VS Code manually: File → Open Folder → C:\laragon\www\Kanlungan.
-I see Tailwind classes in a Blade file and the page looks broken
-
-Tailwind is not installed. Replace those classes with project CSS. See Stack.
-Roadmap
-
-Status legend: ❌ not started · 🟡 in progress · ✅ done
-Pillar	Status
-Project setup (repo, Laravel, DB)	✅
-Auth (login, register, password reset)	❌
-Roles and permissions (student/mod/guidance/admin/dpo)	❌
-Student verification (OLFU Pampanga only)	❌
-Feed + categories	❌
-Anonymous posting + per-thread alias	❌
-Comments + reactions (like, helpful)	❌
-Points ledger + badges	❌
-Reports + severity tiers	❌
-Moderation dashboard	❌
-Unmask audit log	❌
-Guidance case files	❌
-Notifications	❌
-PWA setup	❌
-Mobile responsive pass	❌
-OLFU approval + DPO review	❌
-Contact
-
-Repo owner: @YKMarkkuu
-
-For questions, open a GitHub Issue — not a DM. Keep the paper trail.
-text
-
-
-**Step 4:** Save (`Ctrl+S`).
-
-**Step 5:** Preview it in VS Code. Press `Ctrl+Shift+V` to open Markdown preview. You should see properly formatted headings, tables, and code blocks. If anything still looks broken in the preview, it'll look broken on GitHub too — fix it before committing.
-
-**Step 6:** Commit and push.
-
 ```
+
+For a local development environment, avoid running `php artisan config:cache` while actively changing `.env`.
+
+### Database connection or “unknown database” errors
+
+- Confirm MySQL is running locally and the database exists.
+- Check `DB_CONNECTION`, `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, and `DB_PASSWORD` in `.env`.
+- Clear cached configuration after changing connection values.
+- Confirm PHP has the PDO driver for the selected database (`pdo_mysql` locally or `pdo_pgsql` for PostgreSQL).
+
+### Uploaded files return 404
+
+Create Laravel's public storage symlink:
+
+```powershell
+php artisan storage:link
+```
+
+Also confirm the configured filesystem disk is available and that the web process has the required storage permissions.
+
+### `vendor/autoload.php` is missing
+
+Install the Composer dependencies from the repository root:
+
+```powershell
+composer install
+```
+
+## Security and Privacy
+
+Please do not report vulnerabilities or submit real student information in public issues. Contact the repository maintainers privately for security concerns. Never commit secrets, raw OTPs, personal data, or production database exports.
