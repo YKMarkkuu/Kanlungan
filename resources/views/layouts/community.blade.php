@@ -149,5 +149,8 @@
             });
         }
     </script>
+    <div class="cm-page-overlay" id="cm-page-overlay" aria-hidden="true">
+        <span class="cm-page-overlay__spinner" aria-hidden="true"></span>
+    </div>
 </body>
 </html>

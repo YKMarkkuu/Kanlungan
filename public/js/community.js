@@ -1755,6 +1755,7 @@
         }
 
         event.preventDefault();
+        window.blockScreen();
 
         if (form.dataset.sending === 'true') {
             return;
@@ -1779,6 +1780,7 @@
             if (result.ok && result.data.status === 'success') {
                 form.remove();
                 feedback.textContent = result.data.message || 'Vote recorded.';
+                hidePageOverlay();
                 return;
             }
 
@@ -1787,6 +1789,7 @@
             feedback.remove();
 
             if (result.networkError) {
+                hidePageOverlay();
                 showReactError('Could not reach server. Your vote was not recorded.');
                 return;
             }
@@ -1797,11 +1800,13 @@
             }
 
             if (result.status === 419) {
+                hidePageOverlay();
                 showReactError('Your session expired. Refresh the page and try again.');
                 return;
             }
 
             if (result.status === 429) {
+                hidePageOverlay();
                 showReactError('You are going too fast. Try again in a moment.');
                 return;
             }
@@ -1810,6 +1815,7 @@
             var message = result.data.message ||
                 (errors && errors.report && errors.report[0]) ||
                 'Your vote could not be recorded. Please try again.';
+            hidePageOverlay();
             showReactError(message);
         });
     });
@@ -3771,6 +3777,27 @@
         return { start: start, done: done };
     })();
 
+    function showPageOverlay() {
+        var overlay = document.getElementById('cm-page-overlay');
+
+        if (overlay) {
+            overlay.classList.add('is-active');
+        }
+    }
+
+    window.blockScreen = showPageOverlay;
+
+    function hidePageOverlay() {
+        var overlay = document.getElementById('cm-page-overlay');
+
+        if (overlay) {
+            overlay.classList.remove('is-active');
+        }
+    }
+
+    window.addEventListener('load', hidePageOverlay);
+    window.addEventListener('pageshow', hidePageOverlay);
+
     var NAVIGATION_FEEDBACK_SELECTOR = '.cm-mobile-back, .cm-compose-form .cm-header a[aria-label="Cancel"]';
 
     document.addEventListener('click', function (event) {
@@ -3785,17 +3812,33 @@
 
         button.classList.add('is-loading');
         button.setAttribute('aria-busy', 'true');
+        showPageOverlay();
         Progress.start();
     });
 
     document.addEventListener('htmx:beforeRequest', function (event) {
-        var trigger = event.detail && event.detail.elt;
+        var detail = event.detail;
+        var trigger = detail && detail.elt;
+
+        if (detail && detail.target && detail.target.tagName === 'MAIN') {
+            showPageOverlay();
+        }
 
         if (trigger && trigger.matches && trigger.matches(NAVIGATION_FEEDBACK_SELECTOR) && trigger.classList.contains('is-loading')) {
             return;
         }
 
         Progress.start();
+    });
+
+    document.addEventListener('submit', function (event) {
+        var form = event.target;
+
+        if (event.defaultPrevented || !form || form.tagName !== 'FORM' || (form.target && form.target !== '_self')) {
+            return;
+        }
+
+        showPageOverlay();
     });
 
     // afterRequest fires for success AND failure, so the bar always completes.
@@ -4357,16 +4400,18 @@
     });
 
     // A failed request leaves the old page in place, so put it back.
-    ['htmx:sendError', 'htmx:timeout', 'htmx:swapError'].forEach(function (name) {
+    ['htmx:sendError', 'htmx:sendAbort', 'htmx:timeout', 'htmx:swapError'].forEach(function (name) {
         document.addEventListener(name, function () {
             navState.token += 1;
             resetSkeleton();
+            hidePageOverlay();
         });
     });
 
 
 
     document.addEventListener('htmx:afterSettle', function () {
+        hidePageOverlay();
         initPage();
     });
 

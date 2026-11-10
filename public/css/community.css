@@ -4019,13 +4019,48 @@ body.dark-mode .input:focus {
 }
 
 /* ---------- Global Fetch Progress Bar (HTMX) ---------- */
+.cm-page-overlay {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: var(--surface-bg);
+    opacity: 0;
+    pointer-events: none;
+    z-index: 9999;
+    transition: opacity 200ms ease;
+}
+
+.cm-page-overlay.is-active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.cm-page-overlay__spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--border-default);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: cm-page-overlay-spin 700ms linear infinite;
+}
+
+@keyframes cm-page-overlay-spin {
+    to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cm-page-overlay { transition: none; }
+    .cm-page-overlay__spinner { animation: none; }
+}
+
 .cm-progress {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     height: 3px;
-    z-index: 9999;
+    z-index: 10000;
     pointer-events: none;
     opacity: 0;
     transition: opacity 200ms ease;
