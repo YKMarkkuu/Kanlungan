@@ -3766,7 +3766,30 @@
         return { start: start, done: done };
     })();
 
-    document.addEventListener('htmx:beforeRequest', function () {
+    var NAVIGATION_FEEDBACK_SELECTOR = '.cm-mobile-back, .cm-compose-form .cm-header a[aria-label="Cancel"]';
+
+    document.addEventListener('click', function (event) {
+        var target = event.target;
+        var button = target.closest
+            ? target.closest(NAVIGATION_FEEDBACK_SELECTOR)
+            : null;
+
+        if (!button || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+            return;
+        }
+
+        button.classList.add('is-loading');
+        button.setAttribute('aria-busy', 'true');
+        Progress.start();
+    });
+
+    document.addEventListener('htmx:beforeRequest', function (event) {
+        var trigger = event.detail && event.detail.elt;
+
+        if (trigger && trigger.matches && trigger.matches(NAVIGATION_FEEDBACK_SELECTOR) && trigger.classList.contains('is-loading')) {
+            return;
+        }
+
         Progress.start();
     });
 
