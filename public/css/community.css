@@ -4,6 +4,10 @@
    Every class here starts with cm- so it cannot clash with other pages.
    ========================================================================== */
 
+[hidden] {
+    display: none !important;
+}
+
 .cm-main {
     padding-top: 20px;
     padding-bottom: 112px; /* room for the floating bottom nav */
@@ -2938,7 +2942,7 @@ html:has(.cm-main--compose) { scroll-padding-bottom: 130px; } /* caret never hid
     left: 0;
     right: 0;
     bottom: var(--cm-kb, 0px); /* set by JS while the keyboard is open */
-    z-index: 50;
+    z-index: 100;
     gap: 8px;
     box-sizing: border-box;
     width: 100%;
