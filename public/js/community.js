@@ -4114,6 +4114,121 @@
     document.addEventListener('pointerdown', onNavIntent, { passive: true });
     document.addEventListener('touchstart', onNavIntent, { passive: true }); // browsers without Pointer Events
 
+    /* ---------- Background prefetch on idle (bottom-nav destinations) ----------
+       Warms the main tabs after the page has settled, so the FIRST tap on them is already a cache hit.
+       Same rules as every other prefetch: JS memory only, cleared by writes, 30s TTL, never cached
+       if the response redirects. Sequential with gaps, so it never hammers the server. */
+
+    var IDLE_WARM_PATHS = ['/feed', '/search', '/alerts', '/me'];
+    var IDLE_WARM_START_MS = 1500;  // let first paint, images and the unread-count poll go first
+    var IDLE_WARM_GAP_MS = 600;     // pause between warm requests
+    var idleWarm = { token: 0, timer: null, idleHandle: null };
+
+    // Stricter than canPrefetch(): that one gates taps (user intent); this gates speculative traffic.
+    // Safari/iOS has no navigator.connection, so "unknown" is allowed. These are small HTML-only requests.
+    function isFastConnection() {
+        var connection = navigator.connection;
+
+        if (!connection) {
+            return true;
+        }
+
+        if (connection.saveData) {
+            return false;
+        }
+
+        if (connection.type === 'wifi' || connection.type === 'ethernet') {
+            return true;
+        }
+
+        return connection.effectiveType === undefined || connection.effectiveType === '4g';
+    }
+
+    function cancelIdleWarm() {
+        idleWarm.token += 1;
+        window.clearTimeout(idleWarm.timer);
+
+        if (idleWarm.idleHandle !== null && window.cancelIdleCallback) {
+            window.cancelIdleCallback(idleWarm.idleHandle);
+        }
+
+        idleWarm.timer = null;
+        idleWarm.idleHandle = null;
+    }
+
+    function nextIdleWarm(urls, token) {
+        if (token !== idleWarm.token || !canPrefetch() || !isFastConnection()) {
+            return;
+        }
+
+        var url = urls.shift();
+
+        if (!url) {
+            return;
+        }
+
+        var entry = Prefetch.load(url);
+
+        // Already cached and fresh: no request was made, so no need to wait before the next one.
+        if (entry.html !== null) {
+            nextIdleWarm(urls, token);
+            return;
+        }
+
+        entry.promise.then(function () {
+            idleWarm.timer = window.setTimeout(function () {
+                nextIdleWarm(urls, token);
+            }, IDLE_WARM_GAP_MS);
+        }, function () {
+            /* a warm request failed (offline, session expired, stale): stop, don't keep hammering */
+        });
+    }
+
+    function scheduleIdleWarm() {
+        cancelIdleWarm();
+
+        var token = idleWarm.token;
+        var nav = document.getElementById('cm-nav');
+
+        // nav[hidden] = composer / thread pages. Skipped on purpose: see the note on flash messages below.
+        if (!nav || nav.hidden || !canPrefetch() || !isFastConnection()) {
+            return;
+        }
+
+        var urls = [];
+
+        // Use the nav's real hrefs, not bare paths: the Activity tab links to /alerts?tab=verdicts, and
+        // the cache key includes the query string, so warming plain "/alerts" would never be a hit.
+        nav.querySelectorAll('a[href]').forEach(function (anchor) {
+            var url = eligibleLink(anchor);
+
+            if (url && IDLE_WARM_PATHS.indexOf(url.pathname) !== -1 && url.pathname !== window.location.pathname) {
+                urls.push(url);
+            }
+        });
+
+        if (urls.length === 0) {
+            return;
+        }
+
+        idleWarm.timer = window.setTimeout(function () {
+            var run = function () {
+                idleWarm.idleHandle = null;
+                nextIdleWarm(urls, token);
+            };
+
+            if (window.requestIdleCallback) {
+                idleWarm.idleHandle = window.requestIdleCallback(run, { timeout: 4000 });
+            } else {
+                idleWarm.timer = window.setTimeout(run, 1000); // Safari: no requestIdleCallback
+            }
+        }, IDLE_WARM_START_MS);
+    }
+
+    // The moment the user starts navigating, stop queuing speculative requests behind their click.
+    // (A warm request already in flight keeps going; the click joins it via the in-flight path.)
+    document.addEventListener('htmx:beforeRequest', cancelIdleWarm);
+
     /* ---------- Skeleton ---------- */
 
     var SKELETON_ROUTES = [
@@ -4436,7 +4551,8 @@
         initCommentForm,
         initDeleteModal,
         initPostArrival,
-        syncAllSeeMore
+        syncAllSeeMore,
+        scheduleIdleWarm
     ];
 
     function initPage() {
