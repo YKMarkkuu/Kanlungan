@@ -7,6 +7,16 @@
     <meta name="theme-color" content="#1a6b4a">
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
+    {{-- HTMX settings. htmx reads this tag once at startup, so it must stay above the htmx <script>.
+         historyCacheSize 0 + refreshOnHistoryMiss: htmx would otherwise save page snapshots (anonymous posts,
+           alerts, saved posts) in localStorage. Back/Forward becomes a normal browser load instead.
+         allowScriptTags false: htmx never executes <script> tags found in swapped HTML.
+         disableSelector: htmx ignores forms (they have their own JS: confirm modal, AJAX votes, uploads, CSRF
+           redirects), links with a #fragment (the fragment is lost in XHR redirects) and /alerts/{id} links
+           (they redirect to a post#comment). Those stay normal browser navigations.
+         includeIndicatorStyles false: we draw our own progress bar. --}}
+    <meta name="htmx-config" content='{"historyCacheSize":0,"refreshOnHistoryMiss":true,"allowScriptTags":false,"allowEval":false,"includeIndicatorStyles":false,"scrollIntoViewOnBoost":false,"defaultSettleDelay":0,"defaultSwapDelay":0,"timeout":15000,"disableSelector":"[hx-disable], [data-hx-disable], form, a[href*=\"#\"], a[href*=\"/alerts/\"]"}'>
+
     {{-- PWA --}}
     <link rel="manifest" href="{{ asset('manifest.json') }}">
     <link rel="apple-touch-icon" href="{{ asset('images/icon-192.png') }}">
@@ -20,6 +30,9 @@
     <link rel="stylesheet" href="{{ asset('css/components.css') }}">
     <link rel="stylesheet" href="{{ asset('css/community.css') }}">
     @yield('head')
+
+    {{-- Pinned version. If this fails to load, every link is still a normal link. --}}
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/htmx/2.0.4/htmx.min.js" defer></script>
 </head>
 <body>
     <script>
@@ -31,27 +44,41 @@
             console.error('Could not restore the saved theme preference.', error);
         }
     </script>
+
+    {{-- Global fetch feedback. Outside .cm-page so a page swap never touches it. Driven by community.js. --}}
+    <div class="cm-progress" id="cm-progress" aria-hidden="true"><div class="cm-progress__bar"></div></div>
+
     {{-- Mobile back button is opt-in per page:
          @section('back', 'history')            -> history.back(), falls back to the feed if there is no history
          @section('back', route('post.show', 1)) -> goes to that specific route
          Hidden on desktop by CSS. --}}
     @php($back = trim($__env->yieldContent('back')))
 
-    <div class="page cm-page">
+    {{-- hx-boost turns every <a> inside into an AJAX fetch: the response is a full page, htmx keeps only its
+         <main> (hx-select) and swaps it in. The bottom nav lives outside <main>, so it is swapped out-of-band
+         by id (hx-select-oob). --}}
+    <div class="page cm-page"
+         hx-boost="true"
+         hx-target="main"
+         hx-select="main"
+         hx-select-oob="#cm-nav"
+         hx-swap="outerHTML show:window:top"
+         hx-push-url="true">
         <main class="container cm-main @yield('main-class')">
             @php($unread = auth()->check() ? \App\Models\Alert::unreadCount(auth()->id()) : 0)
             @php($headerAlerts = auth()->check() ? \App\Models\Alert::where('user_id', auth()->id())->latest('id')->limit(5)->get() : collect())
             <header class="cm-header">
                 <div class="cm-header__brand">
                     @if ($back !== '')
+                        {{-- hx-boost="false": this link uses history.back(), which must not also trigger an htmx fetch. --}}
                         <a href="{{ $back === 'history' ? route('feed') : $back }}"
                            class="cm-mobile-back"
                            aria-label="Go back"
-                           @if ($back === 'history') onclick="if (window.history.length > 1) { window.history.back(); return false; }" @endif>
+                           @if ($back === 'history') hx-boost="false" onclick="if (window.history.length > 1) { window.history.back(); return false; }" @endif>
                             @include('components.icon', ['name' => 'back'])
                         </a>
                     @endif
-                    <a href="{{ route('feed') }}" class="cm-brand"><x-logo />Kanlungan</a>
+                    <a href="{{ route('feed') }}" class="cm-brand">Kanlungan</a>
                 </div>
                 <div class="cm-header__actions">
                     <a href="{{ route('search') }}" class="cm-icon-btn" aria-label="Search">
@@ -81,23 +108,25 @@
             @yield('content')
         </main>
 
-        {{-- Bottom nav (design screen 3). Pages that need the whole screen (create post, comment box)
-             set @section('hide-nav'). @section('nav', 'home|search|alerts|me') highlights a tab. --}}
-        @if (trim($__env->yieldContent('hide-nav')) === '')
-            @php($tab = trim($__env->yieldContent('nav')))
-            <nav class="cm-nav" aria-label="Main navigation">
-                <a href="{{ route('feed') }}" class="cm-nav__item {{ $tab === 'home' ? 'is-active' : '' }}" aria-label="Home" @if ($tab === 'home') aria-current="page" @endif>@include('components.icon', ['name' => 'home'])</a>
-                <a href="{{ route('search') }}" class="cm-nav__item {{ $tab === 'search' ? 'is-active' : '' }}" aria-label="Search" @if ($tab === 'search') aria-current="page" @endif>@include('components.icon', ['name' => 'search'])</a>
-                <a href="{{ route('post.create') }}" class="cm-nav__item cm-nav__item--create" aria-label="Create post">@include('components.icon', ['name' => 'plus'])</a>
-                <a href="{{ route('alerts', ['tab' => 'verdicts']) }}" class="cm-nav__item {{ $tab === 'alerts' ? 'is-active' : '' }}" data-alert-activity-link aria-label="Activity{{ $unread > 0 ? ', '.$unread.' unread' : '' }}" @if ($tab === 'alerts') aria-current="page" @endif>
-                    @include('components.icon', ['name' => 'bell'])
-                    <span class="cm-count" data-unread-badge aria-hidden="true" @if ($unread === 0) hidden @endif>{{ $unread }}</span>
-                </a>
-                <a href="{{ route('community.me') }}" class="cm-nav__item {{ $tab === 'me' ? 'is-active' : '' }}" aria-label="Profile" @if ($tab === 'me') aria-current="page" @endif><x-avatar :avatar-path="auth()->user()->avatar_path" :name="auth()->user()->display_name" class="cm-nav__avatar" /></a>
-            </nav>
-        @endif
+        {{-- Bottom nav (design screen 3). Always rendered, so htmx can swap it by id on every navigation;
+             pages that need the whole screen (create post, comment box) set @section('hide-nav') and get
+             the `hidden` attribute instead of no nav at all.
+             @section('nav', 'home|search|alerts|me') highlights a tab. --}}
+        @php($hideNav = trim($__env->yieldContent('hide-nav')) !== '')
+        @php($tab = trim($__env->yieldContent('nav')))
+        <nav class="cm-nav" id="cm-nav" aria-label="Main navigation" @if ($hideNav) hidden @endif>
+            <a href="{{ route('feed') }}" class="cm-nav__item {{ $tab === 'home' ? 'is-active' : '' }}" aria-label="Home" @if ($tab === 'home') aria-current="page" @endif>@include('components.icon', ['name' => 'home'])</a>
+            <a href="{{ route('search') }}" class="cm-nav__item {{ $tab === 'search' ? 'is-active' : '' }}" aria-label="Search" @if ($tab === 'search') aria-current="page" @endif>@include('components.icon', ['name' => 'search'])</a>
+            <a href="{{ route('post.create') }}" class="cm-nav__item cm-nav__item--create" aria-label="Create post">@include('components.icon', ['name' => 'plus'])</a>
+            <a href="{{ route('alerts', ['tab' => 'verdicts']) }}" class="cm-nav__item {{ $tab === 'alerts' ? 'is-active' : '' }}" data-alert-activity-link aria-label="Activity{{ $unread > 0 ? ', '.$unread.' unread' : '' }}" @if ($tab === 'alerts') aria-current="page" @endif>
+                @include('components.icon', ['name' => 'bell'])
+                <span class="cm-count" data-unread-badge aria-hidden="true" @if ($unread === 0) hidden @endif>{{ $unread }}</span>
+            </a>
+            <a href="{{ route('community.me') }}" class="cm-nav__item {{ $tab === 'me' ? 'is-active' : '' }}" aria-label="Profile" @if ($tab === 'me') aria-current="page" @endif><x-avatar :avatar-path="auth()->user()->avatar_path" :name="auth()->user()->display_name" class="cm-nav__avatar" /></a>
+        </nav>
     </div>
 
+    {{-- Everything below lives outside .cm-page, so it survives page swaps and is bound once. --}}
     @include('components.report-sheet')
     @include('components.confirm-modal')
     @yield('scripts')

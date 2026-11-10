@@ -1,6 +1,47 @@
 (function () {
     'use strict';
 
+    // Safety net: if this file is ever executed twice (htmx history restore, a stray swapped <script>),
+    // the document/window listeners below must not be registered again.
+    if (window.__kanlunganCommunity) {
+        return;
+    }
+    window.__kanlunganCommunity = true;
+
+    /* ==========================================================================
+       Page lifecycle (htmx navigation)
+
+       Rules used throughout this file:
+         1. Listeners on `document` / `window` are registered ONCE, at the top level, and look elements up
+            when the event fires (event delegation).
+         2. Code that grabs elements inside <main> with getElementById / querySelector lives in an init*()
+            function. initPage() runs them all on first load and again after every htmx swap.
+         3. An init*() that adds a window/document listener, observer or timer registers a cleanup with
+            addCleanup(). Cleanups run right before the next swap replaces <main>.
+       The list of init functions is at the bottom of the file (PAGE_INITS).
+       ========================================================================== */
+
+    var pageCleanups = [];
+
+    function addCleanup(fn) {
+        pageCleanups.push(fn);
+    }
+
+    function runCleanups() {
+        var list = pageCleanups;
+
+        pageCleanups = [];
+        list.forEach(function (fn) {
+            try {
+                fn();
+            } catch (error) {
+                console.error(error);
+            }
+        });
+    }
+
+    /* ---------- Theme ---------- */
+
     var savedTheme = null;
 
     try {
@@ -9,13 +50,16 @@
         console.error('Could not restore the saved theme preference.', error);
     }
 
-    var forceLightTheme = document.body.hasAttribute('data-force-light-theme');
+    document.body.classList.toggle('dark-mode', savedTheme === 'dark');
 
-    document.documentElement.classList.toggle('dark-mode', !forceLightTheme && savedTheme === 'dark');
-    document.body.classList.toggle('dark-mode', !forceLightTheme && savedTheme === 'dark');
-    document.querySelectorAll('[data-theme-toggle]').forEach(function (button) {
-        button.setAttribute('aria-pressed', String(!forceLightTheme && savedTheme === 'dark'));
-    });
+    // The toggle button lives in <main> (profile page), so its pressed state is re-synced per page.
+    function syncThemeToggles() {
+        var isDark = document.body.classList.contains('dark-mode');
+
+        document.querySelectorAll('[data-theme-toggle]').forEach(function (button) {
+            button.setAttribute('aria-pressed', String(isDark));
+        });
+    }
 
     document.addEventListener('click', function (event) {
         if (!(event.target instanceof Element)) {
@@ -29,7 +73,6 @@
         }
 
         var isDark = !document.body.classList.contains('dark-mode');
-        document.documentElement.classList.toggle('dark-mode', isDark);
         document.body.classList.toggle('dark-mode', isDark);
         document.querySelectorAll('[data-theme-toggle]').forEach(function (toggle) {
             toggle.setAttribute('aria-pressed', String(isDark));
@@ -42,6 +85,8 @@
             window.showToast('Could not save your theme preference.', 'error');
         }
     });
+
+    /* ---------- Confirm modal (lives in the layout, outside <main>: bound once) ---------- */
 
     var confirmModal = document.getElementById('confirm-modal');
     var confirmTitle = document.getElementById('confirm-modal-title');
@@ -408,7 +453,8 @@
         return null;
     }
 
-    (function flushFlashToasts() {
+    // Flash messages are rendered inside <main> as hidden spans, so every page swap brings new ones.
+    function flushFlashToasts() {
         document.querySelectorAll('[data-flash-toast]').forEach(function (node) {
             var message = node.getAttribute('data-message') || '';
 
@@ -427,49 +473,53 @@
         } catch (error) {
             console.error('Could not restore a queued toast.', error);
         }
-    })();
+    }
 
-    var restartOnboardingButton = document.querySelector('[data-restart-onboarding]');
+    function initRestartOnboarding() {
+        var restartOnboardingButton = document.querySelector('[data-restart-onboarding]');
 
-    if (restartOnboardingButton) {
-        restartOnboardingButton.addEventListener('click', function () {
-            var tokenMeta = document.querySelector('meta[name="csrf-token"]');
-            var headers = {
-                'Accept': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            };
+        if (restartOnboardingButton) {
+            restartOnboardingButton.addEventListener('click', function () {
+                var tokenMeta = document.querySelector('meta[name="csrf-token"]');
+                var headers = {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                };
 
-            if (tokenMeta) {
-                headers['X-CSRF-TOKEN'] = tokenMeta.getAttribute('content');
-            }
-
-            restartOnboardingButton.disabled = true;
-            fetch('/onboarding/restart', {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: headers
-            }).then(function (response) {
-                if (!response.ok) {
-                    throw new Error('Restarting onboarding failed with HTTP ' + response.status);
+                if (tokenMeta) {
+                    headers['X-CSRF-TOKEN'] = tokenMeta.getAttribute('content');
                 }
 
-                return response.json();
-            }).then(function (data) {
-                if (!data || data.status !== 'success') {
-                    throw new Error('Restarting onboarding returned an unexpected response.');
-                }
+                restartOnboardingButton.disabled = true;
+                fetch('/onboarding/restart', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: headers
+                }).then(function (response) {
+                    if (!response.ok) {
+                        throw new Error('Restarting onboarding failed with HTTP ' + response.status);
+                    }
 
-                window.location.href = '/onboarding';
-            }).catch(function (error) {
-                console.error(error);
-                window.showToast('Could not restart the tour. Please try again.', 'error');
-                restartOnboardingButton.disabled = false;
+                    return response.json();
+                }).then(function (data) {
+                    if (!data || data.status !== 'success') {
+                        throw new Error('Restarting onboarding returned an unexpected response.');
+                    }
+
+                    window.location.href = '/onboarding';
+                }).catch(function (error) {
+                    console.error(error);
+                    window.showToast('Could not restart the tour. Please try again.', 'error');
+                    restartOnboardingButton.disabled = false;
+                });
             });
-        });
+        }
     }
 
     /* ==========================================================================
        Onboarding "movie": scripted, non-interactive demos.
+       The onboarding page uses the guest layout, so it is always a full page load
+       (never an htmx swap) and this block runs once. Unchanged.
        Each demo slide (data-scene) gets a director with one ghost hand. The script
        runs while its slide has .is-active, loops, and is cancelled the moment the
        user swipes away (onboarding.js toggles .is-active).
@@ -848,11 +898,13 @@
         sync();
     })();
 
-    /* ---------- Notification dropdown and unread-count polling ---------- */
+    /* ---------- Notification dropdown and unread-count polling ----------
+       The bell lives in the header, which is INSIDE <main>, so it is replaced on every page swap.
+       Document-level listeners and the polling timer are therefore registered once and look the
+       bell up each time; only the toggle's own click listener is per-page (initNotifications). */
 
-    var notificationToggle = document.querySelector('[data-notification-toggle]');
-    var notificationDropdown = document.querySelector('[data-notification-dropdown]');
-
+    // Plain-navigation fallback for notification links htmx does not handle (modifier-less click only).
+    // When htmx boosts a link it has already called preventDefault(), so this returns early.
     document.addEventListener('click', function (event) {
         var link = event.target.closest('a.cm-notification-dropdown__item, a.cm-alert');
 
@@ -866,91 +918,112 @@
         window.location.href = link.href;
     });
 
-    if (notificationToggle && notificationDropdown) {
-        function closeNotificationDropdown() {
-            notificationDropdown.classList.add('hidden');
-            notificationToggle.setAttribute('aria-expanded', 'false');
+    function closeNotificationDropdown() {
+        var toggle = document.querySelector('[data-notification-toggle]');
+        var dropdown = document.querySelector('[data-notification-dropdown]');
+
+        if (!toggle || !dropdown) {
+            return;
         }
 
-        notificationToggle.addEventListener('click', function () {
-            var isOpen = notificationToggle.getAttribute('aria-expanded') === 'true';
-            notificationDropdown.classList.toggle('hidden', isOpen);
-            notificationToggle.setAttribute('aria-expanded', String(!isOpen));
-        });
+        dropdown.classList.add('hidden');
+        toggle.setAttribute('aria-expanded', 'false');
+    }
 
-        document.addEventListener('click', function (event) {
-            if (!event.target.closest('[data-notification-menu]')) {
-                closeNotificationDropdown();
+    document.addEventListener('click', function (event) {
+        if (!event.target.closest('[data-notification-menu]')) {
+            closeNotificationDropdown();
+        }
+    });
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') {
+            closeNotificationDropdown();
+        }
+    });
+
+    function initNotifications() {
+        var notificationToggle = document.querySelector('[data-notification-toggle]');
+        var notificationDropdown = document.querySelector('[data-notification-dropdown]');
+
+        if (notificationToggle && notificationDropdown) {
+            notificationToggle.addEventListener('click', function () {
+                var isOpen = notificationToggle.getAttribute('aria-expanded') === 'true';
+                notificationDropdown.classList.toggle('hidden', isOpen);
+                notificationToggle.setAttribute('aria-expanded', String(!isOpen));
+            });
+        }
+    }
+
+    function wobbleBells() {
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            return;
+        }
+
+        document.querySelectorAll('.cm-bell .icon, [data-alert-activity-link] .icon, [data-unread-badge]').forEach(function (el) {
+            el.classList.remove('is-wobbling');
+            void el.getBoundingClientRect();
+            el.classList.add('is-wobbling');
+            el.addEventListener('animationend', function done() {
+                el.classList.remove('is-wobbling');
+                el.removeEventListener('animationend', done);
+            });
+        });
+    }
+
+    function refreshUnreadCount() {
+        var toggle = document.querySelector('[data-notification-toggle]');
+
+        if (!toggle) {
+            return;
+        }
+
+        // The rendered count is kept on the toggle itself, so a fresh header after a swap is always in sync.
+        var unreadCountUrl = toggle.getAttribute('data-unread-count-url');
+        var renderedUnreadCount = Number(toggle.getAttribute('data-unread-count'));
+
+        fetch(unreadCountUrl, {
+            method: 'GET',
+            credentials: 'same-origin',
+            cache: 'no-store',
+            headers: { 'Accept': 'application/json' }
+        }).then(function (response) {
+            if (!response.ok) {
+                throw new Error('Unread notification polling failed with HTTP ' + response.status);
             }
-        });
 
-        document.addEventListener('keydown', function (event) {
-            if (event.key === 'Escape') {
-                closeNotificationDropdown();
-            }
-        });
+            return response.json();
+        }).then(function (data) {
+            var nextCount = Number(data.count);
+            var currentToggle = document.querySelector('[data-notification-toggle]');
 
-        var unreadCountUrl = notificationToggle.getAttribute('data-unread-count-url');
-        var renderedUnreadCount = Number(notificationToggle.getAttribute('data-unread-count'));
-
-        function wobbleBells() {
-            if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            if (!currentToggle || !Number.isInteger(nextCount) || nextCount < 0 || nextCount === renderedUnreadCount) {
                 return;
             }
 
-            document.querySelectorAll('.cm-bell .icon, [data-alert-activity-link] .icon, [data-unread-badge]').forEach(function (el) {
-                el.classList.remove('is-wobbling');
-                void el.getBoundingClientRect();
-                el.classList.add('is-wobbling');
-                el.addEventListener('animationend', function done() {
-                    el.classList.remove('is-wobbling');
-                    el.removeEventListener('animationend', done);
-                });
+            var hasNewAlert = nextCount > renderedUnreadCount;
+            currentToggle.setAttribute('data-unread-count', String(nextCount));
+            currentToggle.setAttribute('aria-label', 'Notifications' + (nextCount > 0 ? ', ' + nextCount + ' unread' : ''));
+
+            document.querySelectorAll('[data-unread-badge]').forEach(function (badge) {
+                badge.textContent = String(nextCount);
+                badge.hidden = nextCount === 0;
             });
-        }
 
-        function refreshUnreadCount() {
-            fetch(unreadCountUrl, {
-                method: 'GET',
-                credentials: 'same-origin',
-                cache: 'no-store',
-                headers: { 'Accept': 'application/json' }
-            }).then(function (response) {
-                if (!response.ok) {
-                    throw new Error('Unread notification polling failed with HTTP ' + response.status);
-                }
+            var activityLink = document.querySelector('[data-alert-activity-link]');
+            if (activityLink) {
+                activityLink.setAttribute('aria-label', 'Activity' + (nextCount > 0 ? ', ' + nextCount + ' unread' : ''));
+            }
 
-                return response.json();
-            }).then(function (data) {
-                var nextCount = Number(data.count);
+            if (hasNewAlert) {
+                wobbleBells();
+            }
+        }).catch(function (error) {
+            console.error(error);
+        });
+    }
 
-                if (!Number.isInteger(nextCount) || nextCount < 0 || nextCount === renderedUnreadCount) {
-                    return;
-                }
-
-                var hasNewAlert = nextCount > renderedUnreadCount;
-                renderedUnreadCount = nextCount;
-                notificationToggle.setAttribute('data-unread-count', String(nextCount));
-                notificationToggle.setAttribute('aria-label', 'Notifications' + (nextCount > 0 ? ', ' + nextCount + ' unread' : ''));
-
-                document.querySelectorAll('[data-unread-badge]').forEach(function (badge) {
-                    badge.textContent = String(nextCount);
-                    badge.hidden = nextCount === 0;
-                });
-
-                var activityLink = document.querySelector('[data-alert-activity-link]');
-                if (activityLink) {
-                    activityLink.setAttribute('aria-label', 'Activity' + (nextCount > 0 ? ', ' + nextCount + ' unread' : ''));
-                }
-
-                if (hasNewAlert) {
-                    wobbleBells();
-                }
-            }).catch(function (error) {
-                console.error(error);
-            });
-        }
-
+    if (document.querySelector('[data-notification-toggle]')) {
         window.setInterval(refreshUnreadCount, 30000);
         window.addEventListener('pageshow', function (event) {
             if (event.persisted) {
@@ -964,274 +1037,340 @@
         });
     }
 
-    /* ---------- Profile avatar preview and crop ---------- */
-
     /* ---------- Profile: tap your name to edit it inline ---------- */
 
-    var nameForm = document.querySelector('[data-name-form]');
-    var nameTrigger = document.querySelector('[data-name-edit]');
+    function initNameEditor() {
+        var nameForm = document.querySelector('[data-name-form]');
+        var nameTrigger = document.querySelector('[data-name-edit]');
 
-    if (nameForm && nameTrigger) {
-        var nameRoot = nameForm.closest('.cm-identity');
-        var nameInput = nameForm.querySelector('input[name="display_name"]');
-        var nameOriginal = nameInput.getAttribute('data-original') || '';
-        var nameLocked = false;
+        if (nameForm && nameTrigger) {
+            var nameRoot = nameForm.closest('.cm-identity');
+            var nameInput = nameForm.querySelector('input[name="display_name"]');
+            var nameOriginal = nameInput.getAttribute('data-original') || '';
+            var nameLocked = false;
 
-        var openNameEditor = function () {
-            nameLocked = false;
-            nameTrigger.hidden = true;
-            nameForm.hidden = false;
-            nameForm.classList.add('cm-animate-fade');
-            nameRoot.classList.add('is-editing');
-            nameInput.focus();
-            nameInput.setSelectionRange(nameInput.value.length, nameInput.value.length);
-        };
+            var openNameEditor = function () {
+                nameLocked = false;
+                nameTrigger.hidden = true;
+                nameForm.hidden = false;
+                nameForm.classList.add('cm-animate-fade');
+                nameRoot.classList.add('is-editing');
+                nameInput.focus();
+                nameInput.setSelectionRange(nameInput.value.length, nameInput.value.length);
+            };
 
-        var closeNameEditor = function () {
-            nameInput.value = nameOriginal;
-            nameForm.hidden = true;
-            nameTrigger.hidden = false;
-            nameRoot.classList.remove('is-editing');
-            nameTrigger.focus({ preventScroll: true });
-        };
+            var closeNameEditor = function () {
+                nameInput.value = nameOriginal;
+                nameForm.hidden = true;
+                nameTrigger.hidden = false;
+                nameRoot.classList.remove('is-editing');
+                nameTrigger.focus({ preventScroll: true });
+            };
 
-        var commitName = function () {
-            if (nameLocked) {
-                return;
-            }
+            var commitName = function () {
+                if (nameLocked) {
+                    return;
+                }
 
-            nameLocked = true;
-
-            if (nameInput.value.trim() === nameOriginal.trim()) {
-                closeNameEditor();
-                return;
-            }
-
-            if (nameForm.requestSubmit) {
-                nameForm.requestSubmit();
-            } else {
-                nameForm.submit();
-            }
-        };
-
-        nameTrigger.addEventListener('click', openNameEditor);
-        nameInput.addEventListener('blur', commitName);
-        nameInput.addEventListener('keydown', function (event) {
-            if (event.key === 'Enter') {
-                event.preventDefault();
-                commitName();
-            } else if (event.key === 'Escape') {
                 nameLocked = true;
-                closeNameEditor();
-            }
-        });
-        nameForm.addEventListener('submit', function () { nameLocked = true; });
 
-        if (!nameForm.hidden) {
-            nameInput.focus();
+                if (nameInput.value.trim() === nameOriginal.trim()) {
+                    closeNameEditor();
+                    return;
+                }
+
+                if (nameForm.requestSubmit) {
+                    nameForm.requestSubmit();
+                } else {
+                    nameForm.submit();
+                }
+            };
+
+            nameTrigger.addEventListener('click', openNameEditor);
+            nameInput.addEventListener('blur', commitName);
+            nameInput.addEventListener('keydown', function (event) {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    commitName();
+                } else if (event.key === 'Escape') {
+                    nameLocked = true;
+                    closeNameEditor();
+                }
+            });
+            nameForm.addEventListener('submit', function () { nameLocked = true; });
+
+            if (!nameForm.hidden) {
+                nameInput.focus();
+            }
         }
     }
 
-    var avatarForm = document.querySelector('[data-avatar-upload]');
+    /* ---------- Profile: avatar preview and crop ----------
+       Cropper.js is only referenced by the profile page. When that page arrives through an htmx swap its
+       <head>/<script> tags are not executed, so the library is loaded on demand (same pinned version
+       as docs/FRONTEND.md). */
 
-    if (avatarForm) {
-        var avatarInput = avatarForm.querySelector('[data-avatar-input]');
-        var avatarChoose = avatarForm.querySelector('[data-avatar-choose]');
-        var avatarModal = document.querySelector('[data-avatar-crop]');
-        var avatarPreview = avatarModal.querySelector('[data-avatar-preview]');
-        var avatarError = avatarModal.querySelector('[data-avatar-error]');
-        var avatarSave = avatarModal.querySelector('[data-avatar-save]');
-        var avatarCancel = avatarModal.querySelectorAll('[data-avatar-cancel]');
-        var avatarObjectUrl = null;
-        var avatarCropper = null;
-        var avatarOpener = null;
+    var CROPPER_CSS = 'https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css';
+    var CROPPER_JS = 'https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js';
+    var cropperPromise = null;
 
-        function showAvatarError(message) {
-            avatarError.textContent = message;
-            avatarError.hidden = false;
+    function loadCropper() {
+        if (typeof window.Cropper === 'function') {
+            return Promise.resolve();
         }
 
-        function destroyAvatarCropper() {
-            if (avatarCropper) {
-                avatarCropper.destroy();
-                avatarCropper = null;
-            }
+        if (cropperPromise) {
+            return cropperPromise;
         }
 
-        function closeAvatarModal() {
-            avatarModal.hidden = true;
-            document.body.classList.remove('cm-no-scroll');
-            destroyAvatarCropper();
+        cropperPromise = new Promise(function (resolve, reject) {
+            if (!document.querySelector('link[href="' + CROPPER_CSS + '"]')) {
+                var link = document.createElement('link');
 
-            if (avatarObjectUrl) {
-                URL.revokeObjectURL(avatarObjectUrl);
-                avatarObjectUrl = null;
+                link.rel = 'stylesheet';
+                link.href = CROPPER_CSS;
+                document.head.appendChild(link);
             }
 
-            avatarPreview.onload = null;
-            avatarPreview.onerror = null;
-            avatarPreview.removeAttribute('src');
-            avatarError.hidden = true;
-            avatarError.textContent = '';
-            avatarSave.disabled = false;
-            avatarSave.textContent = 'Save Avatar';
+            var script = document.querySelector('script[src="' + CROPPER_JS + '"]');
 
-            if (avatarOpener) {
-                avatarOpener.focus();
-            }
-        }
-
-        avatarChoose.addEventListener('click', function () {
-            avatarOpener = avatarChoose;
-            avatarInput.click();
-        });
-
-        avatarInput.addEventListener('change', function () {
-            if (!avatarInput.files || !avatarInput.files[0]) {
-                return;
+            if (!script) {
+                script = document.createElement('script');
+                script.src = CROPPER_JS;
+                document.head.appendChild(script);
             }
 
-            destroyAvatarCropper();
-            if (avatarObjectUrl) {
-                URL.revokeObjectURL(avatarObjectUrl);
-                avatarObjectUrl = null;
-            }
-
-            avatarError.hidden = true;
-            avatarError.textContent = '';
-            avatarSave.disabled = true;
-            avatarSave.textContent = 'Save Avatar';
-            avatarModal.hidden = false;
-            document.body.classList.add('cm-no-scroll');
-            avatarModal.querySelector('.cm-avatar-crop__actions [data-avatar-cancel]').focus();
-
-            if (typeof window.Cropper !== 'function') {
-                showAvatarError('The photo editor could not be loaded. Refresh the page and try again.');
-                return;
-            }
-
-            try {
-                avatarObjectUrl = URL.createObjectURL(avatarInput.files[0]);
-            } catch (error) {
-                showAvatarError('Could not open this image. Please choose another photo.');
-                return;
-            }
-
-            avatarPreview.onload = function () {
-                try {
-                    avatarCropper = new window.Cropper(avatarPreview, {
-                        aspectRatio: 1,
-                        viewMode: 1,
-                        dragMode: 'move',
-                        cropBoxMovable: false,
-                        guides: false,
-                        center: true,
-                        highlight: false,
-                        background: false,
-                        autoCropArea: 1,
-                        cropBoxResizable: false,
-                        toggleDragModeOnDblclick: false,
-                        responsive: true,
-                        zoomOnTouch: true,
-                        zoomOnWheel: false,
-                        ready: function () {
-                            avatarSave.disabled = false;
-                        }
-                    });
-                } catch (error) {
-                    showAvatarError('Could not prepare this image for cropping. Please choose another photo.');
+            script.addEventListener('load', function () {
+                if (typeof window.Cropper === 'function') {
+                    resolve();
+                } else {
+                    reject(new Error('Cropper did not initialise.'));
                 }
-            };
-            avatarPreview.onerror = function () {
-                showAvatarError('This image could not be previewed. Choose a different image.');
-            };
-            avatarPreview.src = avatarObjectUrl;
-        });
-
-        avatarCancel.forEach(function (button) {
-            button.addEventListener('click', function () {
-                closeAvatarModal();
             });
+            script.addEventListener('error', function () {
+                reject(new Error('Cropper could not be loaded.'));
+            });
+        }).catch(function (error) {
+            cropperPromise = null;
+            throw error;
         });
 
-        avatarSave.addEventListener('click', function () {
-            if (!avatarCropper || !avatarInput.files[0] || avatarSave.disabled) {
-                return;
+        return cropperPromise;
+    }
+
+    function initAvatarCropper() {
+        var avatarForm = document.querySelector('[data-avatar-upload]');
+
+        if (avatarForm) {
+            var avatarInput = avatarForm.querySelector('[data-avatar-input]');
+            var avatarChoose = avatarForm.querySelector('[data-avatar-choose]');
+            var avatarModal = document.querySelector('[data-avatar-crop]');
+            var avatarPreview = avatarModal.querySelector('[data-avatar-preview]');
+            var avatarError = avatarModal.querySelector('[data-avatar-error]');
+            var avatarSave = avatarModal.querySelector('[data-avatar-save]');
+            var avatarCancel = avatarModal.querySelectorAll('[data-avatar-cancel]');
+            var avatarObjectUrl = null;
+            var avatarCropper = null;
+            var avatarOpener = null;
+
+            function showAvatarError(message) {
+                avatarError.textContent = message;
+                avatarError.hidden = false;
             }
 
-            avatarSave.disabled = true;
-            avatarError.hidden = true;
-            avatarError.textContent = '';
-            avatarSave.textContent = 'Uploading…';
+            function destroyAvatarCropper() {
+                if (avatarCropper) {
+                    avatarCropper.destroy();
+                    avatarCropper = null;
+                }
+            }
 
-            try {
-                var canvas = avatarCropper.getCroppedCanvas({
-                    width: 150,
-                    height: 150,
-                    imageSmoothingEnabled: true,
-                    imageSmoothingQuality: 'high'
-                });
+            function closeAvatarModal() {
+                avatarModal.hidden = true;
+                document.body.classList.remove('cm-no-scroll');
+                destroyAvatarCropper();
 
-                if (!canvas) {
-                    throw new Error('Could not crop this image. Please try again.');
+                if (avatarObjectUrl) {
+                    URL.revokeObjectURL(avatarObjectUrl);
+                    avatarObjectUrl = null;
                 }
 
-                canvas.toBlob(function (blob) {
-                    if (!blob) {
-                        showAvatarError('Could not prepare this image. Please try again.');
-                        avatarSave.disabled = false;
-                        avatarSave.textContent = 'Save Avatar';
-                        return;
+                avatarPreview.onload = null;
+                avatarPreview.onerror = null;
+                avatarPreview.removeAttribute('src');
+                avatarError.hidden = true;
+                avatarError.textContent = '';
+                avatarSave.disabled = false;
+                avatarSave.textContent = 'Save Avatar';
+
+                if (avatarOpener) {
+                    avatarOpener.focus();
+                }
+            }
+
+            // Runs once the Cropper library is available.
+            function startAvatarCrop() {
+                if (avatarModal.hidden || !avatarInput.files || !avatarInput.files[0]) {
+                    return;
+                }
+
+                try {
+                    avatarObjectUrl = URL.createObjectURL(avatarInput.files[0]);
+                } catch (error) {
+                    showAvatarError('Could not open this image. Please choose another photo.');
+                    return;
+                }
+
+                avatarPreview.onload = function () {
+                    try {
+                        avatarCropper = new window.Cropper(avatarPreview, {
+                            aspectRatio: 1,
+                            viewMode: 1,
+                            dragMode: 'move',
+                            cropBoxMovable: false,
+                            guides: false,
+                            center: true,
+                            highlight: false,
+                            background: false,
+                            autoCropArea: 1,
+                            cropBoxResizable: false,
+                            toggleDragModeOnDblclick: false,
+                            responsive: true,
+                            zoomOnTouch: true,
+                            zoomOnWheel: false,
+                            ready: function () {
+                                avatarSave.disabled = false;
+                            }
+                        });
+                    } catch (error) {
+                        showAvatarError('Could not prepare this image for cropping. Please choose another photo.');
+                    }
+                };
+                avatarPreview.onerror = function () {
+                    showAvatarError('This image could not be previewed. Choose a different image.');
+                };
+                avatarPreview.src = avatarObjectUrl;
+            }
+
+            avatarChoose.addEventListener('click', function () {
+                avatarOpener = avatarChoose;
+                avatarInput.click();
+            });
+
+            avatarInput.addEventListener('change', function () {
+                if (!avatarInput.files || !avatarInput.files[0]) {
+                    return;
+                }
+
+                destroyAvatarCropper();
+                if (avatarObjectUrl) {
+                    URL.revokeObjectURL(avatarObjectUrl);
+                    avatarObjectUrl = null;
+                }
+
+                avatarError.hidden = true;
+                avatarError.textContent = '';
+                avatarSave.disabled = true;
+                avatarSave.textContent = 'Save Avatar';
+                avatarModal.hidden = false;
+                document.body.classList.add('cm-no-scroll');
+                avatarModal.querySelector('.cm-avatar-crop__actions [data-avatar-cancel]').focus();
+
+                loadCropper().then(startAvatarCrop, function () {
+                    showAvatarError('The photo editor could not be loaded. Refresh the page and try again.');
+                });
+            });
+
+            avatarCancel.forEach(function (button) {
+                button.addEventListener('click', function () {
+                    closeAvatarModal();
+                });
+            });
+
+            avatarSave.addEventListener('click', function () {
+                if (!avatarCropper || !avatarInput.files[0] || avatarSave.disabled) {
+                    return;
+                }
+
+                avatarSave.disabled = true;
+                avatarError.hidden = true;
+                avatarError.textContent = '';
+                avatarSave.textContent = 'Uploading…';
+
+                try {
+                    var canvas = avatarCropper.getCroppedCanvas({
+                        width: 150,
+                        height: 150,
+                        imageSmoothingEnabled: true,
+                        imageSmoothingQuality: 'high'
+                    });
+
+                    if (!canvas) {
+                        throw new Error('Could not crop this image. Please try again.');
                     }
 
-                    var formData = new FormData(avatarForm);
-                    formData.set('avatar', blob, 'avatar.jpg');
-
-                    fetch(avatarForm.action, {
-                        method: 'POST',
-                        body: formData,
-                        credentials: 'same-origin',
-                        headers: { Accept: 'application/json' }
-                    }).then(function (response) {
-                        if (response.ok) {
-                            window.queueToast('Profile picture updated', 'success', 'check');
-                            window.location.reload();
+                    canvas.toBlob(function (blob) {
+                        if (!blob) {
+                            showAvatarError('Could not prepare this image. Please try again.');
+                            avatarSave.disabled = false;
+                            avatarSave.textContent = 'Save Avatar';
                             return;
                         }
 
-                        return response.json().then(function (payload) {
-                            var message = payload.errors && payload.errors.avatar
-                                ? payload.errors.avatar[0]
-                                : payload.message;
-                            throw new Error(message || 'Avatar upload failed. Please try again.');
-                        }, function () {
-                            throw new Error('Avatar upload failed (HTTP ' + response.status + '). Please try again.');
+                        var formData = new FormData(avatarForm);
+                        formData.set('avatar', blob, 'avatar.jpg');
+
+                        fetch(avatarForm.action, {
+                            method: 'POST',
+                            body: formData,
+                            credentials: 'same-origin',
+                            headers: { Accept: 'application/json' }
+                        }).then(function (response) {
+                            if (response.ok) {
+                                window.queueToast('Profile picture updated', 'success', 'check');
+                                window.location.reload();
+                                return;
+                            }
+
+                            return response.json().then(function (payload) {
+                                var message = payload.errors && payload.errors.avatar
+                                    ? payload.errors.avatar[0]
+                                    : payload.message;
+                                throw new Error(message || 'Avatar upload failed. Please try again.');
+                            }, function () {
+                                throw new Error('Avatar upload failed (HTTP ' + response.status + '). Please try again.');
+                            });
+                        }).catch(function (error) {
+                            showAvatarError(error.message || 'Avatar upload failed. Please try again.');
+                            avatarSave.disabled = false;
+                            avatarSave.textContent = 'Save Avatar';
                         });
-                    }).catch(function (error) {
-                        showAvatarError(error.message || 'Avatar upload failed. Please try again.');
-                        avatarSave.disabled = false;
-                        avatarSave.textContent = 'Save Avatar';
-                    });
-                }, 'image/jpeg', 0.9);
-            } catch (error) {
-                showAvatarError(error.message || 'Could not prepare this image. Please try again.');
-                avatarSave.disabled = false;
-                avatarSave.textContent = 'Save Avatar';
-            }
-        });
+                    }, 'image/jpeg', 0.9);
+                } catch (error) {
+                    showAvatarError(error.message || 'Could not prepare this image. Please try again.');
+                    avatarSave.disabled = false;
+                    avatarSave.textContent = 'Save Avatar';
+                }
+            });
 
-        avatarForm.addEventListener('submit', function (event) {
-            event.preventDefault();
-        });
+            avatarForm.addEventListener('submit', function (event) {
+                event.preventDefault();
+            });
 
-        document.addEventListener('keydown', function (event) {
-            if (event.key === 'Escape' && !avatarModal.hidden) {
-                closeAvatarModal();
-            }
-        });
+            var onAvatarKeydown = function (event) {
+                if (event.key === 'Escape' && !avatarModal.hidden) {
+                    closeAvatarModal();
+                }
+            };
+
+            document.addEventListener('keydown', onAvatarKeydown);
+            addCleanup(function () {
+                document.removeEventListener('keydown', onAvatarKeydown);
+            });
+        }
     }
 
-    /* ---------- Context-aware card menus ---------- */
+    /* ---------- Context-aware card menus (document delegation: bound once) ---------- */
 
     function closeMoreMenus(except) {
         document.querySelectorAll('.cm-more-menu__dropdown:not(.hidden)').forEach(function (menu) {
@@ -1294,174 +1433,187 @@
         }
     });
 
-    /* ---------- Feed pull-to-refresh ---------- */
+    /* ---------- Feed: infinite scroll ("Load more") + pull-to-refresh ---------- */
 
-    var feedSkeleton = document.getElementById('skeleton-loader');
+    function initFeed() {
+        var feedSkeleton = document.getElementById('skeleton-loader');
 
-    var loadMoreButton = document.getElementById('load-more-btn');
+        var loadMoreButton = document.getElementById('load-more-btn');
 
-    if (loadMoreButton) {
-        var feedPosts = document.getElementById('feed-posts');
-        var loadMoreContainer = document.getElementById('load-more-container');
-        var loadMoreError = document.getElementById('load-more-error');
-        var feedPageLoading = false;
-        var pauseAutoLoad = false;
-        var loadMoreLabel = loadMoreButton.textContent;
+        if (loadMoreButton) {
+            var feedPosts = document.getElementById('feed-posts');
+            var loadMoreContainer = document.getElementById('load-more-container');
+            var loadMoreError = document.getElementById('load-more-error');
+            var feedPageLoading = false;
+            var pauseAutoLoad = false;
+            var loadMoreLabel = loadMoreButton.textContent;
 
-        function loadNextFeedPage() {
-            if (feedPageLoading || loadMoreButton.disabled) {
-                return;
-            }
-
-            var nextUrl = loadMoreButton.getAttribute('data-next-url');
-            if (!nextUrl) {
-                loadMoreContainer.hidden = true;
-                return;
-            }
-
-            var pageUrl = new URL(nextUrl, window.location.href);
-            if (pageUrl.origin !== window.location.origin) {
-                loadMoreError.textContent = 'Could not load more posts because the page address was invalid.';
-                loadMoreError.hidden = false;
-                return;
-            }
-
-            feedPageLoading = true;
-            loadMoreButton.disabled = true;
-            loadMoreButton.setAttribute('aria-busy', 'true');
-            loadMoreButton.textContent = 'Loading…';
-            loadMoreError.hidden = true;
-            loadMoreError.textContent = '';
-
-            if (feedSkeleton) {
-                feedSkeleton.classList.remove('hidden');
-                feedSkeleton.setAttribute('aria-hidden', 'false');
-            }
-
-            fetch(pageUrl.href, {
-                credentials: 'same-origin',
-                headers: { Accept: 'text/html' }
-            }).then(function (response) {
-                if (!response.ok) {
-                    throw new Error('Could not load more posts (HTTP ' + response.status + ').');
+            function loadNextFeedPage() {
+                if (feedPageLoading || loadMoreButton.disabled) {
+                    return;
                 }
 
-                if (response.redirected) {
-                    throw new Error('Your session may have expired. Refresh the page and sign in again.');
-                }
-
-                return response.text();
-            }).then(function (html) {
-                var nextDocument = new DOMParser().parseFromString(html, 'text/html');
-                var newPosts = nextDocument.querySelectorAll('#feed-posts > article.cm-post');
-                newPosts.forEach(function (post) {
-                    if (post.id && document.getElementById(post.id)) {
-                        return;
-                    }
-                    feedPosts.appendChild(post);
-                });
-
-                var nextPageButton = nextDocument.getElementById('load-more-btn');
-                if (nextPageButton && nextPageButton.getAttribute('data-next-url')) {
-                    loadMoreButton.setAttribute('data-next-url', nextPageButton.getAttribute('data-next-url'));
-                    loadMoreContainer.hidden = false;
-                    loadMoreButton.disabled = false;
-                    loadMoreButton.textContent = loadMoreLabel;
-                } else {
-                    loadMoreButton.removeAttribute('data-next-url');
+                var nextUrl = loadMoreButton.getAttribute('data-next-url');
+                if (!nextUrl) {
                     loadMoreContainer.hidden = true;
-                    loadMoreButton.textContent = loadMoreLabel;
+                    return;
                 }
 
-                if (window.cmRefreshPostClamps) {
-                    window.cmRefreshPostClamps();
+                var pageUrl = new URL(nextUrl, window.location.href);
+                if (pageUrl.origin !== window.location.origin) {
+                    loadMoreError.textContent = 'Could not load more posts because the page address was invalid.';
+                    loadMoreError.hidden = false;
+                    return;
                 }
-            }).catch(function (error) {
-                pauseAutoLoad = true;
-                loadMoreError.textContent = error.message || 'Could not load more posts. Please try again.';
-                loadMoreError.hidden = false;
-                loadMoreButton.disabled = false;
-                loadMoreButton.textContent = loadMoreLabel;
-            }).then(function () {
-                feedPageLoading = false;
-                loadMoreButton.removeAttribute('aria-busy');
+
+                feedPageLoading = true;
+                loadMoreButton.disabled = true;
+                loadMoreButton.setAttribute('aria-busy', 'true');
+                loadMoreButton.textContent = 'Loading…';
+                loadMoreError.hidden = true;
+                loadMoreError.textContent = '';
 
                 if (feedSkeleton) {
-                    feedSkeleton.classList.add('hidden');
-                    feedSkeleton.setAttribute('aria-hidden', 'true');
+                    feedSkeleton.classList.remove('hidden');
+                    feedSkeleton.setAttribute('aria-hidden', 'false');
                 }
 
-                if (typeof feedObserver !== 'undefined' && feedObserver && loadMoreButton.getAttribute('data-next-url')) {
-                    feedObserver.unobserve(loadMoreContainer);
-                    feedObserver.observe(loadMoreContainer);
-                }
+                fetch(pageUrl.href, {
+                    credentials: 'same-origin',
+                    headers: { Accept: 'text/html' }
+                }).then(function (response) {
+                    if (!response.ok) {
+                        throw new Error('Could not load more posts (HTTP ' + response.status + ').');
+                    }
+
+                    if (response.redirected) {
+                        throw new Error('Your session may have expired. Refresh the page and sign in again.');
+                    }
+
+                    return response.text();
+                }).then(function (html) {
+                    var nextDocument = new DOMParser().parseFromString(html, 'text/html');
+                    var newPosts = nextDocument.querySelectorAll('#feed-posts > article.cm-post');
+                    newPosts.forEach(function (post) {
+                        if (post.id && document.getElementById(post.id)) {
+                            return;
+                        }
+                        feedPosts.appendChild(post);
+                    });
+
+                    var nextPageButton = nextDocument.getElementById('load-more-btn');
+                    if (nextPageButton && nextPageButton.getAttribute('data-next-url')) {
+                        loadMoreButton.setAttribute('data-next-url', nextPageButton.getAttribute('data-next-url'));
+                        loadMoreContainer.hidden = false;
+                        loadMoreButton.disabled = false;
+                        loadMoreButton.textContent = loadMoreLabel;
+                    } else {
+                        loadMoreButton.removeAttribute('data-next-url');
+                        loadMoreContainer.hidden = true;
+                        loadMoreButton.textContent = loadMoreLabel;
+                    }
+
+                    if (window.cmRefreshPostClamps) {
+                        window.cmRefreshPostClamps();
+                    }
+                }).catch(function (error) {
+                    pauseAutoLoad = true;
+                    loadMoreError.textContent = error.message || 'Could not load more posts. Please try again.';
+                    loadMoreError.hidden = false;
+                    loadMoreButton.disabled = false;
+                    loadMoreButton.textContent = loadMoreLabel;
+                }).then(function () {
+                    feedPageLoading = false;
+                    loadMoreButton.removeAttribute('aria-busy');
+
+                    if (feedSkeleton) {
+                        feedSkeleton.classList.add('hidden');
+                        feedSkeleton.setAttribute('aria-hidden', 'true');
+                    }
+
+                    if (typeof feedObserver !== 'undefined' && feedObserver && loadMoreButton.getAttribute('data-next-url')) {
+                        feedObserver.unobserve(loadMoreContainer);
+                        feedObserver.observe(loadMoreContainer);
+                    }
+                });
+            }
+
+            loadMoreButton.addEventListener('click', function () {
+                pauseAutoLoad = false;
+                loadNextFeedPage();
             });
+
+            if ('IntersectionObserver' in window) {
+                var feedObserver = new IntersectionObserver(function (entries) {
+                    if (!pauseAutoLoad && entries.some(function (entry) { return entry.isIntersecting; })) {
+                        loadNextFeedPage();
+                    }
+                }, { rootMargin: '250px 0px' });
+                feedObserver.observe(loadMoreContainer);
+
+                addCleanup(function () {
+                    feedObserver.disconnect();
+                });
+            }
         }
 
-        loadMoreButton.addEventListener('click', function () {
-            pauseAutoLoad = false;
-            loadNextFeedPage();
-        });
+        if (feedSkeleton) {
+            var touchStartY = null;
+            var touchStartX = null;
+            var refreshing = false;
 
-        if ('IntersectionObserver' in window) {
-            var feedObserver = new IntersectionObserver(function (entries) {
-                if (!pauseAutoLoad && entries.some(function (entry) { return entry.isIntersecting; })) {
-                    loadNextFeedPage();
+            var onPullStart = function (event) {
+                if (event.touches.length !== 1 || window.scrollY > 0) {
+                    touchStartY = null;
+                    touchStartX = null;
+                    return;
                 }
-            }, { rootMargin: '250px 0px' });
-            feedObserver.observe(loadMoreContainer);
-        }
-    }
 
-    if (feedSkeleton) {
-        var touchStartY = null;
-        var touchStartX = null;
-        var refreshing = false;
+                touchStartY = event.touches[0].clientY;
+                touchStartX = event.touches[0].clientX;
+            };
 
-        window.addEventListener('touchstart', function (event) {
-            if (event.touches.length !== 1 || window.scrollY > 0) {
+            var onPullMove = function (event) {
+                if (touchStartY === null || refreshing || event.touches.length !== 1 || window.scrollY > 0) {
+                    return;
+                }
+
+                var deltaY = event.touches[0].clientY - touchStartY;
+                var deltaX = event.touches[0].clientX - touchStartX;
+
+                if (deltaY <= 80 || Math.abs(deltaX) > Math.abs(deltaY)) {
+                    return;
+                }
+
+                refreshing = true;
+                feedSkeleton.classList.remove('hidden');
+                feedSkeleton.setAttribute('aria-hidden', 'false');
+                document.querySelectorAll('.cm-post, .cm-empty').forEach(function (item) {
+                    item.hidden = true;
+                });
+
+                window.setTimeout(function () {
+                    window.location.reload();
+                }, 120);
+            };
+
+            var onPullEnd = function () {
                 touchStartY = null;
                 touchStartX = null;
-                return;
-            }
+            };
 
-            touchStartY = event.touches[0].clientY;
-            touchStartX = event.touches[0].clientX;
-        }, { passive: true });
+            window.addEventListener('touchstart', onPullStart, { passive: true });
+            window.addEventListener('touchmove', onPullMove, { passive: true });
+            window.addEventListener('touchend', onPullEnd, { passive: true });
+            window.addEventListener('touchcancel', onPullEnd, { passive: true });
 
-        window.addEventListener('touchmove', function (event) {
-            if (touchStartY === null || refreshing || event.touches.length !== 1 || window.scrollY > 0) {
-                return;
-            }
-
-            var deltaY = event.touches[0].clientY - touchStartY;
-            var deltaX = event.touches[0].clientX - touchStartX;
-
-            if (deltaY <= 80 || Math.abs(deltaX) > Math.abs(deltaY)) {
-                return;
-            }
-
-            refreshing = true;
-            feedSkeleton.classList.remove('hidden');
-            feedSkeleton.setAttribute('aria-hidden', 'false');
-            document.querySelectorAll('.cm-post, .cm-empty').forEach(function (item) {
-                item.hidden = true;
+            addCleanup(function () {
+                window.removeEventListener('touchstart', onPullStart);
+                window.removeEventListener('touchmove', onPullMove);
+                window.removeEventListener('touchend', onPullEnd);
+                window.removeEventListener('touchcancel', onPullEnd);
             });
-
-            window.setTimeout(function () {
-                window.location.reload();
-            }, 120);
-        }, { passive: true });
-
-        window.addEventListener('touchend', function () {
-            touchStartY = null;
-            touchStartX = null;
-        }, { passive: true });
-
-        window.addEventListener('touchcancel', function () {
-            touchStartY = null;
-            touchStartX = null;
-        }, { passive: true });
+        }
     }
 
     /* ---------- Activity tabs ---------- */
@@ -1501,15 +1653,19 @@
         return true;
     }
 
-    document.querySelectorAll('[data-activity]').forEach(function (activity) {
-        var urlTab = activity.getAttribute('data-query-tab');
-        var sessionTab = activity.getAttribute('data-session-tab');
+    // Picks the starting tab from ?tab= (or the flashed session tab). Switching tabs is pure client-side
+    // (the server already rendered all three panels), so no htmx request is involved.
+    function initActivityTabs() {
+        document.querySelectorAll('[data-activity]').forEach(function (activity) {
+            var urlTab = activity.getAttribute('data-query-tab');
+            var sessionTab = activity.getAttribute('data-session-tab');
 
-        if (!selectActivityTab(activity, urlTab, false) &&
-            !selectActivityTab(activity, sessionTab, false)) {
-            selectActivityTab(activity, 'notifications', false);
-        }
-    });
+            if (!selectActivityTab(activity, urlTab, false) &&
+                !selectActivityTab(activity, sessionTab, false)) {
+                selectActivityTab(activity, 'notifications', false);
+            }
+        });
+    }
 
     document.addEventListener('click', function (event) {
         var tab = event.target.closest('[data-activity-tab]');
@@ -1739,664 +1895,679 @@
 
     /* ---------- Create post: enable Post, alias hint, auto-grow, photo preview ---------- */
 
-    var postForm = document.getElementById('post-form');
+    function initComposer() {
+        var postForm = document.getElementById('post-form');
 
-    if (postForm) {
-        var body = document.getElementById('body');
-        var postBtn = document.getElementById('post-btn');
-        var anon = document.getElementById('anonymous');
-        var anonHint = document.getElementById('anon-hint');
-        var composeRow = postForm.querySelector('.cm-compose__row');
-        var marketFields = document.querySelector('[data-market-fields]');
-        var conditionInput = document.getElementById('condition');
-        var marketNameHint = document.getElementById('market-name-hint');
-        var marketOn = false;
-        var anonBeforeMarket = true;
-        var itemsIncomplete;
-        var charCount = document.getElementById('char-count');
-        var alias = postForm.getAttribute('data-alias');
-        var displayName = postForm.getAttribute('data-display-name');
-        var postSubmitting = false;
-        var photoItems = [];   // { id, blob, url, name, width, height, pending }
-        var photosBusy = 0;    // photos still being resized
+        if (postForm) {
+            var body = document.getElementById('body');
+            var postBtn = document.getElementById('post-btn');
+            var anon = document.getElementById('anonymous');
+            var anonHint = document.getElementById('anon-hint');
+            var marketFields = document.querySelector('[data-market-fields]');
+            var conditionInput = document.getElementById('condition');
+            var marketNameHint = document.getElementById('market-name-hint');
+            var marketOn = false;
+            var anonBeforeMarket = true;
+            var itemsIncomplete;
+            var charCount = document.getElementById('char-count');
+            var alias = postForm.getAttribute('data-alias');
+            var displayName = postForm.getAttribute('data-display-name');
+            var postSubmitting = false;
+            var photoItems = [];   // { id, blob, url, name, width, height, pending }
+            var photosBusy = 0;    // photos still being resized
 
-        var syncCharCount = function () {
-            if (!charCount) {
-                return;
+            var syncCharCount = function () {
+                if (!charCount) {
+                    return;
+                }
+
+                var length = body.value.length;
+                charCount.textContent = length + ' / 2000';
+                charCount.classList.toggle('text-warning', length > 1800);
+                charCount.classList.toggle('text-danger', length > 1950);
+            };
+
+            var syncPostBtn = function () {
+                var itemsMissing = marketOn && itemsIncomplete();
+                postBtn.disabled = postSubmitting || photosBusy > 0 || itemsMissing || body.value.trim().length < 3;
+            };
+
+            var syncAnon = function () {
+                if (marketOn) {
+                    anonHint.textContent = postForm.getAttribute('data-has-name') === '1'
+                        ? 'Listings always show your display name.'
+                        : 'Listings show your display name. Add one in Me first.';
+                    return;
+                }
+
+                anonHint.textContent = anon.checked
+                    ? 'Posting anonymously as ' + alias
+                    : 'Posting as ' + displayName;
+            };
+
+            /* -- Auto-expanding textarea: no cap, the page scrolls instead -- */
+
+            var autoGrow = function () {
+                body.style.height = 'auto';
+                body.style.height = body.scrollHeight + 'px';
+                body.style.overflowY = 'hidden';
+            };
+
+            body.addEventListener('input', function () {
+                syncPostBtn();
+                syncCharCount();
+                autoGrow();
+            });
+
+            // Width changes re-wrap the text, which changes the height it needs.
+            window.addEventListener('resize', autoGrow);
+            addCleanup(function () {
+                window.removeEventListener('resize', autoGrow);
+            });
+
+            anon.addEventListener('change', syncAnon);
+
+            /* -- Marketplace: slide-down items + condition, anonymity locked OFF -- */
+
+            var itemsEditor = document.getElementById('items-editor');
+            var itemRowsBox = document.getElementById('item-rows');
+            var itemTemplate = document.getElementById('item-row-template');
+            var addItemBtn = document.getElementById('add-item-btn');
+            var itemsTitle = document.getElementById('items-title');
+            var anonLabel = anon.closest('.cm-anon-badge');
+            var maxItems = parseInt(itemsEditor.getAttribute('data-max-items'), 10) || 5;
+            var rowAnimationMs = 280;
+
+            var liveRows = function () {
+                return Array.prototype.filter.call(itemRowsBox.querySelectorAll('[data-item-row]'), function (row) {
+                    return !row.hasAttribute('data-removing');
+                });
+            };
+
+            var rowPrice = function (row) { return row.querySelector('[data-item-price]'); };
+            var rowName = function (row) { return row.querySelector('[data-item-name] input'); };
+
+            itemsIncomplete = function () {
+                var rows = liveRows();
+                var multi = rows.length > 1;
+
+                return rows.some(function (row) {
+                    return rowPrice(row).value.trim() === '' || (multi && rowName(row).value.trim() === '');
+                });
+            };
+
+            var syncItems = function () {
+                var rows = liveRows();
+                var multi = rows.length > 1;
+
+                itemsEditor.classList.toggle('is-multi', multi);
+                itemsTitle.textContent = multi ? 'Items for sale' : 'Price';
+                addItemBtn.hidden = rows.length >= maxItems;
+
+                rows.forEach(function (row, index) {
+                    var name = rowName(row);
+                    var price = rowPrice(row);
+                    var nameLabel = row.querySelector('[data-item-name] label');
+                    var priceLabel = row.querySelector('.cm-item-row__price label');
+                    var remove = row.querySelector('[data-item-remove]');
+
+                    name.name = 'items[' + index + '][label]';
+                    name.id = 'items-' + index + '-label';
+                    nameLabel.htmlFor = name.id;
+                    nameLabel.textContent = 'Item ' + (index + 1) + ' name';
+
+                    price.name = 'items[' + index + '][price]';
+                    price.id = 'items-' + index + '-price';
+                    priceLabel.htmlFor = price.id;
+                    priceLabel.textContent = multi ? 'Item ' + (index + 1) + ' price in pesos' : 'Price in pesos';
+
+                    remove.setAttribute('aria-label', 'Remove item ' + (index + 1));
+                    remove.disabled = !marketOn || !multi;
+                    price.disabled = !marketOn;
+                    name.disabled = !marketOn || !multi;
+                });
+            };
+
+            var isMarketplace = function () {
+                var checked = postForm.querySelector('input[name="category"]:checked');
+
+                return Boolean(checked && checked.value === 'Marketplace');
+            };
+
+            var setMarket = function (on, instant) {
+                if (!marketFields || on === marketOn) {
+                    return;
+                }
+
+                marketOn = on;
+
+                if (instant) {
+                    marketFields.style.transition = 'none';
+                }
+
+                marketFields.classList.toggle('is-open', on);
+                marketFields.setAttribute('aria-hidden', on ? 'false' : 'true');
+
+                if (instant) {
+                    void marketFields.offsetWidth;
+                    marketFields.style.transition = '';
+                }
+
+                conditionInput.disabled = !on;
+                syncItems();
+
+                if (marketNameHint) {
+                    marketNameHint.hidden = postForm.getAttribute('data-has-name') === '1' || !on;
+                }
+
+                if (on) {
+                    anonBeforeMarket = anon.checked;
+                    anon.checked = false;
+                    anon.disabled = true;
+                    anonLabel.classList.add('is-locked');
+
+                    if (!instant) {
+                        window.setTimeout(function () {
+                            rowPrice(liveRows()[0]).focus({ preventScroll: true });
+                        }, rowAnimationMs);
+                    }
+                } else {
+                    anon.disabled = false;
+                    anon.checked = anonBeforeMarket;
+                    anonLabel.classList.remove('is-locked');
+                }
+
+                syncAnon();
+                syncPostBtn();
+            };
+
+            addItemBtn.addEventListener('click', function () {
+                var rows = liveRows();
+
+                if (rows.length >= maxItems) {
+                    return;
+                }
+
+                var wasSingle = rows.length === 1;
+                var holder = document.createElement('div');
+                holder.innerHTML = itemTemplate.innerHTML.replace(/__i__/g, String(rows.length));
+
+                var slot = holder.firstElementChild;
+                slot.classList.add('is-hidden');
+                itemRowsBox.appendChild(slot);
+                syncItems();
+                void slot.offsetWidth;
+                slot.classList.remove('is-hidden');
+
+                var target = rowName(wasSingle ? rows[0] : slot);
+                window.setTimeout(function () {
+                    target.focus({ preventScroll: true });
+                }, rowAnimationMs);
+                syncPostBtn();
+            });
+
+            itemRowsBox.addEventListener('click', function (event) {
+                var button = event.target.closest('[data-item-remove]');
+
+                if (!button) {
+                    return;
+                }
+
+                var row = button.closest('[data-item-row]');
+                var rows = liveRows();
+
+                if (!row || rows.length <= 1) {
+                    return;
+                }
+
+                row.setAttribute('data-removing', '');
+                row.querySelectorAll('input, button').forEach(function (element) {
+                    element.disabled = true;
+                });
+                row.classList.add('is-hidden');
+
+                syncItems();
+                syncPostBtn();
+
+                window.setTimeout(function () {
+                    if (row.parentNode) {
+                        row.parentNode.removeChild(row);
+                    }
+                }, rowAnimationMs);
+
+                (addItemBtn.hidden ? rowPrice(liveRows()[0]) : addItemBtn).focus({ preventScroll: true });
+            });
+
+            itemRowsBox.addEventListener('input', function (event) {
+                var field = event.target;
+
+                if (field.matches('[data-item-price]')) {
+                    var digits = field.value.replace(/\D/g, '').slice(0, 7);
+
+                    if (digits !== '' && parseInt(digits, 10) > 1000000) {
+                        digits = '1000000';
+                    }
+
+                    if (field.value !== digits) {
+                        field.value = digits;
+                    }
+                }
+
+                syncPostBtn();
+            });
+
+            postForm.querySelectorAll('input[name="category"]').forEach(function (radio) {
+                radio.addEventListener('change', function () {
+                    var chipContainer = radio.closest('.cm-chips--compose');
+                    var chipLabel = radio.closest('label');
+
+                    if (chipContainer && chipLabel) {
+                        var containerRect = chipContainer.getBoundingClientRect();
+                        var labelRect = chipLabel.getBoundingClientRect();
+                        var targetLeft = chipContainer.scrollLeft
+                            + labelRect.left
+                            - containerRect.left
+                            - (chipContainer.clientWidth - labelRect.width) / 2;
+                        var maxScrollLeft = chipContainer.scrollWidth - chipContainer.clientWidth;
+
+                        chipContainer.scrollLeft = Math.max(0, Math.min(targetLeft, maxScrollLeft));
+                    }
+
+                    setMarket(isMarketplace(), false);
+                });
+            });
+
+            syncItems();
+            setMarket(isMarketplace(), true);
+
+            /* -- AJAX submit -- */
+
+            var postError = document.getElementById('post-error');
+
+            postForm.addEventListener('submit', function (event) {
+                event.preventDefault();
+
+                if (postSubmitting || postBtn.disabled) {
+                    return;
+                }
+
+                postSubmitting = true;
+                showInlineError(postError, '');
+                setSending(postBtn, 'Posting\u2026');
+
+                sendForm(postForm, function (data) {
+                    // Replace the raw picks with the resized blobs.
+                    data.delete('photos[]');
+                    photoItems.forEach(function (item) {
+                        if (item.blob) {
+                            data.append('photos[]', item.blob, item.name);
+                        }
+                    });
+                }).then(function (res) {
+                    if (res.ok && res.data.status === 'success') {
+                        try { sessionStorage.setItem('cm-new-post', '1'); } catch (e) { /* private mode */ }
+                        window.location.href = res.data.redirect || '/feed';
+                        return;
+                    }
+
+                    postSubmitting = false;
+                    clearSending(postBtn);
+                    syncPostBtn();
+                    composerFailure(res, postError);
+                });
+            });
+
+            /* -- Photos: pick up to 3, shrink to 1600px in the browser, preview as a grid -- */
+
+            var photoInput = document.getElementById('photo');
+            var photoName = document.getElementById('photo-name');
+            var photoLabel = document.querySelector('label[for="photo"]');
+            var previewBox = document.getElementById('image-preview-container');
+
+            if (photoInput && previewBox) {
+                // Mirrors PostController::store() (type and count). Size is checked AFTER shrinking.
+                var ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+                var MAX_PHOTOS = 3;
+                var MAX_EDGE = 1600;
+                var MAX_SOURCE_BYTES = 25 * 1024 * 1024;
+                var MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
+                var DEFAULT_LABEL = 'Add photos (max 3)';
+
+                var photoError = null;
+                var nextPhotoId = 1;
+
+                var showPhotoError = function (message) {
+                    if (!photoError) {
+                        photoError = document.createElement('p');
+                        photoError.className = 'field__error';
+                        photoError.setAttribute('aria-live', 'polite');
+                        previewBox.parentNode.insertBefore(photoError, previewBox.nextSibling);
+                    }
+
+                    photoError.textContent = message;
+                    photoError.hidden = false;
+                };
+
+                var clearPhotoError = function () {
+                    if (photoError) {
+                        photoError.textContent = '';
+                        photoError.hidden = true;
+                    }
+                };
+
+                var buildCloseIcon = function () {
+                    var ns = 'http://www.w3.org/2000/svg';
+                    var svg = document.createElementNS(ns, 'svg');
+                    var path = document.createElementNS(ns, 'path');
+
+                    svg.setAttribute('class', 'icon');
+                    svg.setAttribute('viewBox', '0 0 24 24');
+                    svg.setAttribute('fill', 'none');
+                    svg.setAttribute('stroke', 'currentColor');
+                    svg.setAttribute('stroke-width', '1.75');
+                    svg.setAttribute('stroke-linecap', 'round');
+                    svg.setAttribute('stroke-linejoin', 'round');
+                    svg.setAttribute('aria-hidden', 'true');
+                    path.setAttribute('d', 'M6 6l12 12M18 6 6 18');
+                    svg.appendChild(path);
+
+                    return svg;
+                };
+
+                /* ---- resize ---- */
+
+                var loadImage = function (file) {
+                    return new Promise(function (resolve, reject) {
+                        var url = URL.createObjectURL(file);
+                        var img = new Image();
+
+                        img.onload = function () { resolve({ img: img, url: url }); };
+                        img.onerror = function () {
+                            URL.revokeObjectURL(url);
+                            reject(new Error('read'));
+                        };
+                        img.src = url;
+                    });
+                };
+
+                var canvasToBlob = function (canvas, quality) {
+                    return new Promise(function (resolve) {
+                        canvas.toBlob(resolve, 'image/jpeg', quality);
+                    });
+                };
+
+                // Resolves to { blob, name, width, height }. Photos that are already small are sent untouched.
+                var preparePhoto = function (file) {
+                    return loadImage(file).then(function (loaded) {
+                        var img = loaded.img;
+                        var width = img.naturalWidth;
+                        var height = img.naturalHeight;
+
+                        if (width * height > 24000000) {
+                            URL.revokeObjectURL(loaded.url);
+                            throw new Error('pixels');
+                        }
+
+                        var scale = Math.min(1, MAX_EDGE / Math.max(width, height));
+
+                        if (scale === 1 && file.size <= MAX_UPLOAD_BYTES) {
+                            URL.revokeObjectURL(loaded.url);
+                            return { blob: file, name: file.name, width: width, height: height };
+                        }
+
+                        var targetW = Math.max(1, Math.round(width * scale));
+                        var targetH = Math.max(1, Math.round(height * scale));
+                        var canvas = document.createElement('canvas');
+
+                        canvas.width = targetW;
+                        canvas.height = targetH;
+
+                        var ctx = canvas.getContext('2d');
+
+                        if (!ctx) {
+                            URL.revokeObjectURL(loaded.url);
+                            throw new Error('read');
+                        }
+
+                        ctx.fillStyle = '#ffffff'; // transparent PNGs would turn black as JPEG
+                        ctx.fillRect(0, 0, targetW, targetH);
+                        ctx.imageSmoothingQuality = 'high';
+                        ctx.drawImage(img, 0, 0, targetW, targetH);
+                        URL.revokeObjectURL(loaded.url);
+
+                        return canvasToBlob(canvas, 0.85).then(function (blob) {
+                            if (blob && blob.size > MAX_UPLOAD_BYTES) {
+                                return canvasToBlob(canvas, 0.7);
+                            }
+
+                            return blob;
+                        }).then(function (blob) {
+                            canvas.width = 0; // frees the pixel buffer sooner on iOS
+                            canvas.height = 0;
+
+                            if (!blob || blob.size > MAX_UPLOAD_BYTES) {
+                                throw new Error('size');
+                            }
+
+                            return { blob: blob, name: 'photo-' + Date.now() + '-' + nextPhotoId + '.jpg', width: targetW, height: targetH };
+                        });
+                    });
+                };
+
+                /* ---- preview grid ---- */
+
+                var render = function () {
+                    var count = photoItems.length;
+
+                    while (previewBox.firstChild) {
+                        previewBox.removeChild(previewBox.firstChild);
+                    }
+
+                    if (count === 0) {
+                        previewBox.classList.add('hidden');
+                    } else {
+                        var grid = document.createElement('div');
+                        grid.className = 'cm-photos cm-photos--' + count;
+
+                        if (count === 1 && photoItems[0].width && photoItems[0].height) {
+                            // Same clamp as post-card.blade.php.
+                            var ratio = Math.max(0.8, Math.min(1.91, photoItems[0].width / photoItems[0].height));
+                            grid.style.setProperty('--cm-ar', ratio.toFixed(3));
+                        }
+
+                        photoItems.forEach(function (item, index) {
+                            var tile = document.createElement('div');
+                            tile.className = 'cm-photos__item' + (item.pending ? ' cm-skeleton' : '');
+
+                            if (!item.pending) {
+                                var img = document.createElement('img');
+                                img.className = 'cm-photos__img';
+                                img.src = item.url;
+                                img.alt = 'Selected photo ' + (index + 1) + ' of ' + count;
+
+                                var remove = document.createElement('button');
+                                remove.type = 'button';
+                                remove.className = 'cm-photos__remove';
+                                remove.setAttribute('aria-label', 'Remove photo ' + (index + 1));
+                                remove.appendChild(buildCloseIcon());
+                                remove.addEventListener('click', function () {
+                                    removePhoto(item);
+                                    body.focus();
+                                });
+
+                                tile.appendChild(img);
+                                tile.appendChild(remove);
+                            }
+
+                            grid.appendChild(tile);
+                        });
+
+                        previewBox.appendChild(grid);
+                        previewBox.classList.remove('hidden');
+                    }
+
+                    photoInput.disabled = count >= MAX_PHOTOS;
+
+                    if (photoLabel) {
+                        photoLabel.classList.toggle('is-disabled', count >= MAX_PHOTOS);
+                    }
+
+                    if (photoName) {
+                        photoName.textContent = count === 0 ? DEFAULT_LABEL : count + ' of ' + MAX_PHOTOS + ' photos';
+                    }
+
+                    autoGrow(); // the textarea gives room back once photos appear
+                };
+
+                var removePhoto = function (item) {
+                    var index = photoItems.indexOf(item);
+
+                    if (index === -1) {
+                        return;
+                    }
+
+                    if (item.url) {
+                        URL.revokeObjectURL(item.url);
+                    }
+
+                    photoItems.splice(index, 1);
+                    clearPhotoError();
+                    render();
+                    syncPostBtn();
+                };
+
+                var addPhotos = function (files) {
+                    var message = '';
+                    var room = MAX_PHOTOS - photoItems.length;
+
+                    clearPhotoError();
+
+                    if (files.length > room) {
+                        message = 'You can only upload up to ' + MAX_PHOTOS + ' photos.';
+                        files = files.slice(0, Math.max(0, room));
+                    }
+
+                    files = files.filter(function (file) {
+                        if (ALLOWED_TYPES.indexOf(file.type) === -1) {
+                            message = 'Please choose JPG, PNG or WebP photos.';
+                            return false;
+                        }
+
+                        if (file.size > MAX_SOURCE_BYTES) {
+                            message = 'That photo is too large. Choose one under 25 MB.';
+                            return false;
+                        }
+
+                        return true;
+                    });
+
+                    files.forEach(function (file) {
+                        var item = { id: nextPhotoId++, blob: null, url: null, name: '', width: 0, height: 0, pending: true };
+
+                        photoItems.push(item);
+                        photosBusy += 1;
+
+                        preparePhoto(file).then(function (result) {
+                            if (photoItems.indexOf(item) === -1) {
+                                return;
+                            }
+
+                            item.blob = result.blob;
+                            item.name = result.name;
+                            item.width = result.width;
+                            item.height = result.height;
+                            item.url = URL.createObjectURL(result.blob);
+                            item.pending = false;
+                        }, function (error) {
+                            var index = photoItems.indexOf(item);
+
+                            if (index !== -1) {
+                                photoItems.splice(index, 1);
+                            }
+
+                            showPhotoError(error && error.message === 'size'
+                                ? 'That photo is still over 4 MB after shrinking. Try another one.'
+                                : error && error.message === 'pixels'
+                                    ? 'That photo has too many pixels to process. Try a smaller one.'
+                                    : 'That file could not be read as an image.');
+                        }).then(function () {
+                            photosBusy -= 1;
+                            render();
+                            syncPostBtn();
+                        });
+                    });
+
+                    if (message) {
+                        showPhotoError(message);
+                    }
+
+                    render();
+                    syncPostBtn();
+                };
+
+                photoInput.addEventListener('change', function () {
+                    var files = photoInput.files ? Array.prototype.slice.call(photoInput.files) : [];
+
+                    // Clear the input so picking the same file again still fires "change".
+                    // The real list lives in photoItems.
+                    photoInput.value = '';
+
+                    if (files.length > 0) {
+                        addPhotos(files);
+                    }
+                });
+
+                // Free the preview blobs if the user navigates away without posting.
+                addCleanup(function () {
+                    photoItems.forEach(function (item) {
+                        if (item.url) {
+                            URL.revokeObjectURL(item.url);
+                        }
+                    });
+                });
             }
 
-            var length = body.value.length;
-            charCount.textContent = length + ' / 2000';
-            charCount.classList.toggle('text-warning', length > 1800);
-            charCount.classList.toggle('text-danger', length > 1950);
-        };
+            /* -- Tap anywhere on the canvas to focus the textarea -- */
 
-        var syncPostBtn = function () {
-            var itemsMissing = marketOn && itemsIncomplete();
-            postBtn.disabled = postSubmitting || photosBusy > 0 || itemsMissing || body.value.trim().length < 3;
-        };
+            var canvas = postForm.querySelector('.cm-compose--canvas');
 
-        var syncAnon = function () {
-            composeRow.classList.toggle('is-anonymous', anon.checked);
-
-            if (marketOn) {
-                anonHint.textContent = postForm.getAttribute('data-has-name') === '1'
-                    ? 'Listings always show your display name.'
-                    : 'Listings show your display name. Add one in Me first.';
-                return;
+            if (canvas) {
+                canvas.addEventListener('click', function (event) {
+                    if (event.target === canvas || event.target.classList.contains('cm-compose__main') || event.target.classList.contains('cm-compose__row')) {
+                        body.focus();
+                    }
+                });
             }
 
-            anonHint.textContent = anon.checked
-                ? 'Posting anonymously as ' + alias
-                : 'Posting as ' + displayName;
-        };
+            /* -- Lift the action bar above the iOS keyboard -- */
 
-        /* -- Auto-expanding textarea: no cap, the page scrolls instead -- */
+            if (window.visualViewport) {
+                var vv = window.visualViewport;
 
-        var autoGrow = function () {
-            body.style.height = 'auto';
-            body.style.height = body.scrollHeight + 'px';
-            body.style.overflowY = 'hidden';
-        };
+                var syncKeyboard = function () {
+                    var offset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+                    var open = offset > 80; // ignore URL-bar resize noise
 
-        body.addEventListener('input', function () {
+                    postForm.style.setProperty('--cm-kb', open ? offset + 'px' : '0px');
+                    postForm.classList.toggle('is-keyboard', open);
+                };
+
+                vv.addEventListener('resize', syncKeyboard);
+                vv.addEventListener('scroll', syncKeyboard);
+                addCleanup(function () {
+                    vv.removeEventListener('resize', syncKeyboard);
+                    vv.removeEventListener('scroll', syncKeyboard);
+                });
+            }
+
             syncPostBtn();
             syncCharCount();
-            autoGrow();
-        });
-
-        // Width changes re-wrap the text, which changes the height it needs.
-        window.addEventListener('resize', autoGrow);
-
-        anon.addEventListener('change', syncAnon);
-
-        /* -- Marketplace: slide-down items + condition, anonymity locked OFF -- */
-
-        var itemsEditor = document.getElementById('items-editor');
-        var itemRowsBox = document.getElementById('item-rows');
-        var itemTemplate = document.getElementById('item-row-template');
-        var addItemBtn = document.getElementById('add-item-btn');
-        var itemsTitle = document.getElementById('items-title');
-        var anonLabel = anon.closest('.cm-anon-badge');
-        var maxItems = parseInt(itemsEditor.getAttribute('data-max-items'), 10) || 5;
-        var rowAnimationMs = 280;
-
-        var liveRows = function () {
-            return Array.prototype.filter.call(itemRowsBox.querySelectorAll('[data-item-row]'), function (row) {
-                return !row.hasAttribute('data-removing');
-            });
-        };
-
-        var rowPrice = function (row) { return row.querySelector('[data-item-price]'); };
-        var rowName = function (row) { return row.querySelector('[data-item-name] input'); };
-
-        itemsIncomplete = function () {
-            var rows = liveRows();
-            var multi = rows.length > 1;
-
-            return rows.some(function (row) {
-                return rowPrice(row).value.trim() === '' || (multi && rowName(row).value.trim() === '');
-            });
-        };
-
-        var syncItems = function () {
-            var rows = liveRows();
-            var multi = rows.length > 1;
-
-            itemsEditor.classList.toggle('is-multi', multi);
-            itemsTitle.textContent = multi ? 'Items for sale' : 'Price';
-            addItemBtn.hidden = rows.length >= maxItems;
-
-            rows.forEach(function (row, index) {
-                var name = rowName(row);
-                var price = rowPrice(row);
-                var nameLabel = row.querySelector('[data-item-name] label');
-                var priceLabel = row.querySelector('.cm-item-row__price label');
-                var remove = row.querySelector('[data-item-remove]');
-
-                name.name = 'items[' + index + '][label]';
-                name.id = 'items-' + index + '-label';
-                nameLabel.htmlFor = name.id;
-                nameLabel.textContent = 'Item ' + (index + 1) + ' name';
-
-                price.name = 'items[' + index + '][price]';
-                price.id = 'items-' + index + '-price';
-                priceLabel.htmlFor = price.id;
-                priceLabel.textContent = multi ? 'Item ' + (index + 1) + ' price in pesos' : 'Price in pesos';
-
-                remove.setAttribute('aria-label', 'Remove item ' + (index + 1));
-                remove.disabled = !marketOn || !multi;
-                price.disabled = !marketOn;
-                name.disabled = !marketOn || !multi;
-            });
-        };
-
-        var isMarketplace = function () {
-            var checked = postForm.querySelector('input[name="category"]:checked');
-
-            return Boolean(checked && checked.value === 'Marketplace');
-        };
-
-        var setMarket = function (on, instant) {
-            if (!marketFields || on === marketOn) {
-                return;
-            }
-
-            marketOn = on;
-
-            if (instant) {
-                marketFields.style.transition = 'none';
-            }
-
-            marketFields.classList.toggle('is-open', on);
-            marketFields.setAttribute('aria-hidden', on ? 'false' : 'true');
-
-            if (instant) {
-                void marketFields.offsetWidth;
-                marketFields.style.transition = '';
-            }
-
-            conditionInput.disabled = !on;
-            syncItems();
-
-            if (marketNameHint) {
-                marketNameHint.hidden = postForm.getAttribute('data-has-name') === '1' || !on;
-            }
-
-            if (on) {
-                anonBeforeMarket = anon.checked;
-                anon.checked = false;
-                anon.disabled = true;
-                anonLabel.classList.add('is-locked');
-
-                if (!instant) {
-                    window.setTimeout(function () {
-                        rowPrice(liveRows()[0]).focus({ preventScroll: true });
-                    }, rowAnimationMs);
-                }
-            } else {
-                anon.disabled = false;
-                anon.checked = anonBeforeMarket;
-                anonLabel.classList.remove('is-locked');
-            }
-
             syncAnon();
-            syncPostBtn();
-        };
-
-        addItemBtn.addEventListener('click', function () {
-            var rows = liveRows();
-
-            if (rows.length >= maxItems) {
-                return;
-            }
-
-            var wasSingle = rows.length === 1;
-            var holder = document.createElement('div');
-            holder.innerHTML = itemTemplate.innerHTML.replace(/__i__/g, String(rows.length));
-
-            var slot = holder.firstElementChild;
-            slot.classList.add('is-hidden');
-            itemRowsBox.appendChild(slot);
-            syncItems();
-            void slot.offsetWidth;
-            slot.classList.remove('is-hidden');
-
-            var target = rowName(wasSingle ? rows[0] : slot);
-            window.setTimeout(function () {
-                target.focus({ preventScroll: true });
-            }, rowAnimationMs);
-            syncPostBtn();
-        });
-
-        itemRowsBox.addEventListener('click', function (event) {
-            var button = event.target.closest('[data-item-remove]');
-
-            if (!button) {
-                return;
-            }
-
-            var row = button.closest('[data-item-row]');
-            var rows = liveRows();
-
-            if (!row || rows.length <= 1) {
-                return;
-            }
-
-            row.setAttribute('data-removing', '');
-            row.querySelectorAll('input, button').forEach(function (element) {
-                element.disabled = true;
-            });
-            row.classList.add('is-hidden');
-
-            syncItems();
-            syncPostBtn();
-
-            window.setTimeout(function () {
-                if (row.parentNode) {
-                    row.parentNode.removeChild(row);
-                }
-            }, rowAnimationMs);
-
-            (addItemBtn.hidden ? rowPrice(liveRows()[0]) : addItemBtn).focus({ preventScroll: true });
-        });
-
-        itemRowsBox.addEventListener('input', function (event) {
-            var field = event.target;
-
-            if (field.matches('[data-item-price]')) {
-                var digits = field.value.replace(/\D/g, '').slice(0, 7);
-
-                if (digits !== '' && parseInt(digits, 10) > 1000000) {
-                    digits = '1000000';
-                }
-
-                if (field.value !== digits) {
-                    field.value = digits;
-                }
-            }
-
-            syncPostBtn();
-        });
-
-        postForm.querySelectorAll('input[name="category"]').forEach(function (radio) {
-            radio.addEventListener('change', function () {
-                var chipContainer = radio.closest('.cm-chips--compose');
-                var chipLabel = radio.closest('label');
-
-                if (chipContainer && chipLabel) {
-                    var containerRect = chipContainer.getBoundingClientRect();
-                    var labelRect = chipLabel.getBoundingClientRect();
-                    var targetLeft = chipContainer.scrollLeft
-                        + labelRect.left
-                        - containerRect.left
-                        - (chipContainer.clientWidth - labelRect.width) / 2;
-                    var maxScrollLeft = chipContainer.scrollWidth - chipContainer.clientWidth;
-
-                    chipContainer.scrollLeft = Math.max(0, Math.min(targetLeft, maxScrollLeft));
-                }
-
-                setMarket(isMarketplace(), false);
-            });
-        });
-
-        syncItems();
-        setMarket(isMarketplace(), true);
-
-        /* -- AJAX submit -- */
-
-        var postError = document.getElementById('post-error');
-
-        postForm.addEventListener('submit', function (event) {
-            event.preventDefault();
-
-            if (postSubmitting || postBtn.disabled) {
-                return;
-            }
-
-            postSubmitting = true;
-            showInlineError(postError, '');
-            setSending(postBtn, 'Posting\u2026');
-
-            sendForm(postForm, function (data) {
-                // Replace the raw picks with the resized blobs.
-                data.delete('photos[]');
-                photoItems.forEach(function (item) {
-                    if (item.blob) {
-                        data.append('photos[]', item.blob, item.name);
-                    }
-                });
-            }).then(function (res) {
-                if (res.ok && res.data.status === 'success') {
-                    try { sessionStorage.setItem('cm-new-post', '1'); } catch (e) { /* private mode */ }
-                    window.location.href = res.data.redirect || '/feed';
-                    return;
-                }
-
-                postSubmitting = false;
-                clearSending(postBtn);
-                syncPostBtn();
-                composerFailure(res, postError);
-            });
-        });
-
-        /* -- Photos: pick up to 3, shrink to 1600px in the browser, preview as a grid -- */
-
-        var photoInput = document.getElementById('photo');
-        var photoName = document.getElementById('photo-name');
-        var photoLabel = document.querySelector('label[for="photo"]');
-        var previewBox = document.getElementById('image-preview-container');
-
-        if (photoInput && previewBox) {
-            // Mirrors PostController::store() (type and count). Size is checked AFTER shrinking.
-            var ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-            var MAX_PHOTOS = 3;
-            var MAX_EDGE = 1600;
-            var MAX_SOURCE_BYTES = 25 * 1024 * 1024;
-            var MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
-            var DEFAULT_LABEL = 'Add photos (max 3)';
-
-            var photoError = null;
-            var nextPhotoId = 1;
-
-            var showPhotoError = function (message) {
-                if (!photoError) {
-                    photoError = document.createElement('p');
-                    photoError.className = 'field__error';
-                    photoError.setAttribute('aria-live', 'polite');
-                    previewBox.parentNode.insertBefore(photoError, previewBox.nextSibling);
-                }
-
-                photoError.textContent = message;
-                photoError.hidden = false;
-            };
-
-            var clearPhotoError = function () {
-                if (photoError) {
-                    photoError.textContent = '';
-                    photoError.hidden = true;
-                }
-            };
-
-            var buildCloseIcon = function () {
-                var ns = 'http://www.w3.org/2000/svg';
-                var svg = document.createElementNS(ns, 'svg');
-                var path = document.createElementNS(ns, 'path');
-
-                svg.setAttribute('class', 'icon');
-                svg.setAttribute('viewBox', '0 0 24 24');
-                svg.setAttribute('fill', 'none');
-                svg.setAttribute('stroke', 'currentColor');
-                svg.setAttribute('stroke-width', '1.75');
-                svg.setAttribute('stroke-linecap', 'round');
-                svg.setAttribute('stroke-linejoin', 'round');
-                svg.setAttribute('aria-hidden', 'true');
-                path.setAttribute('d', 'M6 6l12 12M18 6 6 18');
-                svg.appendChild(path);
-
-                return svg;
-            };
-
-            /* ---- resize ---- */
-
-            var loadImage = function (file) {
-                return new Promise(function (resolve, reject) {
-                    var url = URL.createObjectURL(file);
-                    var img = new Image();
-
-                    img.onload = function () { resolve({ img: img, url: url }); };
-                    img.onerror = function () {
-                        URL.revokeObjectURL(url);
-                        reject(new Error('read'));
-                    };
-                    img.src = url;
-                });
-            };
-
-            var canvasToBlob = function (canvas, quality) {
-                return new Promise(function (resolve) {
-                    canvas.toBlob(resolve, 'image/jpeg', quality);
-                });
-            };
-
-            // Resolves to { blob, name, width, height }. Photos that are already small are sent untouched.
-            var preparePhoto = function (file) {
-                return loadImage(file).then(function (loaded) {
-                    var img = loaded.img;
-                    var width = img.naturalWidth;
-                    var height = img.naturalHeight;
-
-                    if (width * height > 24000000) {
-                        URL.revokeObjectURL(loaded.url);
-                        throw new Error('pixels');
-                    }
-
-                    var scale = Math.min(1, MAX_EDGE / Math.max(width, height));
-
-                    if (scale === 1 && file.size <= MAX_UPLOAD_BYTES) {
-                        URL.revokeObjectURL(loaded.url);
-                        return { blob: file, name: file.name, width: width, height: height };
-                    }
-
-                    var targetW = Math.max(1, Math.round(width * scale));
-                    var targetH = Math.max(1, Math.round(height * scale));
-                    var canvas = document.createElement('canvas');
-
-                    canvas.width = targetW;
-                    canvas.height = targetH;
-
-                    var ctx = canvas.getContext('2d');
-
-                    if (!ctx) {
-                        URL.revokeObjectURL(loaded.url);
-                        throw new Error('read');
-                    }
-
-                    ctx.fillStyle = '#ffffff'; // transparent PNGs would turn black as JPEG
-                    ctx.fillRect(0, 0, targetW, targetH);
-                    ctx.imageSmoothingQuality = 'high';
-                    ctx.drawImage(img, 0, 0, targetW, targetH);
-                    URL.revokeObjectURL(loaded.url);
-
-                    return canvasToBlob(canvas, 0.85).then(function (blob) {
-                        if (blob && blob.size > MAX_UPLOAD_BYTES) {
-                            return canvasToBlob(canvas, 0.7);
-                        }
-
-                        return blob;
-                    }).then(function (blob) {
-                        canvas.width = 0; // frees the pixel buffer sooner on iOS
-                        canvas.height = 0;
-
-                        if (!blob || blob.size > MAX_UPLOAD_BYTES) {
-                            throw new Error('size');
-                        }
-
-                        return { blob: blob, name: 'photo-' + Date.now() + '-' + nextPhotoId + '.jpg', width: targetW, height: targetH };
-                    });
-                });
-            };
-
-            /* ---- preview grid ---- */
-
-            var render = function () {
-                var count = photoItems.length;
-
-                while (previewBox.firstChild) {
-                    previewBox.removeChild(previewBox.firstChild);
-                }
-
-                if (count === 0) {
-                    previewBox.classList.add('hidden');
-                } else {
-                    var grid = document.createElement('div');
-                    grid.className = 'cm-photos cm-photos--' + count;
-
-                    if (count === 1 && photoItems[0].width && photoItems[0].height) {
-                        // Same clamp as post-card.blade.php.
-                        var ratio = Math.max(0.8, Math.min(1.91, photoItems[0].width / photoItems[0].height));
-                        grid.style.setProperty('--cm-ar', ratio.toFixed(3));
-                    }
-
-                    photoItems.forEach(function (item, index) {
-                        var tile = document.createElement('div');
-                        tile.className = 'cm-photos__item' + (item.pending ? ' cm-skeleton' : '');
-
-                        if (!item.pending) {
-                            var img = document.createElement('img');
-                            img.className = 'cm-photos__img';
-                            img.src = item.url;
-                            img.alt = 'Selected photo ' + (index + 1) + ' of ' + count;
-
-                            var remove = document.createElement('button');
-                            remove.type = 'button';
-                            remove.className = 'cm-photos__remove';
-                            remove.setAttribute('aria-label', 'Remove photo ' + (index + 1));
-                            remove.appendChild(buildCloseIcon());
-                            remove.addEventListener('click', function () {
-                                removePhoto(item);
-                                body.focus();
-                            });
-
-                            tile.appendChild(img);
-                            tile.appendChild(remove);
-                        }
-
-                        grid.appendChild(tile);
-                    });
-
-                    previewBox.appendChild(grid);
-                    previewBox.classList.remove('hidden');
-                }
-
-                photoInput.disabled = count >= MAX_PHOTOS;
-
-                if (photoLabel) {
-                    photoLabel.classList.toggle('is-disabled', count >= MAX_PHOTOS);
-                }
-
-                if (photoName) {
-                    photoName.textContent = count === 0 ? DEFAULT_LABEL : count + ' of ' + MAX_PHOTOS + ' photos';
-                }
-
-                autoGrow(); // the textarea gives room back once photos appear
-            };
-
-            var removePhoto = function (item) {
-                var index = photoItems.indexOf(item);
-
-                if (index === -1) {
-                    return;
-                }
-
-                if (item.url) {
-                    URL.revokeObjectURL(item.url);
-                }
-
-                photoItems.splice(index, 1);
-                clearPhotoError();
-                render();
-                syncPostBtn();
-            };
-
-            var addPhotos = function (files) {
-                var message = '';
-                var room = MAX_PHOTOS - photoItems.length;
-
-                clearPhotoError();
-
-                if (files.length > room) {
-                    message = 'You can only upload up to ' + MAX_PHOTOS + ' photos.';
-                    files = files.slice(0, Math.max(0, room));
-                }
-
-                files = files.filter(function (file) {
-                    if (ALLOWED_TYPES.indexOf(file.type) === -1) {
-                        message = 'Please choose JPG, PNG or WebP photos.';
-                        return false;
-                    }
-
-                    if (file.size > MAX_SOURCE_BYTES) {
-                        message = 'That photo is too large. Choose one under 25 MB.';
-                        return false;
-                    }
-
-                    return true;
-                });
-
-                files.forEach(function (file) {
-                    var item = { id: nextPhotoId++, blob: null, url: null, name: '', width: 0, height: 0, pending: true };
-
-                    photoItems.push(item);
-                    photosBusy += 1;
-
-                    preparePhoto(file).then(function (result) {
-                        if (photoItems.indexOf(item) === -1) {
-                            return;
-                        }
-
-                        item.blob = result.blob;
-                        item.name = result.name;
-                        item.width = result.width;
-                        item.height = result.height;
-                        item.url = URL.createObjectURL(result.blob);
-                        item.pending = false;
-                    }, function (error) {
-                        var index = photoItems.indexOf(item);
-
-                        if (index !== -1) {
-                            photoItems.splice(index, 1);
-                        }
-
-                        showPhotoError(error && error.message === 'size'
-                            ? 'That photo is still over 4 MB after shrinking. Try another one.'
-                            : error && error.message === 'pixels'
-                                ? 'That photo has too many pixels to process. Try a smaller one.'
-                                : 'That file could not be read as an image.');
-                    }).then(function () {
-                        photosBusy -= 1;
-                        render();
-                        syncPostBtn();
-                    });
-                });
-
-                if (message) {
-                    showPhotoError(message);
-                }
-
-                render();
-                syncPostBtn();
-            };
-
-            photoInput.addEventListener('change', function () {
-                var files = photoInput.files ? Array.prototype.slice.call(photoInput.files) : [];
-
-                // Clear the input so picking the same file again still fires "change".
-                // The real list lives in photoItems.
-                photoInput.value = '';
-
-                if (files.length > 0) {
-                    addPhotos(files);
-                }
-            });
+            autoGrow(); // handles old('body') after a failed validation
         }
-
-        /* -- Tap anywhere on the canvas to focus the textarea -- */
-
-        var canvas = postForm.querySelector('.cm-compose--canvas');
-
-        if (canvas) {
-            canvas.addEventListener('click', function (event) {
-                if (event.target === canvas || event.target.classList.contains('cm-compose__main') || event.target.classList.contains('cm-compose__row')) {
-                    body.focus();
-                }
-            });
-        }
-
-        /* -- Lift the action bar above the iOS keyboard -- */
-
-        if (window.visualViewport) {
-            var vv = window.visualViewport;
-
-            var syncKeyboard = function () {
-                var offset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-                var open = offset > 80; // ignore URL-bar resize noise
-
-                postForm.style.setProperty('--cm-kb', open ? offset + 'px' : '0px');
-                postForm.classList.toggle('is-keyboard', open);
-            };
-
-            vv.addEventListener('resize', syncKeyboard);
-            vv.addEventListener('scroll', syncKeyboard);
-        }
-
-        syncPostBtn();
-        syncCharCount();
-        syncAnon();
-        autoGrow(); // handles old('body') after a failed validation
     }
 
-    /* ---------- Post page: anonymous toggle + reply-to ---------- */
+    /* ---------- Post page: replies toggle (delegated, once) ---------- */
 
     document.addEventListener('click', function (event) {
         var button = event.target.closest('[data-toggle-replies]');
@@ -2419,258 +2590,271 @@
             : button.getAttribute('data-expanded-label');
     });
 
-    var commentForm = document.getElementById('comment-form');
+    /* ---------- Post page: anonymous toggle + reply-to + AJAX comments ---------- */
 
-    if (commentForm) {
-        var toggle = document.getElementById('anon-toggle');
-        var anonField = document.getElementById('anon-field');
-        var hint = document.getElementById('comment-hint');
-        var commentAlias = commentForm.getAttribute('data-alias');
-        var commentDisplayName = commentForm.getAttribute('data-display-name');
-        var parentId = document.getElementById('parent-id');
-        var replyNote = document.getElementById('reply-note');
-        var replyName = document.getElementById('reply-name');
-        var replyCancel = document.getElementById('reply-cancel');
-        var commentBody = document.getElementById('comment-body');
-        var replyMentionPrefix = '';
-        var replyTarget = null;
+    function initCommentForm() {
+        var commentForm = document.getElementById('comment-form');
 
-        var autoGrowComment = function () {
-            commentBody.style.height = 'auto';
-            commentBody.style.height = commentBody.scrollHeight + 'px';
-            commentBody.style.overflowY = 'hidden';
-        };
+        if (commentForm) {
+            var toggle = document.getElementById('anon-toggle');
+            var anonField = document.getElementById('anon-field');
+            var hint = document.getElementById('comment-hint');
+            var commentAlias = commentForm.getAttribute('data-alias');
+            var commentDisplayName = commentForm.getAttribute('data-display-name');
+            var parentId = document.getElementById('parent-id');
+            var replyNote = document.getElementById('reply-note');
+            var replyName = document.getElementById('reply-name');
+            var replyCancel = document.getElementById('reply-cancel');
+            var commentBody = document.getElementById('comment-body');
+            var replyMentionPrefix = '';
+            var replyTarget = null;
 
-        var alignReplyTarget = function (behavior) {
-            if (!replyTarget) {
-                return;
-            }
+            var autoGrowComment = function () {
+                commentBody.style.height = 'auto';
+                commentBody.style.height = commentBody.scrollHeight + 'px';
+                commentBody.style.overflowY = 'hidden';
+            };
 
-            var top = replyTarget.getBoundingClientRect().top;
-            var targetTop = 16;
+            var alignReplyTarget = function (behavior) {
+                if (!replyTarget) {
+                    return;
+                }
 
-            if (Math.abs(top - targetTop) > 8) {
-                window.scrollBy({
-                    top: top - targetTop,
-                    behavior: behavior || 'auto'
-                });
-            }
-        };
+                var top = replyTarget.getBoundingClientRect().top;
+                var targetTop = 16;
 
-        commentBody.addEventListener('input', autoGrowComment);
-        window.addEventListener('resize', autoGrowComment);
-        autoGrowComment();
-
-        if (window.visualViewport) {
-            var commentViewport = window.visualViewport;
-            var syncCommentKeyboard = function () {
-                var keyboardOffset = Math.max(0, window.innerHeight - commentViewport.height - commentViewport.offsetTop);
-                var keyboardOpen = keyboardOffset > 80;
-
-                commentForm.style.setProperty('--cm-comment-kb', keyboardOpen ? keyboardOffset + 'px' : '0px');
-
-                if (keyboardOpen) {
-                    window.requestAnimationFrame(function () {
-                        alignReplyTarget('auto');
+                if (Math.abs(top - targetTop) > 8) {
+                    window.scrollBy({
+                        top: top - targetTop,
+                        behavior: behavior || 'auto'
                     });
                 }
             };
 
-            commentViewport.addEventListener('resize', syncCommentKeyboard);
-            commentViewport.addEventListener('scroll', syncCommentKeyboard);
-        }
-
-        toggle.addEventListener('pointerdown', function (event) {
-            event.preventDefault();
-        });
-
-        toggle.addEventListener('click', function () {
-            var on = anonField.value !== '1';
-
-            anonField.value = on ? '1' : '0';
-            toggle.classList.toggle('is-on', on);
-            toggle.setAttribute('aria-pressed', on ? 'true' : 'false');
-            hint.textContent = on
-                ? 'Commenting anonymously as ' + commentAlias
-                : 'Commenting as ' + commentDisplayName;
-        });
-
-        hint.textContent = 'Commenting anonymously as ' + commentAlias;
-
-        var clearReply = function () {
-            if (replyMentionPrefix && commentBody.value.indexOf(replyMentionPrefix) === 0) {
-                commentBody.value = commentBody.value.slice(replyMentionPrefix.length);
-                autoGrowComment();
-            }
-
-            replyMentionPrefix = '';
-            replyTarget = null;
-            parentId.value = '';
-            replyNote.hidden = true;
-            commentBody.placeholder = 'Write a comment\u2026';
-        };
-
-        document.addEventListener('click', function (event) {
-            var button = event.target.closest('[data-reply-to]');
-
-            if (!button) {
-                return;
-            }
-
-            var existingDraft = commentBody.value;
-
-            if (replyMentionPrefix && existingDraft.indexOf(replyMentionPrefix) === 0) {
-                existingDraft = existingDraft.slice(replyMentionPrefix.length);
-            }
-
-            var alias = button.getAttribute('data-reply-name');
-            replyMentionPrefix = button.getAttribute('data-reply-self') === '1' ? '' : '@' + alias + ' ';
-            commentBody.value = replyMentionPrefix + existingDraft;
-            parentId.value = button.getAttribute('data-reply-to');
-            replyTarget = document.getElementById('comment-' + parentId.value);
-            replyName.textContent = 'Replying to ' + alias;
-            replyNote.hidden = false;
-            commentBody.placeholder = 'Write a reply\u2026';
+            commentBody.addEventListener('input', autoGrowComment);
+            window.addEventListener('resize', autoGrowComment);
+            addCleanup(function () {
+                window.removeEventListener('resize', autoGrowComment);
+            });
             autoGrowComment();
-            commentBody.focus({ preventScroll: true });
 
-            if (replyMentionPrefix) {
-                commentBody.setSelectionRange(commentBody.value.length, commentBody.value.length);
-            }
+            if (window.visualViewport) {
+                var commentViewport = window.visualViewport;
+                var syncCommentKeyboard = function () {
+                    var keyboardOffset = Math.max(0, window.innerHeight - commentViewport.height - commentViewport.offsetTop);
+                    var keyboardOpen = keyboardOffset > 80;
 
-            window.requestAnimationFrame(function () {
-                alignReplyTarget('smooth');
-            });
-        });
+                    commentForm.style.setProperty('--cm-comment-kb', keyboardOpen ? keyboardOffset + 'px' : '0px');
 
-        replyCancel.addEventListener('click', clearReply);
-
-        /* -- AJAX submit -- */
-
-        var commentError = document.getElementById('comment-error');
-        var commentList = document.getElementById('comment-list');
-        var commentSubmit = commentForm.querySelector('button[type="submit"]');
-        var commentSending = false;
-
-        var repliesContainerFor = function (parent) {
-            var containerId = 'comment-replies-' + parent;
-            var container = document.getElementById(containerId);
-
-            if (container) {
-                return container;
-            }
-
-            var parentEl = document.getElementById('comment-' + parent);
-            var wrapper = parentEl ? parentEl.closest('.cm-comment-wrapper') : null;
-
-            if (!wrapper) {
-                return null;
-            }
-
-            var toggleBtn = document.createElement('button');
-            toggleBtn.type = 'button';
-            toggleBtn.className = 'cm-view-replies-btn';
-            toggleBtn.setAttribute('data-toggle-replies', containerId);
-            toggleBtn.setAttribute('data-expanded-label', 'Hide replies');
-            toggleBtn.setAttribute('aria-controls', containerId);
-            toggleBtn.setAttribute('aria-expanded', 'true');
-            toggleBtn.textContent = 'Hide replies';
-
-            container = document.createElement('div');
-            container.className = 'cm-replies-container';
-            container.id = containerId;
-
-            var actionsLeft = parentEl.querySelector('.cm-comment__actions-left');
-            (actionsLeft || wrapper).appendChild(toggleBtn);
-            wrapper.appendChild(container);
-
-            return container;
-        };
-
-        var insertComment = function (data) {
-            var target = commentList;
-            var empty = document.getElementById('comments-empty');
-
-            if (empty) {
-                empty.parentNode.removeChild(empty);
-            }
-
-            if (data.parent_id) {
-                var container = repliesContainerFor(data.parent_id);
-
-                if (container) {
-                    target = container;
-
-                    if (container.classList.contains('hidden')) {
-                        container.classList.remove('hidden');
-
-                        var toggleButton = document.querySelector('[data-toggle-replies="' + container.id + '"]');
-
-                        if (toggleButton) {
-                            toggleButton.setAttribute('aria-expanded', 'true');
-                            toggleButton.textContent = toggleButton.getAttribute('data-expanded-label');
-                        }
+                    if (keyboardOpen) {
+                        window.requestAnimationFrame(function () {
+                            alignReplyTarget('auto');
+                        });
                     }
-                }
+                };
+
+                commentViewport.addEventListener('resize', syncCommentKeyboard);
+                commentViewport.addEventListener('scroll', syncCommentKeyboard);
+                addCleanup(function () {
+                    commentViewport.removeEventListener('resize', syncCommentKeyboard);
+                    commentViewport.removeEventListener('scroll', syncCommentKeyboard);
+                });
             }
 
-            if (!target) {
-                window.location.reload();
-                return;
-            }
+            toggle.addEventListener('click', function () {
+                var on = anonField.value !== '1';
 
-            target.insertAdjacentHTML('beforeend', data.html);
-
-            document.querySelectorAll('[data-comments-count]').forEach(function (el) {
-                el.textContent = String(data.comments_count);
+                anonField.value = on ? '1' : '0';
+                toggle.classList.toggle('is-on', on);
+                toggle.setAttribute('aria-pressed', on ? 'true' : 'false');
+                hint.textContent = on
+                    ? 'Commenting anonymously as ' + commentAlias
+                    : 'Commenting as ' + commentDisplayName;
             });
 
-            var added = document.getElementById('comment-' + data.comment_id);
+            hint.textContent = 'Commenting anonymously as ' + commentAlias;
 
-            if (added) {
-                var addedWrap = added.closest('.cm-comment-wrapper');
-
-                if (addedWrap) {
-                    addedWrap.classList.add('cm-animate-in');
+            var clearReply = function () {
+                if (replyMentionPrefix && commentBody.value.indexOf(replyMentionPrefix) === 0) {
+                    commentBody.value = commentBody.value.slice(replyMentionPrefix.length);
+                    autoGrowComment();
                 }
 
-                added.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            }
-        };
+                replyMentionPrefix = '';
+                replyTarget = null;
+                parentId.value = '';
+                replyNote.hidden = true;
+                commentBody.placeholder = 'Write a comment\u2026';
+            };
 
-        commentForm.addEventListener('submit', function (event) {
-            event.preventDefault();
+            // Document-level, so it needs a cleanup (the reply buttons live in the swapped <main>).
+            var onReplyClick = function (event) {
+                var button = event.target.closest('[data-reply-to]');
 
-            if (commentSending) {
-                return;
-            }
-
-            if (commentBody.value.trim() === '') {
-                commentBody.focus();
-                return;
-            }
-
-            commentSending = true;
-            showInlineError(commentError, '');
-            commentSubmit.disabled = true;
-
-            sendForm(commentForm).then(function (res) {
-                commentSending = false;
-                commentSubmit.disabled = false;
-
-                if (res.ok && res.data.status === 'success') {
-                    insertComment(res.data);
-                    commentBody.value = '';
-                    autoGrowComment();
-                    clearReply();
-                    commentBody.focus();
-                    window.showToast('Comment posted', 'success', 'comment');
+                if (!button) {
                     return;
                 }
 
-                composerFailure(res, commentError);
+                var existingDraft = commentBody.value;
+
+                if (replyMentionPrefix && existingDraft.indexOf(replyMentionPrefix) === 0) {
+                    existingDraft = existingDraft.slice(replyMentionPrefix.length);
+                }
+
+                var replyAlias = button.getAttribute('data-reply-name');
+                replyMentionPrefix = button.getAttribute('data-reply-self') === '1' ? '' : '@' + replyAlias + ' ';
+                commentBody.value = replyMentionPrefix + existingDraft;
+                parentId.value = button.getAttribute('data-reply-to');
+                replyTarget = document.getElementById('comment-' + parentId.value);
+                replyName.textContent = 'Replying to ' + replyAlias;
+                replyNote.hidden = false;
+                commentBody.placeholder = 'Write a reply\u2026';
+                autoGrowComment();
+                commentBody.focus({ preventScroll: true });
+
+                if (replyMentionPrefix) {
+                    commentBody.setSelectionRange(commentBody.value.length, commentBody.value.length);
+                }
+
+                window.requestAnimationFrame(function () {
+                    alignReplyTarget('smooth');
+                });
+            };
+
+            document.addEventListener('click', onReplyClick);
+            addCleanup(function () {
+                document.removeEventListener('click', onReplyClick);
             });
-        });
+
+            replyCancel.addEventListener('click', clearReply);
+
+            /* -- AJAX submit -- */
+
+            var commentError = document.getElementById('comment-error');
+            var commentList = document.getElementById('comment-list');
+            var commentSubmit = commentForm.querySelector('button[type="submit"]');
+            var commentSending = false;
+
+            var repliesContainerFor = function (parent) {
+                var containerId = 'comment-replies-' + parent;
+                var container = document.getElementById(containerId);
+
+                if (container) {
+                    return container;
+                }
+
+                var parentEl = document.getElementById('comment-' + parent);
+                var wrapper = parentEl ? parentEl.closest('.cm-comment-wrapper') : null;
+
+                if (!wrapper) {
+                    return null;
+                }
+
+                var toggleBtn = document.createElement('button');
+                toggleBtn.type = 'button';
+                toggleBtn.className = 'cm-view-replies-btn';
+                toggleBtn.setAttribute('data-toggle-replies', containerId);
+                toggleBtn.setAttribute('data-expanded-label', 'Hide replies');
+                toggleBtn.setAttribute('aria-controls', containerId);
+                toggleBtn.setAttribute('aria-expanded', 'true');
+                toggleBtn.textContent = 'Hide replies';
+
+                container = document.createElement('div');
+                container.className = 'cm-replies-container';
+                container.id = containerId;
+
+                var actionsLeft = parentEl.querySelector('.cm-comment__actions-left');
+                (actionsLeft || wrapper).appendChild(toggleBtn);
+                wrapper.appendChild(container);
+
+                return container;
+            };
+
+            var insertComment = function (data) {
+                var target = commentList;
+                var empty = document.getElementById('comments-empty');
+
+                if (empty) {
+                    empty.parentNode.removeChild(empty);
+                }
+
+                if (data.parent_id) {
+                    var container = repliesContainerFor(data.parent_id);
+
+                    if (container) {
+                        target = container;
+
+                        if (container.classList.contains('hidden')) {
+                            container.classList.remove('hidden');
+
+                            var toggleButton = document.querySelector('[data-toggle-replies="' + container.id + '"]');
+
+                            if (toggleButton) {
+                                toggleButton.setAttribute('aria-expanded', 'true');
+                                toggleButton.textContent = toggleButton.getAttribute('data-expanded-label');
+                            }
+                        }
+                    }
+                }
+
+                if (!target) {
+                    window.location.reload();
+                    return;
+                }
+
+                target.insertAdjacentHTML('beforeend', data.html);
+
+                document.querySelectorAll('[data-comments-count]').forEach(function (el) {
+                    el.textContent = String(data.comments_count);
+                });
+
+                var added = document.getElementById('comment-' + data.comment_id);
+
+                if (added) {
+                    var addedWrap = added.closest('.cm-comment-wrapper');
+
+                    if (addedWrap) {
+                        addedWrap.classList.add('cm-animate-in');
+                    }
+
+                    added.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+            };
+
+            commentForm.addEventListener('submit', function (event) {
+                event.preventDefault();
+
+                if (commentSending) {
+                    return;
+                }
+
+                if (commentBody.value.trim() === '') {
+                    commentBody.focus();
+                    return;
+                }
+
+                commentSending = true;
+                showInlineError(commentError, '');
+                commentSubmit.disabled = true;
+
+                sendForm(commentForm).then(function (res) {
+                    commentSending = false;
+                    commentSubmit.disabled = false;
+
+                    if (res.ok && res.data.status === 'success') {
+                        insertComment(res.data);
+                        commentBody.value = '';
+                        autoGrowComment();
+                        clearReply();
+                        commentBody.focus();
+                        window.showToast('Comment posted', 'success', 'comment');
+                        return;
+                    }
+
+                    composerFailure(res, commentError);
+                });
+            });
+        }
     }
 
     /* ---------- AJAX reactions (Like / Helpful) ----------
@@ -2979,7 +3163,7 @@
         });
     });
 
-    /* ---------- Report bottom sheet ---------- */
+    /* ---------- Report bottom sheet (lives in the layout, outside <main>: bound once) ---------- */
 
     var sheet = document.getElementById('report-sheet');
 
@@ -3077,11 +3261,11 @@
         button.hidden = true;
     });
 
-    syncAllSeeMore();
+    // The first syncAllSeeMore() call is made by initPage(); this covers late font/image layout shifts.
     window.addEventListener('load', syncAllSeeMore);
     window.addEventListener('resize', syncAllSeeMore);
 
-    /* ---------- Feed polish: photo lightbox (swipe through a post's photos) ---------- */
+    /* ---------- Feed polish: photo lightbox (lives in the layout, bound once) ---------- */
 
     var lightbox = document.getElementById('lightbox');
 
@@ -3268,70 +3452,77 @@
 
     /* ---------- Account deletion confirmation ---------- */
 
-    var deleteModal = document.querySelector('[data-delete-modal]');
+    function initDeleteModal() {
+        var deleteModal = document.querySelector('[data-delete-modal]');
 
-    if (deleteModal) {
-        var deleteInput = deleteModal.querySelector('[data-delete-input]');
-        var deleteSubmit = deleteModal.querySelector('[data-delete-submit]');
-        var deleteOpener = null;
+        if (deleteModal) {
+            var deleteInput = deleteModal.querySelector('[data-delete-input]');
+            var deleteSubmit = deleteModal.querySelector('[data-delete-submit]');
+            var deleteOpener = null;
 
-        var syncDeleteSubmit = function () {
-            deleteSubmit.disabled = deleteInput.value.trim() !== 'DELETE';
-        };
+            var syncDeleteSubmit = function () {
+                deleteSubmit.disabled = deleteInput.value.trim() !== 'DELETE';
+            };
 
-        var openDeleteModal = function (opener) {
-            deleteOpener = opener || null;
-            deleteModal.hidden = false;
-            document.body.classList.add('cm-no-scroll');
-            syncDeleteSubmit();
-            deleteInput.focus();
-        };
+            var openDeleteModal = function (opener) {
+                deleteOpener = opener || null;
+                deleteModal.hidden = false;
+                document.body.classList.add('cm-no-scroll');
+                syncDeleteSubmit();
+                deleteInput.focus();
+            };
 
-        var closeDeleteModal = function () {
-            deleteModal.hidden = true;
-            document.body.classList.remove('cm-no-scroll');
-            deleteInput.value = '';
-            syncDeleteSubmit();
+            var closeDeleteModal = function () {
+                deleteModal.hidden = true;
+                document.body.classList.remove('cm-no-scroll');
+                deleteInput.value = '';
+                syncDeleteSubmit();
 
-            if (deleteOpener) {
-                deleteOpener.focus();
+                if (deleteOpener) {
+                    deleteOpener.focus();
+                }
+            };
+
+            document.querySelectorAll('[data-delete-open]').forEach(function (button) {
+                button.addEventListener('click', function () { openDeleteModal(button); });
+            });
+
+            deleteModal.querySelectorAll('[data-delete-cancel]').forEach(function (button) {
+                button.addEventListener('click', closeDeleteModal);
+            });
+
+            deleteInput.addEventListener('input', syncDeleteSubmit);
+
+            deleteModal.querySelector('form').addEventListener('submit', function (event) {
+                if (deleteInput.value.trim() !== 'DELETE') {
+                    event.preventDefault();
+                    return;
+                }
+
+                deleteSubmit.textContent = 'Deleting\u2026';
+                deleteSubmit.disabled = true;
+            });
+
+            var onDeleteKeydown = function (event) {
+                if (event.key === 'Escape' && !deleteModal.hidden) {
+                    closeDeleteModal();
+                }
+            };
+
+            document.addEventListener('keydown', onDeleteKeydown);
+            addCleanup(function () {
+                document.removeEventListener('keydown', onDeleteKeydown);
+            });
+
+            if (!deleteModal.hidden) {
+                openDeleteModal(null);
             }
-        };
-
-        document.querySelectorAll('[data-delete-open]').forEach(function (button) {
-            button.addEventListener('click', function () { openDeleteModal(button); });
-        });
-
-        deleteModal.querySelectorAll('[data-delete-cancel]').forEach(function (button) {
-            button.addEventListener('click', closeDeleteModal);
-        });
-
-        deleteInput.addEventListener('input', syncDeleteSubmit);
-
-        deleteModal.querySelector('form').addEventListener('submit', function (event) {
-            if (deleteInput.value.trim() !== 'DELETE') {
-                event.preventDefault();
-                return;
-            }
-
-            deleteSubmit.textContent = 'Deleting\u2026';
-            deleteSubmit.disabled = true;
-        });
-
-        document.addEventListener('keydown', function (event) {
-            if (event.key === 'Escape' && !deleteModal.hidden) {
-                closeDeleteModal();
-            }
-        });
-
-        if (!deleteModal.hidden) {
-            openDeleteModal(null);
         }
     }
 
     /* ---------- Feed: a just-published post slides down from the top ---------- */
 
-    (function () {
+    function initPostArrival() {
         var list = document.getElementById('feed-posts');
         var flagged = false;
 
@@ -3363,9 +3554,9 @@
             first.classList.remove('cm-post--arrive');
             list.style.removeProperty('--cm-arrive-h');
         }, 900);
-    })();
+    }
 
-    /* ---------- Post deletion: collapse like a native iOS list row ---------- */
+    /* ---------- Post deletion: collapse like a native iOS list row (delegated, once) ---------- */
 
     function collapseAway(row, done) {
         var finished = false;
@@ -3469,129 +3660,214 @@
     });
 
     /* ==========================================================================
-       Auto-hide header on scroll (mobile only)
-       Scroll down: the app bar (and the sticky chip row, via CSS) slides away.
-       Scroll up: they slide back. One class on .cm-page does everything; the
-       motion itself is CSS (transform only). Does nothing on desktop, with
-       prefers-reduced-motion, while the notification dropdown is open, or on
-       pages without the sticky header (guest pages, onboarding).
+       HTMX bridge
+       Everything below only reacts to htmx events. If htmx never loads, none of
+       these events fire and the app behaves exactly as before: every link is a
+       normal full-page navigation, and initPage() has already run once.
        ========================================================================== */
-    (function () {
-        var header = document.querySelector('.cm-main > .cm-header');
-        var page = document.querySelector('.cm-page');
 
-        if (!header || !page) {
+    /* ---------- Top progress bar (#cm-progress in the layout) ---------- */
+
+    var Progress = (function () {
+        var pending = 0;
+        var value = 0;
+        var showTimer = null;
+        var trickleTimer = null;
+        var hideTimer = null;
+        var safetyTimer = null;
+
+        function parts() {
+            var el = document.getElementById('cm-progress');
+
+            return el ? { el: el, bar: el.firstElementChild } : null;
+        }
+
+        function paint(bar, next) {
+            value = next;
+            bar.style.transform = 'scaleX(' + next + ')';
+        }
+
+        // Fast responses (< 80ms) never show the bar at all, so cached-feeling navigations do not flicker.
+        function reveal() {
+            var p = parts();
+
+            if (!p) {
+                return;
+            }
+
+            window.clearTimeout(hideTimer);
+            window.clearInterval(trickleTimer);
+            p.bar.style.transition = 'none';
+            paint(p.bar, 0);
+            void p.bar.offsetWidth;
+            p.bar.style.transition = '';
+            p.el.classList.add('is-active');
+            paint(p.bar, 0.15);
+
+            // Creep towards 92% and wait there until the response arrives.
+            trickleTimer = window.setInterval(function () {
+                paint(p.bar, value + (0.92 - value) * 0.12);
+            }, 250);
+        }
+
+        function finish() {
+            window.clearTimeout(showTimer);
+            window.clearInterval(trickleTimer);
+            window.clearTimeout(safetyTimer);
+
+            var p = parts();
+
+            if (!p || !p.el.classList.contains('is-active')) {
+                return;
+            }
+
+            paint(p.bar, 1);
+            hideTimer = window.setTimeout(function () {
+                p.el.classList.remove('is-active');
+                hideTimer = window.setTimeout(function () {
+                    p.bar.style.transition = 'none';
+                    paint(p.bar, 0);
+                    void p.bar.offsetWidth;
+                    p.bar.style.transition = '';
+                }, 250);
+            }, 200);
+        }
+
+        function start() {
+            pending += 1;
+
+            if (pending > 1) {
+                return;
+            }
+
+            window.clearTimeout(hideTimer);
+            window.clearTimeout(showTimer);
+            window.clearTimeout(safetyTimer);
+            showTimer = window.setTimeout(reveal, 80);
+            // If an afterRequest event is ever missed, never leave the bar stuck on screen.
+            safetyTimer = window.setTimeout(function () {
+                pending = 0;
+                finish();
+            }, 20000);
+            document.body.setAttribute('aria-busy', 'true');
+        }
+
+        function done() {
+            pending = Math.max(0, pending - 1);
+
+            if (pending > 0) {
+                return;
+            }
+
+            document.body.removeAttribute('aria-busy');
+            finish();
+        }
+
+        return { start: start, done: done };
+    })();
+
+    document.addEventListener('htmx:beforeRequest', function () {
+        Progress.start();
+    });
+
+    // afterRequest fires for success AND failure, so the bar always completes.
+    document.addEventListener('htmx:afterRequest', function () {
+        Progress.done();
+    });
+
+    /* ---------- Swap lifecycle ---------- */
+
+    // Anything that is not a normal community page (a redirect to the login page after the session expired,
+    // an error page, the guest layout) is opened as a real navigation instead of being swapped into <main>.
+    var hardNavigating = false;
+
+    function hardNavigate(url) {
+        if (hardNavigating || !url) {
             return;
         }
 
-        var DELTA = 10; // px of travel in one direction before the header reacts
-        var narrow = window.matchMedia('(max-width: 768px)');
-        var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-        var hidden = false;
-        var ticking = false;
+        hardNavigating = true;
+        window.location.assign(url);
+    }
 
-        function enabled() {
-            return narrow.matches && !reduceMotion.matches;
+    document.addEventListener('htmx:beforeSwap', function (event) {
+        var detail = event.detail;
+
+        if (!detail || !detail.target || detail.target.tagName !== 'MAIN') {
+            return;
         }
 
-        function dropdownOpen() {
-            var dropdown = document.querySelector('[data-notification-dropdown]');
+        var html = typeof detail.serverResponse === 'string' ? detail.serverResponse : '';
+        var isCommunityPage = /<main[^>]*\bcm-main\b/.test(html);
 
-            return Boolean(dropdown && !dropdown.classList.contains('hidden'));
+        if (!detail.shouldSwap || !isCommunityPage) {
+            detail.shouldSwap = false;
+            hardNavigate((detail.xhr && detail.xhr.responseURL) || (detail.pathInfo && detail.pathInfo.requestPath));
+            return;
         }
 
-        // iOS rubber-banding reports negative values at the top and values past
-        // the end at the bottom; clamping stops the bounce from flipping direction.
-        function currentY() {
-            var max = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+        // The old <main> is about to be thrown away: stop its window/document listeners, observers and
+        // object URLs now. The new page's init functions run in htmx:afterSettle.
+        runCleanups();
+    });
 
-            return Math.min(Math.max(0, window.scrollY), max);
-        }
-
-        var lastY = currentY();
-
-        function setHidden(next) {
-            if (next === hidden) {
-                return;
-            }
-
-            hidden = next;
-            page.classList.toggle('is-header-hidden', next);
-        }
-
-        function update() {
-            var y = currentY();
-            ticking = false;
-
-            // Not allowed to hide: make sure it is showing and keep tracking.
-            if (!enabled() || dropdownOpen() || y < 50) {
-                setHidden(false);
-                lastY = y;
-                return;
-            }
-
-            var delta = y - lastY;
-
-            // While hidden, track the furthest downward point so even a short
-            // upward scroll can reveal the header.
-            if (hidden) {
-                if (delta <= -2) {
-                    setHidden(false);
-                    lastY = y;
-                    return;
-                }
-
-                if (delta > 0) {
-                    lastY = y;
-                }
-
-                return;
-            }
-
-            if (Math.abs(delta) < DELTA) {
-                return;
-            }
-
-            if (delta > 0 && y > header.offsetHeight) {
-                setHidden(true); // Scrolling down
-            } else if (delta < 0) {
-                setHidden(false); // Scrolling up
-            }
-
-            lastY = y;
-        }
-
-        function resync() {
-            ticking = false;
-            setHidden(false);
-            lastY = currentY();
-        }
-
-        window.addEventListener('scroll', function () {
-            if (!ticking) {
-                ticking = true;
-                window.requestAnimationFrame(update);
-            }
-        }, { passive: true });
-
-        // Keyboard / screen-reader users tabbing into a hidden header bring it back.
-        header.addEventListener('focusin', function () {
-            setHidden(false);
+    ['htmx:sendError', 'htmx:timeout'].forEach(function (name) {
+        document.addEventListener(name, function () {
+            window.showToast('Could not reach the server. Check your connection and try again.', 'error');
         });
+    });
 
-        // Breakpoint or motion-preference change, or a bfcache restore: start clean.
-        [narrow, reduceMotion].forEach(function (query) {
-            if (query.addEventListener) {
-                query.addEventListener('change', resync);
-            } else {
-                query.addListener(resync);
+    document.addEventListener('htmx:afterSettle', function () {
+        initPage();
+    });
+
+    // Only reached if someone re-enables htmx's history cache (historyCacheSize > 0): the whole body is
+    // restored from a snapshot, so the old listeners are gone and the new elements need binding again.
+    document.addEventListener('htmx:historyRestore', function () {
+        runCleanups();
+        initPage();
+    });
+
+    /* ---------- Page init list ---------- */
+
+    // Every function here must be safe to call on a page that does not contain "its" elements.
+    var PAGE_INITS = [
+        syncThemeToggles,
+        flushFlashToasts,
+        initRestartOnboarding,
+        initNotifications,
+        initNameEditor,
+        initAvatarCropper,
+        initFeed,
+        initActivityTabs,
+        initComposer,
+        initCommentForm,
+        initDeleteModal,
+        initPostArrival,
+        syncAllSeeMore
+    ];
+
+    function initPage() {
+        var main = document.querySelector('main');
+
+        // <main> is replaced wholesale on every swap, so a marker on it means "this page is already bound"
+        // (htmx can fire afterSettle more than once for one navigation, e.g. for the out-of-band nav swap).
+        if (main) {
+            if (main.hasAttribute('data-cm-ready')) {
+                return;
+            }
+
+            main.setAttribute('data-cm-ready', '');
+        }
+
+        PAGE_INITS.forEach(function (init) {
+            try {
+                init();
+            } catch (error) {
+                console.error(error);
             }
         });
+    }
 
-        window.addEventListener('pageshow', function (event) {
-            if (event.persisted) {
-                resync();
-            }
-        });
-    })();
+    initPage();
 })();
