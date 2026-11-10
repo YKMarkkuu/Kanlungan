@@ -65,7 +65,7 @@
         <template id="item-row-template">@include('components.item-row', ['i' => '__i__'])</template>
 
         <div class="cm-compose cm-compose--canvas cm-animate-in" style="--cm-delay: 50ms">
-            <div class="cm-compose__row">
+            <div class="cm-compose__row" data-compose-avatar-row>
                 <x-avatar :avatar-path="auth()->user()->avatar_path" :name="auth()->user()->display_name" class="cm-compose__avatar cm-compose__avatar--user" data-compose-avatar-user />
                 <span class="cm-avatar cm-compose__avatar cm-compose__avatar--anonymous" data-compose-avatar-anonymous aria-hidden="true">
                     @include('components.icon', ['name' => 'mask'])
