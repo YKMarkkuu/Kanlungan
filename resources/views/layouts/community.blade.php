@@ -82,12 +82,12 @@
                     <a href="{{ route('feed') }}" class="cm-brand">Kanlungan</a>
                 </div>
                 <div class="cm-header__actions">
-                    <a href="{{ route('search') }}" class="cm-icon-btn" aria-label="Search">
-                        @include('components.icon', ['name' => 'search'])
-                    </a>
                     <button type="button" class="cm-icon-btn" aria-label="Help" title="Help" data-restart-onboarding>
                         @include('components.icon', ['name' => 'help'])
                     </button>
+                    <a href="{{ route('search') }}" class="cm-icon-btn" aria-label="Search">
+                        @include('components.icon', ['name' => 'search'])
+                    </a>
                     @include('components.notification-dropdown', ['alerts' => $headerAlerts, 'unread' => $unread])
                 </div>
             </header>
