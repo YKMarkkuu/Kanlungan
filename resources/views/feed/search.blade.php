@@ -8,7 +8,8 @@
         <header class="cm-header"><h1>Search</h1></header>
 
         <form method="GET" action="{{ route('search') }}" class="cm-search" role="search">
-            <input class="input" type="search" name="q" value="{{ $q }}" placeholder="Search posts" maxlength="80" autofocus>
+            <input class="input" type="search" name="q" value="{{ $q }}" placeholder="Search posts" maxlength="80"
+                   autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" autofocus>
             <button type="submit" class="btn btn--primary cm-send">Search</button>
         </form>
 
