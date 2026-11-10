@@ -3817,6 +3817,527 @@
         });
     });
 
+    /* ==========================================================================
+       Optimistic navigation: skeleton swap + prefetch on intent
+
+       - Prefetch cache is a plain in-memory Map: never localStorage, sessionStorage
+         or the Cache API. It dies on reload, tab close and logout (full navigations).
+       - Any non-GET fetch() or form submit empties it, and an "epoch" counter drops
+         any prefetch that was still in flight when the mutation happened.
+       - Skeleton is only shown if the response takes longer than 80ms, and once shown
+         it stays for at least 150ms, so fast responses never flicker.
+       ========================================================================== */
+
+    var NAV_SWAP = 'outerHTML show:window:top'; // keep identical to hx-swap on .cm-page
+    var SKELETON_DELAY_MS = 80;                 // faster than this: no skeleton at all
+    var SKELETON_MIN_MS = 150;                  // once shown: stay at least this long
+    var LEAVE_MS = 100;                         // old content fade-out before the skeleton appears
+    var PREFETCH_TTL_MS = 30000;
+    var PREFETCH_MAX = 8;
+
+    var nativeFetch = window.fetch.bind(window);
+    var reduceMotionNav = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+    /* ---------- Prefetch cache (JS memory only) ---------- */
+
+    var Prefetch = (function () {
+        var store = new Map(); // "/path?query" -> { html, at, promise }
+        var epoch = 0;
+
+        function keyOf(url) {
+            return url.pathname + url.search;
+        }
+
+        function peek(key) {
+            var entry = store.get(key);
+
+            if (!entry) {
+                return null;
+            }
+
+            if (entry.html !== null && Date.now() - entry.at > PREFETCH_TTL_MS) {
+                store.delete(key);
+                return null;
+            }
+
+            return entry;
+        }
+
+        function trim() {
+            while (store.size > PREFETCH_MAX) {
+                store.delete(store.keys().next().value); // oldest first
+            }
+        }
+
+        // Returns the cache entry. entry.html is a string when ready; entry.promise while in flight.
+        function load(url) {
+            var key = keyOf(url);
+            var existing = peek(key);
+
+            if (existing) {
+                return existing;
+            }
+
+            var startedAtEpoch = epoch;
+            var entry = { html: null, at: Date.now(), promise: null };
+
+            entry.promise = nativeFetch(key, {
+                credentials: 'same-origin',
+                cache: 'no-store',
+                // No X-Requested-With: Laravel's expectsJson() would treat it as an API call.
+                headers: { 'Accept': 'text/html' }
+            }).then(function (response) {
+                // A redirect means the session expired (login page) or the route moved: never cache it.
+                if (!response.ok || response.redirected) {
+                    throw new Error('prefetch: not cacheable');
+                }
+
+                return response.text();
+            }).then(function (html) {
+                if (!/<main[^>]*\bcm-main\b/.test(html)) {
+                    throw new Error('prefetch: not a community page');
+                }
+
+                if (epoch !== startedAtEpoch) {
+                    throw new Error('prefetch: stale (a write happened meanwhile)');
+                }
+
+                entry.html = html;
+                entry.at = Date.now();
+                trim();
+
+                return html;
+            }).catch(function (error) {
+                if (store.get(key) === entry) {
+                    store.delete(key);
+                }
+
+                throw error;
+            });
+
+            store.set(key, entry);
+
+            return entry;
+        }
+
+        function warm(url) {
+            var entry = load(url);
+
+            if (entry.promise) {
+                entry.promise.catch(function () { /* best effort */ });
+            }
+        }
+
+        function clear() {
+            epoch += 1;
+            store.clear();
+        }
+
+        return { keyOf: keyOf, peek: peek, load: load, warm: warm, clear: clear };
+    })();
+
+    // Every write goes through fetch() in this app (likes, bookmarks, comments, votes, avatar...), so one
+    // wrapper clears the cache for all of them. Cleared before AND after, so a prefetch that raced the
+    // write can never store a pre-write page.
+    window.fetch = function (input, init) {
+        var method = String((init && init.method) || (input && input.method) || 'GET').toUpperCase();
+
+        if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') {
+            return nativeFetch.apply(window, arguments);
+        }
+
+        Prefetch.clear();
+
+        var request = nativeFetch.apply(window, arguments);
+        request.then(Prefetch.clear, Prefetch.clear);
+
+        return request;
+    };
+
+    // Form posts (logout, delete account, report, block...) are full navigations, but clear anyway.
+    document.addEventListener('submit', function (event) {
+        var form = event.target;
+
+        if (form instanceof HTMLFormElement && (form.getAttribute('method') || 'get').toLowerCase() !== 'get') {
+            Prefetch.clear();
+        }
+    }, true);
+
+    // Restored from the back/forward cache: the page is old, so nothing cached should survive.
+    window.addEventListener('pageshow', function (event) {
+        if (event.persisted) {
+            Prefetch.clear();
+            resetSkeleton();
+        }
+    });
+
+    /* ---------- Which links may be prefetched (mirrors htmx's disableSelector) ---------- */
+
+    function eligibleLink(anchor) {
+        if (!anchor || anchor.tagName !== 'A') {
+            return null;
+        }
+
+        var href = anchor.getAttribute('href');
+
+        if (!href || href.indexOf('#') !== -1) {
+            return null; // htmx ignores links with a fragment, so do we
+        }
+
+        if ((anchor.target && anchor.target !== '_self') || anchor.hasAttribute('download')) {
+            return null;
+        }
+
+        // Only links htmx actually boosts: inside .cm-page, not opted out.
+        if (!anchor.closest('.cm-page') || anchor.closest('[hx-boost="false"], [hx-disable], [data-hx-disable]')) {
+            return null;
+        }
+
+        var url;
+
+        try {
+            url = new URL(anchor.href, window.location.href);
+        } catch (error) {
+            return null;
+        }
+
+        if (url.origin !== window.location.origin || /^\/alerts\/\d+/.test(url.pathname)) {
+            return null; // /alerts/{id} marks the alert read: never prefetch a write-on-GET
+        }
+
+        if (url.pathname === window.location.pathname && url.search === window.location.search) {
+            return null;
+        }
+
+        return url;
+    }
+
+    function canPrefetch() {
+        if (document.hidden || navigator.onLine === false) {
+            return false;
+        }
+
+        var connection = navigator.connection;
+
+        return !(connection && (connection.saveData || /2g$/.test(connection.effectiveType || '')));
+    }
+
+    function onNavIntent(event) {
+        if (!(event.target instanceof Element)) {
+            return;
+        }
+
+        if (event.type === 'pointerdown' && event.button !== 0) {
+            return;
+        }
+
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+            return;
+        }
+
+        var url = eligibleLink(event.target.closest('a'));
+
+        if (url && canPrefetch()) {
+            Prefetch.warm(url); // deduped by key, so firing for both events is harmless
+        }
+    }
+
+    document.addEventListener('pointerdown', onNavIntent, { passive: true });
+    document.addEventListener('touchstart', onNavIntent, { passive: true }); // browsers without Pointer Events
+
+    /* ---------- Skeleton ---------- */
+
+    var SKELETON_ROUTES = [
+        [/^\/feed\/?$/, 'feed'],
+        [/^\/search/, 'list'],
+        [/^\/me\/(posts|comments|saved|points)/, 'list'],
+        [/^\/me\/?$/, 'profile'],
+        [/^\/alerts/, 'alerts'],
+        [/^\/post\/create/, 'compose'],
+        [/^\/post\/\d+/, 'thread'],
+        [/^\/moderation/, 'list']
+    ];
+
+    var navState = { token: 0, delayTimer: null, leaveTimer: null, shownAt: 0 };
+
+    function skeletonKind(url, anchor) {
+        var forced = anchor && anchor.getAttribute('data-cm-skeleton');
+
+        if (forced) {
+            return forced;
+        }
+
+        for (var i = 0; i < SKELETON_ROUTES.length; i++) {
+            if (SKELETON_ROUTES[i][0].test(url.pathname)) {
+                return SKELETON_ROUTES[i][1];
+            }
+        }
+
+        return 'generic';
+    }
+
+    function skeletonBlock(modifier, count) {
+        var fragment = document.createDocumentFragment();
+
+        for (var i = 0; i < (count || 1); i++) {
+            var block = document.createElement('div');
+
+            block.className = 'cm-skeleton cm-skeleton--' + modifier;
+            fragment.appendChild(block);
+        }
+
+        return fragment;
+    }
+
+    function buildSkeleton(kind) {
+        var root = document.createElement('div');
+
+        root.className = 'cm-nav-skeleton stack';
+        root.setAttribute('aria-hidden', 'true');
+
+        switch (kind) {
+            case 'feed':
+                var chips = document.createElement('div');
+
+                chips.className = 'cm-nav-skeleton__chips';
+                chips.appendChild(skeletonBlock('chip', 5));
+                root.appendChild(chips);
+                root.appendChild(skeletonBlock('post', 3));
+                break;
+            case 'profile':
+                root.appendChild(skeletonBlock('identity'));
+                root.appendChild(skeletonBlock('card'));
+                root.appendChild(skeletonBlock('row', 4));
+                break;
+            case 'alerts':
+                root.appendChild(skeletonBlock('tabs'));
+                root.appendChild(skeletonBlock('row', 4));
+                break;
+            case 'thread':
+                root.appendChild(skeletonBlock('post'));
+                root.appendChild(skeletonBlock('bubble', 3));
+                break;
+            case 'compose':
+                root.appendChild(skeletonBlock('chip-row'));
+                root.appendChild(skeletonBlock('card'));
+                break;
+            default:
+                root.appendChild(skeletonBlock('post', 3));
+        }
+
+        return root;
+    }
+
+    function clearNavTimers() {
+        window.clearTimeout(navState.delayTimer);
+        window.clearTimeout(navState.leaveTimer);
+        navState.delayTimer = null;
+        navState.leaveTimer = null;
+    }
+
+    // Puts the current <main> back exactly as it was (used when a request fails or is superseded).
+    function resetSkeleton() {
+        clearNavTimers();
+        navState.shownAt = 0;
+
+        var main = document.querySelector('main');
+
+        if (!main) {
+            return;
+        }
+
+        main.classList.remove('is-leaving', 'is-navigating');
+        main.removeAttribute('aria-busy');
+
+        var shown = main.querySelector(':scope > .cm-nav-skeleton');
+
+        if (shown) {
+            shown.remove();
+        }
+    }
+
+    // 80ms grace period -> fade the old content out (100ms) -> show the skeleton.
+    // Nothing is destroyed: the old DOM is only hidden, so a failed request restores it instantly.
+    function scheduleSkeleton(url, anchor, token) {
+        resetSkeleton();
+
+        navState.delayTimer = window.setTimeout(function () {
+            var main = document.querySelector('main.cm-main');
+
+            if (!main || token !== navState.token) {
+                return;
+            }
+
+            main.classList.add('is-leaving');
+            main.setAttribute('aria-busy', 'true');
+
+            navState.leaveTimer = window.setTimeout(function () {
+                if (token !== navState.token) {
+                    return;
+                }
+
+                main.classList.add('is-navigating');
+                main.appendChild(buildSkeleton(skeletonKind(url, anchor)));
+                navState.shownAt = Date.now();
+            }, reduceMotionNav.matches ? 0 : LEAVE_MS);
+        }, SKELETON_DELAY_MS);
+    }
+
+    function skeletonRemainingMs() {
+        return navState.shownAt ? Math.max(0, SKELETON_MIN_MS - (Date.now() - navState.shownAt)) : 0;
+    }
+
+    /* ---------- Serving a prefetched page ourselves ----------
+       htmx cannot take a response from our Map, so on a cache hit we cancel its request and do what it
+       would have done: history entry, scroll to top, outerHTML swap of <main> + out-of-band #cm-nav. */
+
+    function commitNavigation(url, html) {
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        var main = document.querySelector('main');
+
+        if (!main || !doc.querySelector('main.cm-main') || !window.htmx || typeof window.htmx.swap !== 'function') {
+            hardNavigate(url.href);
+            return;
+        }
+
+        resetSkeleton();
+
+        try {
+            runCleanups();
+            // Same two history calls htmx makes for hx-push-url, so Back keeps working as it does today.
+            window.history.replaceState({ htmx: true }, document.title, window.location.href);
+            window.history.pushState({ htmx: true }, '', url.pathname + url.search);
+            window.scrollTo(0, 0);
+            window.htmx.swap(main, html, { swapStyle: 'outerHTML', swapDelay: 0, settleDelay: 0 }, {
+                select: 'main',
+                selectOOB: '#cm-nav'
+            });
+
+            if (doc.title) {
+                document.title = doc.title;
+            }
+
+            initPage(); // no-op if afterSettle already ran it (the data-cm-ready marker guards that)
+        } catch (error) {
+            console.error(error);
+            hardNavigate(url.href);
+        }
+    }
+
+    // Honour the 150ms minimum for the in-flight join path too.
+    function finishManualNavigation(url, html, token) {
+        if (token !== navState.token) {
+            return;
+        }
+
+        var wait = skeletonRemainingMs();
+
+        clearNavTimers();
+
+        if (wait > 0) {
+            window.setTimeout(function () {
+                if (token === navState.token) {
+                    commitNavigation(url, html);
+                }
+            }, wait);
+            return;
+        }
+
+        commitNavigation(url, html);
+    }
+
+    /* ---------- htmx listeners ---------- */
+
+    document.addEventListener('htmx:beforeRequest', function (event) {
+        var detail = event.detail;
+        var anchor = detail && detail.elt;
+
+        // Only boosted link navigations that swap <main>.
+        if (!anchor || anchor.tagName !== 'A' || !detail.target || detail.target.tagName !== 'MAIN') {
+            return;
+        }
+
+        var verb = detail.requestConfig && detail.requestConfig.verb;
+
+        if (verb && String(verb).toLowerCase() !== 'get') {
+            return;
+        }
+
+        var url;
+
+        try {
+            url = new URL(anchor.href, window.location.href);
+        } catch (error) {
+            return;
+        }
+
+        if (url.origin !== window.location.origin) {
+            return;
+        }
+
+        navState.token += 1;
+
+        var token = navState.token;
+        var entry = Prefetch.peek(Prefetch.keyOf(url));
+
+        // 1. Fresh cache hit: instant. Progress.start() already ran, so balance it.
+        if (entry && entry.html !== null) {
+            event.preventDefault();
+            commitNavigation(url, entry.html);
+            Progress.done();
+            return;
+        }
+
+        // 2. Prefetch still in flight: join it instead of sending a second request.
+        if (entry && entry.promise) {
+            event.preventDefault();
+            scheduleSkeleton(url, anchor, token);
+
+            entry.promise.then(function (html) {
+                finishManualNavigation(url, html, token);
+            }, function () {
+                if (token === navState.token) {
+                    hardNavigate(url.href); // prefetch failed or went stale: a normal page load is the safe fallback
+                }
+            }).then(function () {
+                Progress.done();
+            });
+            return;
+        }
+
+        // 3. Nothing cached: let htmx send the request, show the skeleton if it is slow.
+        scheduleSkeleton(url, anchor, token);
+    });
+
+    // Must be registered AFTER the existing htmx:beforeSwap listener (it reads detail.shouldSwap).
+    document.addEventListener('htmx:beforeSwap', function (event) {
+        var detail = event.detail;
+
+        if (!detail || !detail.target || detail.target.tagName !== 'MAIN') {
+            return;
+        }
+
+        var wait = skeletonRemainingMs();
+
+        clearNavTimers();
+        navState.shownAt = 0;
+
+        // Skeleton already on screen: hold the swap so it is visible for at least 150ms.
+        if (detail.shouldSwap && wait > 0) {
+            detail.swapOverride = NAV_SWAP + ' swap:' + wait + 'ms';
+        }
+    });
+
+    // A failed request leaves the old page in place, so put it back.
+    ['htmx:sendError', 'htmx:timeout', 'htmx:swapError'].forEach(function (name) {
+        document.addEventListener(name, function () {
+            navState.token += 1;
+            resetSkeleton();
+        });
+    });
+
+
+
     document.addEventListener('htmx:afterSettle', function () {
         initPage();
     });

@@ -4031,3 +4031,36 @@ body.dark-mode .input:focus {
     transform: scaleX(0);
     transition: transform 200ms ease;
 }
+
+/* ---------- Navigation skeleton (optimistic swap) ---------- */
+
+/* Old content fades out, then is hidden; the layout header (brand + bell) stays put. */
+.cm-main.is-leaving > :not(.cm-header):not(.cm-nav-skeleton) {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 100ms var(--ease-ios);
+}
+
+.cm-main.is-navigating > :not(.cm-header):not(.cm-nav-skeleton) {
+    display: none !important;
+}
+
+.cm-nav-skeleton {
+    animation: cm-fade var(--dur-fast) var(--ease-ios) backwards;
+}
+
+.cm-nav-skeleton .cm-skeleton--post { margin-bottom: 0; }
+.cm-nav-skeleton__chips { display: flex; gap: 8px; overflow: hidden; }
+
+.cm-skeleton--chip { flex: none; width: 72px; height: 32px; border-radius: 999px; }
+.cm-skeleton--chip-row { height: 32px; width: 60%; border-radius: 999px; }
+.cm-skeleton--card { height: 88px; }
+.cm-skeleton--row { height: 56px; }
+.cm-skeleton--bubble { height: 64px; margin-left: 40px; border-radius: 14px; }
+.cm-skeleton--tabs { height: 48px; }
+.cm-skeleton--identity { height: 128px; }
+
+@media (prefers-reduced-motion: reduce) {
+    .cm-main.is-leaving > :not(.cm-header):not(.cm-nav-skeleton) { transition: none; }
+    .cm-nav-skeleton { animation: none; }
+}
