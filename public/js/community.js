@@ -172,6 +172,7 @@
             delete form.dataset.confirmPending;
 
             if (confirmed && form.isConnected) {
+                window.blockScreen();
                 HTMLFormElement.prototype.submit.call(form);
             }
         });
@@ -1293,6 +1294,7 @@
                 }
 
                 avatarSave.disabled = true;
+                window.blockScreen();
                 avatarError.hidden = true;
                 avatarError.textContent = '';
                 avatarSave.textContent = 'Uploading…';
@@ -1312,6 +1314,7 @@
                     canvas.toBlob(function (blob) {
                         if (!blob) {
                             showAvatarError('Could not prepare this image. Please try again.');
+                            hidePageOverlay();
                             avatarSave.disabled = false;
                             avatarSave.textContent = 'Save Avatar';
                             return;
@@ -1342,12 +1345,14 @@
                             });
                         }).catch(function (error) {
                             showAvatarError(error.message || 'Avatar upload failed. Please try again.');
+                            hidePageOverlay();
                             avatarSave.disabled = false;
                             avatarSave.textContent = 'Save Avatar';
                         });
                     }, 'image/jpeg', 0.9);
                 } catch (error) {
                     showAvatarError(error.message || 'Could not prepare this image. Please try again.');
+                    hidePageOverlay();
                     avatarSave.disabled = false;
                     avatarSave.textContent = 'Save Avatar';
                 }
@@ -3836,7 +3841,14 @@
             return;
         }
 
-        showPageOverlay();
+        var action = form.action.toLowerCase();
+        var blockingPaths = ['/block', '/report', '/delete', '/logout', '/avatar'];
+
+        if (blockingPaths.some(function (path) {
+            return action.indexOf(path) !== -1;
+        })) {
+            window.blockScreen();
+        }
     });
 
     // afterRequest fires for success AND failure, so the bar always completes.
