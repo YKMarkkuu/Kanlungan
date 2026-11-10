@@ -172,7 +172,7 @@
             delete form.dataset.confirmPending;
 
             if (confirmed && form.isConnected) {
-                window.blockScreen();
+                window.blockScreen(form.method);
                 HTMLFormElement.prototype.submit.call(form);
             }
         });
@@ -1294,7 +1294,7 @@
                 }
 
                 avatarSave.disabled = true;
-                window.blockScreen();
+                window.blockScreen('POST');
                 avatarError.hidden = true;
                 avatarError.textContent = '';
                 avatarSave.textContent = 'Uploading…';
@@ -1443,6 +1443,27 @@
     function initFeed() {
         var feedSkeleton = document.getElementById('skeleton-loader');
 
+        function scrollActiveFeedChipIntoView() {
+            var chipContainer = document.querySelector('.cm-chips--sticky');
+            var activeChip = chipContainer && chipContainer.querySelector('.chip--active, .chip.is-active');
+
+            if (!chipContainer || !activeChip) {
+                return;
+            }
+
+            var containerRect = chipContainer.getBoundingClientRect();
+            var chipRect = activeChip.getBoundingClientRect();
+            var targetLeft = chipContainer.scrollLeft
+                + chipRect.left
+                - containerRect.left
+                - (chipContainer.clientWidth - chipRect.width) / 2;
+            var maxScrollLeft = chipContainer.scrollWidth - chipContainer.clientWidth;
+
+            chipContainer.scrollLeft = Math.max(0, Math.min(targetLeft, maxScrollLeft));
+        }
+
+        scrollActiveFeedChipIntoView();
+
         var loadMoreButton = document.getElementById('load-more-btn');
 
         if (loadMoreButton) {
@@ -1568,6 +1589,12 @@
             var refreshing = false;
 
             var onPullStart = function (event) {
+                if (event.target.closest && event.target.closest('[data-report-sheet], .cm-modal, [data-notification-dropdown]')) {
+                    touchStartY = null;
+                    touchStartX = null;
+                    return;
+                }
+
                 if (event.touches.length !== 1 || window.scrollY > 0) {
                     touchStartY = null;
                     touchStartX = null;
@@ -1760,7 +1787,7 @@
         }
 
         event.preventDefault();
-        window.blockScreen();
+        window.blockScreen(form.method);
 
         if (form.dataset.sending === 'true') {
             return;
@@ -2207,7 +2234,7 @@
                     return;
                 }
 
-                showPageOverlay();
+                showPageOverlay(postForm.method);
                 postSubmitting = true;
                 showInlineError(postError, '');
                 setSending(postBtn, 'Posting\u2026');
@@ -3784,7 +3811,13 @@
         return { start: start, done: done };
     })();
 
-    function showPageOverlay() {
+    function showPageOverlay(method) {
+        var requestMethod = String(method || '').toUpperCase();
+
+        if (requestMethod !== 'POST' && requestMethod !== 'DELETE') {
+            return;
+        }
+
         var overlay = document.getElementById('cm-page-overlay');
 
         if (overlay) {
@@ -3819,7 +3852,6 @@
 
         button.classList.add('is-loading');
         button.setAttribute('aria-busy', 'true');
-        showPageOverlay();
         Progress.start();
     });
 
@@ -3841,13 +3873,19 @@
             return;
         }
 
+        var method = String(form.method || '').toUpperCase();
+
+        if (method !== 'POST' && method !== 'DELETE') {
+            return;
+        }
+
         var action = form.action.toLowerCase();
         var blockingPaths = ['/block', '/report', '/delete', '/logout', '/avatar'];
 
         if (blockingPaths.some(function (path) {
             return action.indexOf(path) !== -1;
         })) {
-            window.blockScreen();
+            window.blockScreen(method);
         }
     });
 
@@ -3905,14 +3943,14 @@
          or the Cache API. It dies on reload, tab close and logout (full navigations).
        - Any non-GET fetch() or form submit empties it, and an "epoch" counter drops
          any prefetch that was still in flight when the mutation happened.
-       - Skeleton is only shown if the response takes longer than 80ms, and once shown
+       - Skeleton is only shown if the response takes longer than 200ms, and once shown
          it stays for at least 150ms, so fast responses never flicker.
        ========================================================================== */
 
     var NAV_SWAP = 'outerHTML show:window:top'; // keep identical to hx-swap on .cm-page
-    var SKELETON_DELAY_MS = 80;                 // faster than this: no skeleton at all
+    var SKELETON_DELAY_MS = 200;                // faster than this: no skeleton at all
     var SKELETON_MIN_MS = 150;                  // once shown: stay at least this long
-    var LEAVE_MS = 100;                         // old content fade-out before the skeleton appears
+    var LEAVE_MS = 0;                           // show the skeleton without fading to a blank page
     var PREFETCH_TTL_MS = 30000;
     var PREFETCH_MAX = 8;
 

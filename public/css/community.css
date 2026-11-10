@@ -4023,8 +4023,6 @@ body.dark-mode .input:focus {
     position: fixed;
     inset: 0;
     background-color: color-mix(in srgb, var(--surface-bg) 50%, transparent);
-    -webkit-backdrop-filter: blur(2px);
-    backdrop-filter: blur(2px);
     opacity: 0;
     pointer-events: none;
     z-index: 9999;
