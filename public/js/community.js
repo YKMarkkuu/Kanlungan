@@ -3806,7 +3806,17 @@
             finish();
         }
 
-        return { start: start, done: done };
+        // Forces the counter to zero. Used when no afterRequest will ever arrive
+        // (bfcache restore, history.back() with no htmx request).
+        function reset() {
+            pending = 0;
+            window.clearTimeout(showTimer);
+            window.clearTimeout(safetyTimer);
+            document.body.removeAttribute('aria-busy');
+            finish();
+        }
+
+        return { start: start, done: done, reset: reset };
     })();
 
     function showPageOverlay(method) {
@@ -3838,6 +3848,13 @@
 
     var NAVIGATION_FEEDBACK_SELECTOR = '.cm-mobile-back, .cm-compose-form .cm-header a[aria-label="Cancel"]';
 
+    function clearNavigationFeedback() {
+        document.querySelectorAll(NAVIGATION_FEEDBACK_SELECTOR).forEach(function (el) {
+            el.classList.remove('is-loading');
+            el.removeAttribute('aria-busy');
+        });
+    }
+
     document.addEventListener('click', function (event) {
         var target = event.target;
         var button = target.closest
@@ -3850,7 +3867,32 @@
 
         button.classList.add('is-loading');
         button.setAttribute('aria-busy', 'true');
-        Progress.start();
+        showPageOverlay();
+
+        // The history-back button (hx-boost="false") never sends an htmx request, so nothing would
+        // ever call Progress.done(). Only boosted links (Cancel) start the progress bar.
+        if (!button.matches('[hx-boost="false"]')) {
+            Progress.start();
+            return;
+        }
+
+        // history.back() can be a no-op or slow. Never leave the overlay or spinner state stuck.
+        window.setTimeout(function () {
+            clearNavigationFeedback();
+            hidePageOverlay();
+        }, 5000);
+    });
+
+    // bfcache restore: the old page comes back exactly as it was left, including a running
+    // progress bar, the overlay and buttons stuck in is-loading.
+    window.addEventListener('pageshow', function (event) {
+        if (!event.persisted) {
+            return;
+        }
+
+        Progress.reset();
+        clearNavigationFeedback();
+        hidePageOverlay();
     });
 
     document.addEventListener('htmx:beforeRequest', function (event) {
@@ -4159,15 +4201,70 @@
         }
     }
 
-    document.addEventListener('pointerdown', onNavIntent, { passive: true });
-    document.addEventListener('touchstart', onNavIntent, { passive: true }); // browsers without Pointer Events
+    // Mouse: prefetch on press. Touch is handled separately below, because a touch that starts a
+    // scroll also fires pointerdown/touchstart and would prefetch every card the finger crosses.
+    document.addEventListener('pointerdown', function (event) {
+        if (event.pointerType === 'mouse') {
+            onNavIntent(event);
+        }
+    }, { passive: true });
+
+    var TOUCH_DWELL_MS = 120;   // finger must rest this long on a link
+    var TOUCH_MOVE_PX = 8;      // ...without moving more than this
+    var touchIntent = { timer: null, x: 0, y: 0 };
+
+    function cancelTouchIntent() {
+        window.clearTimeout(touchIntent.timer);
+        touchIntent.timer = null;
+    }
+
+    document.addEventListener('touchstart', function (event) {
+        cancelTouchIntent();
+
+        if (event.touches.length !== 1 || !(event.target instanceof Element)) {
+            return;
+        }
+
+        var url = eligibleLink(event.target.closest('a'));
+
+        if (!url) {
+            return;
+        }
+
+        touchIntent.x = event.touches[0].clientX;
+        touchIntent.y = event.touches[0].clientY;
+        touchIntent.timer = window.setTimeout(function () {
+            touchIntent.timer = null;
+
+            if (canPrefetch()) {
+                Prefetch.warm(url);
+            }
+        }, TOUCH_DWELL_MS);
+    }, { passive: true });
+
+    document.addEventListener('touchmove', function (event) {
+        if (touchIntent.timer === null || event.touches.length === 0) {
+            return;
+        }
+
+        var dx = Math.abs(event.touches[0].clientX - touchIntent.x);
+        var dy = Math.abs(event.touches[0].clientY - touchIntent.y);
+
+        if (dx > TOUCH_MOVE_PX || dy > TOUCH_MOVE_PX) {
+            cancelTouchIntent();
+        }
+    }, { passive: true });
+
+    document.addEventListener('touchend', cancelTouchIntent, { passive: true });
+    document.addEventListener('touchcancel', cancelTouchIntent, { passive: true });
+    window.addEventListener('scroll', cancelTouchIntent, { passive: true, capture: true });
 
     /* ---------- Background prefetch on idle (bottom-nav destinations) ----------
        Warms the main tabs after the page has settled, so the FIRST tap on them is already a cache hit.
        Same rules as every other prefetch: JS memory only, cleared by writes, 30s TTL, never cached
        if the response redirects. Sequential with gaps, so it never hammers the server. */
 
-    var IDLE_WARM_PATHS = ['/feed', '/search', '/alerts', '/me'];
+    var IDLE_WARM_PATHS = ['/alerts', '/me'];
     var IDLE_WARM_START_MS = 1500;  // let first paint, images and the unread-count poll go first
     var IDLE_WARM_GAP_MS = 600;     // pause between warm requests
     var idleWarm = { token: 0, timer: null, idleHandle: null };
