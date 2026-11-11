@@ -86,6 +86,55 @@
         }
     });
 
+    /* ---------- Modal open/close with exit animation + scroll lock ----------
+       .cm-modal[hidden] / .cm-avatar-crop[hidden] are display:none, so an exit animation needs an
+       .is-closing phase first. Keep MODAL_EXIT_MS in sync with --dur-fast (180ms) in base.css. */
+
+    var MODAL_EXIT_MS = 180;
+    var modalReduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+    function syncScrollLock() {
+        var anyOpen = document.querySelector('.cm-modal:not([hidden]), .cm-avatar-crop:not([hidden]), .cm-lightbox:not([hidden])');
+
+        document.body.classList.toggle('cm-no-scroll', Boolean(anyOpen));
+    }
+
+    function openModal(modal) {
+        window.clearTimeout(modal._closeTimer);
+        modal._closeTimer = null;
+        modal._onClosed = null;
+        modal.classList.remove('is-closing');
+        modal.hidden = false;
+        document.body.classList.add('cm-no-scroll');
+    }
+
+    // onClosed runs after the exit animation, so cleanup (e.g. destroying the cropper) never
+    // happens while the panel is still visibly fading out.
+    function closeModal(modal, onClosed) {
+        if (modal.hidden || modal.classList.contains('is-closing')) {
+            return;
+        }
+
+        var finish = function () {
+            modal._closeTimer = null;
+            modal.classList.remove('is-closing');
+            modal.hidden = true;
+            syncScrollLock();
+
+            if (onClosed) {
+                onClosed();
+            }
+        };
+
+        if (modalReduceMotion.matches) {
+            finish();
+            return;
+        }
+
+        modal.classList.add('is-closing');
+        modal._closeTimer = window.setTimeout(finish, MODAL_EXIT_MS);
+    }
+
     /* ---------- Confirm modal (lives in the layout, outside <main>: bound once) ---------- */
 
     var confirmModal = document.getElementById('confirm-modal');
@@ -102,7 +151,7 @@
 
         var resolve = activeConfirmResolve;
         activeConfirmResolve = null;
-        confirmModal.hidden = true;
+        closeModal(confirmModal);
         resolve(confirmed);
 
         if (confirmReturnFocus && confirmReturnFocus.isConnected) {
@@ -126,7 +175,7 @@
         confirmSubmit.classList.toggle('btn--danger', Boolean(isDestructive));
         confirmSubmit.classList.toggle('btn--primary', !isDestructive);
         confirmReturnFocus = document.activeElement;
-        confirmModal.hidden = false;
+        openModal(confirmModal);
 
         return new Promise(function (resolve) {
             activeConfirmResolve = resolve;
@@ -1185,26 +1234,26 @@
             }
 
             function closeAvatarModal() {
-                avatarModal.hidden = true;
-                document.body.classList.remove('cm-no-scroll');
-                destroyAvatarCropper();
+                closeModal(avatarModal, function () {
+                    destroyAvatarCropper();
 
-                if (avatarObjectUrl) {
-                    URL.revokeObjectURL(avatarObjectUrl);
-                    avatarObjectUrl = null;
-                }
+                    if (avatarObjectUrl) {
+                        URL.revokeObjectURL(avatarObjectUrl);
+                        avatarObjectUrl = null;
+                    }
 
-                avatarPreview.onload = null;
-                avatarPreview.onerror = null;
-                avatarPreview.removeAttribute('src');
-                avatarError.hidden = true;
-                avatarError.textContent = '';
-                avatarSave.disabled = false;
-                avatarSave.textContent = 'Save Avatar';
+                    avatarPreview.onload = null;
+                    avatarPreview.onerror = null;
+                    avatarPreview.removeAttribute('src');
+                    avatarError.hidden = true;
+                    avatarError.textContent = '';
+                    avatarSave.disabled = false;
+                    avatarSave.textContent = 'Save Avatar';
 
-                if (avatarOpener) {
-                    avatarOpener.focus();
-                }
+                    if (avatarOpener) {
+                        avatarOpener.focus();
+                    }
+                });
             }
 
             // Runs once the Cropper library is available.
@@ -1271,8 +1320,7 @@
                 avatarError.textContent = '';
                 avatarSave.disabled = true;
                 avatarSave.textContent = 'Save Avatar';
-                avatarModal.hidden = false;
-                document.body.classList.add('cm-no-scroll');
+                openModal(avatarModal);
                 avatarModal.querySelector('.cm-avatar-crop__actions [data-avatar-cancel]').focus();
 
                 loadCropper().then(startAvatarCrop, function () {
@@ -3509,21 +3557,20 @@
 
             var openDeleteModal = function (opener) {
                 deleteOpener = opener || null;
-                deleteModal.hidden = false;
-                document.body.classList.add('cm-no-scroll');
+                openModal(deleteModal);
                 syncDeleteSubmit();
                 deleteInput.focus();
             };
 
             var closeDeleteModal = function () {
-                deleteModal.hidden = true;
-                document.body.classList.remove('cm-no-scroll');
-                deleteInput.value = '';
-                syncDeleteSubmit();
+                closeModal(deleteModal, function () {
+                    deleteInput.value = '';
+                    syncDeleteSubmit();
 
-                if (deleteOpener) {
-                    deleteOpener.focus();
-                }
+                    if (deleteOpener) {
+                        deleteOpener.focus();
+                    }
+                });
             };
 
             document.querySelectorAll('[data-delete-open]').forEach(function (button) {
@@ -4418,6 +4465,178 @@
         return fragment;
     }
 
+    /* ---------- Skeleton building blocks ---------- */
+
+    function skelEl(className, width, height) {
+        var node = document.createElement('div');
+
+        node.className = className;
+
+        if (width) {
+            node.style.width = width;
+        }
+
+        if (height) {
+            node.style.height = height;
+        }
+
+        return node;
+    }
+
+    function skelBar(width) {
+        return skelEl('cm-skeleton cm-skeleton--line', width);
+    }
+
+    function skelCircle(size) {
+        return skelEl('cm-skeleton cm-skeleton--circle', size + 'px', size + 'px');
+    }
+
+    // Page title placeholder. desktopOnly mirrors .cm-feed-title, which is hidden on mobile.
+    function skelHeader(width, desktopOnly) {
+        var header = skelEl('cm-skel-header' + (desktopOnly ? ' cm-skel-header--desktop' : ''));
+
+        header.appendChild(skelEl('cm-skeleton cm-skeleton--title', width));
+
+        return header;
+    }
+
+    // Uses the real chip-bar classes so mobile gets the same fixed position as the live page.
+    function skelChips(widths) {
+        var row = skelEl('cm-chips cm-chips--sticky');
+
+        widths.forEach(function (width) {
+            row.appendChild(skelEl('cm-skeleton cm-skeleton--chip', width + 'px'));
+        });
+
+        return row;
+    }
+
+    // Flat post card: avatar + meta line + body lines + action footer.
+    function skelPost(lineWidths) {
+        var post = skelEl('cm-skel-post');
+        var head = skelEl('cm-skel-post__head');
+        var meta = skelEl('cm-skel-post__meta');
+        var lines = skelEl('cm-skel-lines');
+        var foot = skelEl('cm-skel-post__foot');
+        var i;
+
+        meta.appendChild(skelBar('92px'));
+        meta.appendChild(skelBar('26px'));
+        meta.appendChild(skelEl('cm-skeleton cm-skeleton--tag'));
+        head.appendChild(skelCircle(32));
+        head.appendChild(meta);
+
+        lineWidths.forEach(function (width) {
+            lines.appendChild(skelBar(width));
+        });
+
+        for (i = 0; i < 3; i++) {
+            foot.appendChild(skelEl('cm-skeleton cm-skeleton--icon'));
+        }
+
+        foot.appendChild(skelEl('cm-skeleton cm-skeleton--icon cm-skel-push'));
+
+        post.appendChild(head);
+        post.appendChild(lines);
+        post.appendChild(foot);
+
+        return post;
+    }
+
+    function skelFeed() {
+        var list = skelEl('cm-skel-feed');
+
+        [
+            ['100%', '92%', '58%'],
+            ['100%', '68%'],
+            ['100%', '96%', '82%']
+        ].forEach(function (lineWidths) {
+            list.appendChild(skelPost(lineWidths));
+        });
+
+        return list;
+    }
+
+    // One comment. Top-level = 32px avatar; reply = 24px avatar, indented under its parent.
+    function skelComment(isReply, lines) {
+        var row = skelEl('cm-skel-comment' + (isReply ? ' cm-skel-comment--reply' : ''));
+        var body = skelEl('cm-skel-comment__body');
+        var actions = skelEl('cm-skel-comment__actions');
+
+        body.appendChild(skelEl('cm-skeleton cm-skeleton--block', null, (34 + lines * 20) + 'px'));
+        actions.appendChild(skelBar('30px'));
+        actions.appendChild(skelBar('64px'));
+        actions.appendChild(skelEl('cm-skeleton cm-skeleton--line cm-skel-push', '28px'));
+        body.appendChild(actions);
+
+        row.appendChild(skelCircle(isReply ? 24 : 32));
+        row.appendChild(body);
+
+        return row;
+    }
+
+    // The comment box is pinned to the bottom of the real thread page (nav hidden there).
+    function skelComposer() {
+        var bar = skelEl('cm-skel-composer');
+        var label = skelEl('cm-skel-composer__label');
+        var row = skelEl('cm-skel-composer__row');
+
+        label.appendChild(skelBar('52%'));
+        row.appendChild(skelEl('cm-skeleton cm-skeleton--btn'));
+        row.appendChild(skelEl('cm-skeleton cm-skeleton--input'));
+        row.appendChild(skelEl('cm-skeleton cm-skeleton--btn'));
+        bar.appendChild(label);
+        bar.appendChild(row);
+
+        return bar;
+    }
+
+    function skelIdentity() {
+        var card = skelEl('card cm-skel-identity');
+        var who = skelEl('cm-skel-identity__who');
+
+        who.appendChild(skelEl('cm-skeleton cm-skeleton--line cm-skeleton--name', '58%'));
+        who.appendChild(skelBar('80%'));
+
+        card.appendChild(skelEl('cm-skeleton cm-skeleton--avatar-lg'));
+        card.appendChild(who);
+
+        return card;
+    }
+
+    function skelPoints() {
+        var card = skelEl('card cm-skel-points');
+        var top = skelEl('cm-skel-points__top');
+
+        top.appendChild(skelBar('92px'));
+        top.appendChild(skelEl('cm-skeleton cm-skeleton--tag'));
+
+        card.appendChild(top);
+        card.appendChild(skelEl('cm-skeleton cm-skeleton--meter'));
+        card.appendChild(skelBar('46%'));
+
+        return card;
+    }
+
+    // Titled, bordered settings list (Activity / About & Support).
+    function skelGroup(rowWidths) {
+        var group = skelEl('cm-skel-group');
+        var list = skelEl('cm-skel-list');
+
+        group.appendChild(skelEl('cm-skeleton cm-skeleton--line cm-skel-group__title', '84px'));
+
+        rowWidths.forEach(function (width) {
+            var row = skelEl('cm-skel-list__row');
+
+            row.appendChild(skelBar(width));
+            list.appendChild(row);
+        });
+
+        group.appendChild(list);
+
+        return group;
+    }
+
     function buildSkeleton(kind) {
         var root = document.createElement('div');
 
@@ -4426,32 +4645,48 @@
 
         switch (kind) {
             case 'feed':
-                var chips = document.createElement('div');
-
-                chips.className = 'cm-nav-skeleton__chips';
-                chips.appendChild(skeletonBlock('chip', 5));
-                root.appendChild(chips);
-                root.appendChild(skeletonBlock('post', 3));
+                root.appendChild(skelHeader('128px', true));
+                root.appendChild(skelChips([44, 52, 60, 56, 56, 84, 100, 60]));
+                root.appendChild(skelFeed());
                 break;
             case 'profile':
-                root.appendChild(skeletonBlock('identity'));
-                root.appendChild(skeletonBlock('card'));
-                root.appendChild(skeletonBlock('row', 4));
+                var chipRow = skelEl('cm-skel-chips');
+
+                root.appendChild(skelHeader('40px'));
+                root.appendChild(skelIdentity());
+                root.appendChild(skelPoints());
+
+                [92, 72, 80].forEach(function (width) {
+                    chipRow.appendChild(skelEl('cm-skeleton cm-skeleton--chip', width + 'px'));
+                });
+                root.appendChild(chipRow);
+
+                root.appendChild(skelGroup(['38%', '46%', '34%']));
+                root.appendChild(skelGroup(['42%', '28%', '24%', '52%', '48%']));
                 break;
             case 'alerts':
                 root.appendChild(skeletonBlock('tabs'));
                 root.appendChild(skeletonBlock('row', 4));
                 break;
             case 'thread':
-                root.appendChild(skeletonBlock('post'));
-                root.appendChild(skeletonBlock('bubble', 3));
+                var comments = skelEl('cm-skel-comments');
+
+                root.appendChild(skelHeader('44px'));
+                root.appendChild(skelPost(['100%', '96%', '88%', '54%']));
+
+                comments.appendChild(skelComment(false, 2));
+                comments.appendChild(skelComment(true, 1));
+                comments.appendChild(skelComment(false, 3));
+                root.appendChild(comments);
+
+                root.appendChild(skelComposer());
                 break;
             case 'compose':
                 root.appendChild(skeletonBlock('chip-row'));
                 root.appendChild(skeletonBlock('card'));
                 break;
             default:
-                root.appendChild(skeletonBlock('post', 3));
+                root.appendChild(skelFeed());
         }
 
         return root;
