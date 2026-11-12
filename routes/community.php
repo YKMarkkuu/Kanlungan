@@ -11,6 +11,7 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SearchController;
 use App\Http\Middleware\EnforceRestrictions;
 use App\Http\Middleware\RequireRole;
+use App\Http\Middleware\StudentsOnly;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -25,7 +26,7 @@ use Illuminate\Support\Facades\Route;
 | Data is stored in the posts / comments / reactions tables.
 */
 
-Route::middleware(['auth', EnforceRestrictions::class])->group(function () {
+Route::middleware(['auth', StudentsOnly::class, EnforceRestrictions::class])->group(function () {
     Route::get('/feed', [FeedController::class, 'index'])->name('feed');
 
     Route::get('/post/create', [PostController::class, 'create'])->name('post.create');
@@ -76,11 +77,11 @@ Route::middleware(['auth', EnforceRestrictions::class])->group(function () {
 
     Route::post('/moderation/{report}/unmask', [ModerationController::class, 'unmask'])
         ->whereNumber('report')
-        ->middleware(RequireRole::class.':admin,dpo')
+        ->middleware(RequireRole::class.':admin')
         ->name('moderation.unmask');
 });
 
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth', StudentsOnly::class])->group(function () {
     // Blocking and unblocking remain available to authenticated restricted users.
     Route::post('/block/{type}/{id}', [BlockController::class, 'store'])->whereIn('type', ['post', 'comment'])->whereNumber('id')->middleware('throttle:20,1')->name('block.store');
     Route::post('/blocks/{block}/unblock', [BlockController::class, 'destroy'])->whereNumber('block')->middleware('throttle:20,1')->name('block.destroy');

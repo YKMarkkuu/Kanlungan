@@ -7,11 +7,8 @@ use Closure;
 use Illuminate\Http\Request;
 
 /**
- * The community (feed, posts, comments, search, profile) is for students only.
- *
- * Admin, guidance and moderator accounts work from /staff and only ever see reported content, so they are
- * sent back there instead of browsing the student feed. This keeps the space safe: staff are not reading
- * everyone's venting posts.
+ * Staff do not use the student onboarding flow, but may access shared community routes such as /me and
+ * the legacy moderation queue.
  */
 class StudentsOnly
 {
@@ -19,10 +16,19 @@ class StudentsOnly
     {
         $role = $request->user()?->role;
 
-        if (in_array($role, ModerationService::STAFF, true)) {
+        if ($role === 'dpo') {
             abort_unless($request->isMethodSafe(), 403);
 
-            return redirect()->route('staff.dashboard');
+            return redirect()->route('staff.dpo-reveal');
+        }
+
+        if (in_array($role, ModerationService::STAFF, true)
+            && $request->routeIs('onboarding', 'onboarding.complete', 'onboarding.restart')) {
+            if ($request->isMethodSafe()) {
+                return redirect()->route('staff.dashboard');
+            }
+
+            abort(403);
         }
 
         return $next($request);

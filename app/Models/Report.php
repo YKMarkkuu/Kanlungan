@@ -9,13 +9,13 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 class Report extends Model
 {
-    /** The 8 reasons from the design (screen 6, "Report this post"). */
-    public const CATEGORIES = ['Harassment', 'Hate speech', 'Threats', 'Self-harm', 'Doxxing', 'Spam', 'Misinformation', 'Other'];
+    /** Report reasons available in the community. */
+    public const CATEGORIES = ['Harassment', 'Hate speech', 'Threats', 'Self-harm', 'Doxxing', 'Spam', 'Misinformation', 'Sexual content', 'Profanity', 'Other'];
 
     /** Severity shown in the moderator queue (design screen 9). */
     public const CRITICAL = ['Self-harm', 'Threats'];
 
-    public const HIGH = ['Harassment', 'Hate speech', 'Doxxing'];
+    public const HIGH = ['Harassment', 'Hate speech', 'Doxxing', 'Sexual content', 'Profanity'];
 
     public const MEDIUM = ['Spam', 'Misinformation', 'Other'];
 

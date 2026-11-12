@@ -2,8 +2,10 @@
 
 namespace App\Providers;
 
+use App\Services\StaffDashboardService;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use RuntimeException;
 use Symfony\Component\Mailer\Bridge\Brevo\Transport\BrevoApiTransport;
@@ -42,5 +44,7 @@ class AppServiceProvider extends ServiceProvider
         if (app()->environment('production') && in_array(config('mail.default'), ['log', 'array', 'failover'], true)) {
             throw new RuntimeException('Live OTPs would be written to disk. Configure a real mailer, such as SMTP or Resend, in production.');
         }
+
+        View::composer('layouts.staff', fn ($view) => $view->with('nav', app(StaffDashboardService::class)->counts()));
     }
 }

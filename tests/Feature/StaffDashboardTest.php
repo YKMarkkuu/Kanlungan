@@ -9,6 +9,7 @@ use App\Models\OtpCode;
 use App\Models\Post;
 use App\Models\Report;
 use App\Models\User;
+use App\Services\ModerationService;
 use App\Support\Alias;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
@@ -47,6 +48,19 @@ class StaffDashboardTest extends TestCase
         return [$post, Report::latest('id')->firstOrFail()];
     }
 
+    private function createReportForPost(Post $post, User $reporter): Report
+    {
+        return Report::create([
+            'reporter_id' => $reporter->id,
+            'reportable_type' => $post->getMorphClass(),
+            'reportable_id' => $post->id,
+            'category' => 'Harassment',
+            'status' => Report::OPEN,
+            'mod_status' => 'pending',
+            'mod_subject' => 'content',
+        ]);
+    }
+
     /* ---------- getting in ---------- */
 
     public function test_staff_sign_in_sends_a_code_only_to_real_staff_and_says_the_same_thing_either_way(): void
@@ -80,6 +94,18 @@ class StaffDashboardTest extends TestCase
         $this->assertAuthenticatedAs($staff);
     }
 
+    public function test_dpo_can_sign_in_to_the_standalone_reveal_page_only(): void
+    {
+        $dpo = $this->staff('dpo');
+        $code = OtpCode::generateForEmail($dpo->email)['plain'];
+
+        $this->post('/staff/login/verify', ['email' => $dpo->email, 'code' => $code])->assertRedirect('/staff/dpo-reveal');
+        $this->assertAuthenticatedAs($dpo);
+        $this->get('/staff/dpo-reveal')->assertOk()->assertSee('DPO identity reveal');
+        $this->get('/staff')->assertForbidden();
+        $this->get('/staff/reports')->assertForbidden();
+    }
+
     public function test_a_student_email_cannot_sign_in_through_the_staff_page_even_with_a_valid_code(): void
     {
         $student = $this->student();
@@ -96,6 +122,10 @@ class StaffDashboardTest extends TestCase
         $user = User::where('email', 'counselor@fatima.edu.ph')->firstOrFail();
         $this->assertSame('guidance', $user->role);
         $this->assertSame('Ms. Cruz', $user->name);
+
+        $this->artisan('staff:create', ['email' => 'dpo@fatima.edu.ph', 'role' => 'dpo'])->assertSuccessful();
+        $this->assertSame('dpo', User::where('email', 'dpo@fatima.edu.ph')->value('role'));
+        $this->assertNotContains('dpo', ModerationService::STAFF);
 
         $this->artisan('staff:create', ['email' => 'counselor@fatima.edu.ph', 'role' => 'admin'])->assertFailed();
         $this->artisan('staff:create', ['email' => 'x@fatima.edu.ph', 'role' => 'student'])->assertFailed();
@@ -116,19 +146,18 @@ class StaffDashboardTest extends TestCase
         }
     }
 
-    public function test_staff_are_kept_out_of_the_student_community(): void
+    public function test_staff_can_access_shared_routes_but_not_student_onboarding(): void
     {
-        $author = $this->student();
-        $post = Post::create(['author_id' => $author->id, 'category' => 'Vent', 'body' => 'PRIVATE-VENT', 'is_anonymous' => true]);
-
         foreach (['admin', 'guidance', 'moderator'] as $role) {
             $staff = $this->staff($role);
-            $this->actingAs($staff)->get('/feed')->assertRedirect(route('staff.dashboard'));
-            $this->actingAs($staff)->get("/post/{$post->id}")->assertRedirect(route('staff.dashboard'));
-            $this->actingAs($staff)->get('/search?q=PRIVATE')->assertRedirect(route('staff.dashboard'));
-            $this->actingAs($staff)->post('/post', ['category' => 'Vent', 'body' => 'staff post'])->assertForbidden();
-            $this->actingAs($staff)->get('/home')->assertRedirect(route('staff.dashboard'));
+            $this->actingAs($staff)->get('/moderation')->assertOk();
+            $this->actingAs($staff)->get('/me')->assertOk();
+            $this->actingAs($staff)->get('/onboarding')->assertRedirect(route('staff.dashboard'));
+            $this->actingAs($staff)->post('/onboarding/complete')->assertForbidden();
         }
+
+        $dpo = $this->staff('dpo');
+        $this->actingAs($dpo)->get('/me')->assertRedirect(route('staff.dpo-reveal'));
     }
 
     public function test_staff_only_see_reported_content_never_unreported_posts(): void
@@ -176,27 +205,27 @@ class StaffDashboardTest extends TestCase
     {
         $author = $this->student();
         [, $report] = $this->reportedPost($author);
-        $guidance = $this->staff('guidance');
         $admin = $this->staff('admin');
 
-        $this->actingAs($guidance)->post("/staff/reports/{$report->id}/reveal", ['reason' => ''])->assertSessionHasErrors('reason');
-        $this->actingAs($guidance)->post("/staff/reports/{$report->id}/reveal", ['reason' => 'too short'])->assertSessionHasErrors('report');
+        $this->actingAs($admin)->post("/staff/reports/{$report->id}/reveal", ['reason' => ''])->assertSessionHasErrors('reason');
+        $this->actingAs($admin)->post("/staff/reports/{$report->id}/reveal", ['reason' => 'too short'])->assertSessionHasErrors('reason');
         $this->assertDatabaseMissing('mod_actions', ['action' => 'unmask']);
 
-        $this->actingAs($guidance)->post("/staff/reports/{$report->id}/reveal", ['reason' => 'Student must be called in for a discipline meeting'])->assertSessionHasNoErrors();
+        $this->actingAs($this->staff('guidance'))->post("/staff/reports/{$report->id}/reveal", ['reason' => 'Not authorized for this reveal'])->assertForbidden();
+        $this->actingAs($admin)->post("/staff/reports/{$report->id}/reveal", ['reason' => 'Student must be called in for a discipline meeting'])->assertSessionHasNoErrors();
 
         $this->assertDatabaseHas('mod_actions', [
             'report_id' => $report->id,
-            'moderator_id' => $guidance->id,
+            'moderator_id' => $admin->id,
             'target_user_id' => $author->id,
             'action' => 'unmask',
             'reason' => 'Student must be called in for a discipline meeting',
         ]);
 
         // The revealing staff member sees who it is, including the student ID.
-        $this->actingAs($guidance)->get("/staff/reports/{$report->id}")->assertSee($author->email)->assertSee($author->student_id);
+        $this->actingAs($admin)->get("/staff/reports/{$report->id}")->assertSee($author->email)->assertSee($author->student_id);
         // Another staff member does not, until they reveal it themselves.
-        $this->actingAs($admin)->get("/staff/reports/{$report->id}")->assertDontSee($author->email);
+        $this->actingAs($this->staff('guidance'))->get("/staff/reports/{$report->id}")->assertDontSee($author->email);
         // The reveal shows in the audit log for everyone to see.
         $this->actingAs($admin)->get('/staff/activity')->assertSee('Identity revealed')->assertSee('Student must be called in');
     }
@@ -205,12 +234,12 @@ class StaffDashboardTest extends TestCase
     {
         $author = $this->student();
         [, $report] = $this->reportedPost($author);
-        $guidance = $this->staff('guidance');
+        $admin = $this->staff('admin');
 
-        $this->actingAs($guidance)->post("/staff/reports/{$report->id}/reveal", ['reason' => 'Safety follow-up with the student']);
+        $this->actingAs($admin)->post("/staff/reports/{$report->id}/reveal", ['reason' => 'Safety follow-up with the student']);
         ModAction::where('action', 'unmask')->update(['created_at' => now()->subMinutes(31)]);
 
-        $this->actingAs($guidance)->get("/staff/reports/{$report->id}")->assertDontSee($author->email);
+        $this->actingAs($admin)->get("/staff/reports/{$report->id}")->assertDontSee($author->email);
     }
 
     public function test_moderators_and_students_cannot_reveal_identities(): void
@@ -221,6 +250,32 @@ class StaffDashboardTest extends TestCase
         $this->actingAs($this->staff('moderator'))->post("/staff/reports/{$report->id}/reveal", ['reason' => 'I am curious who this is'])->assertForbidden();
         $this->actingAs($this->student())->post("/staff/reports/{$report->id}/reveal", ['reason' => 'I am curious who this is'])->assertForbidden();
         $this->assertDatabaseMissing('mod_actions', ['action' => 'unmask']);
+    }
+
+    public function test_dpo_reveals_from_the_standalone_form_and_the_identity_is_shown_and_logged(): void
+    {
+        $author = $this->student();
+        $post = Post::create(['author_id' => $author->id, 'category' => 'Vent', 'body' => 'REPORTED-BODY', 'is_anonymous' => true]);
+        $report = $this->createReportForPost($post, $this->student());
+        $dpo = $this->staff('dpo');
+
+        $this->actingAs($dpo)->post('/staff/dpo-reveal', ['report_id' => $report->id])->assertSessionHasErrors('reason');
+        $this->actingAs($dpo)->post('/staff/dpo-reveal', [
+            'report_id' => $report->id,
+            'reason' => 'Privacy investigation follow-up',
+        ])->assertRedirect(route('staff.dpo-reveal'))
+            ->assertSessionHas('revealed_identity.email', $author->email);
+
+        $this->assertDatabaseHas('mod_actions', [
+            'report_id' => $report->id,
+            'moderator_id' => $dpo->id,
+            'target_user_id' => $author->id,
+            'action' => 'unmask',
+            'reason' => 'Privacy investigation follow-up',
+        ]);
+        $this->actingAs($dpo)->get('/staff/dpo-reveal')->assertSee($author->email);
+        $this->actingAs($dpo)->get("/staff/reports/{$report->id}")->assertForbidden();
+        $this->actingAs($dpo)->post("/moderation/{$report->id}/unmask", ['reason' => 'Not through the community endpoint'])->assertForbidden();
     }
 
     /* ---------- decisions ---------- */
@@ -254,27 +309,30 @@ class StaffDashboardTest extends TestCase
     public function test_mute_length_is_chosen_by_staff_and_limited_to_the_listed_choices(): void
     {
         $author = $this->student();
-        [, $report] = $this->reportedPost($author);
+        $post = Post::create(['author_id' => $author->id, 'category' => 'Vent', 'body' => 'REPORTED-BODY', 'is_anonymous' => true]);
+        $report = $this->createReportForPost($post, $this->student());
         $admin = $this->staff();
 
-        $this->actingAs($admin)->post("/staff/reports/{$report->id}/act", ['action' => 'mute', 'reason' => 'Cooling off period', 'mute_days' => 99])->assertSessionHasErrors('report');
+        $this->actingAs($admin)->post("/staff/reports/{$report->id}/act", ['action' => 'mute', 'reason' => 'Cooling off period', 'mute_days' => 99])->assertSessionHasErrors('mute_days');
         $this->assertNull($author->fresh()->muted_until);
 
-        $this->actingAs($admin)->post("/staff/reports/{$report->id}/act", ['action' => 'mute', 'reason' => 'Cooling off period', 'mute_days' => 14])->assertSessionHasNoErrors();
-        $this->assertEqualsWithDelta(now()->addDays(14)->timestamp, $author->fresh()->muted_until->timestamp, 5);
+        $this->actingAs($admin)->post("/staff/reports/{$report->id}/act", ['action' => 'mute', 'reason' => 'Cooling off period', 'mute_days' => 14])->assertSessionHasErrors('mute_days');
+        $this->actingAs($admin)->post("/staff/reports/{$report->id}/act", ['action' => 'mute', 'reason' => 'Cooling off period', 'mute_days' => 30])->assertSessionHasNoErrors();
+        $this->assertEqualsWithDelta(now()->addDays(30)->timestamp, \Illuminate\Support\Carbon::parse($author->fresh()->muted_until)->timestamp, 5);
 
         // The muted student is told how long.
-        $this->assertDatabaseHas('alerts', ['user_id' => $author->id, 'body' => 'You are muted for 14 days (you can read, but not post, comment, report or vote). Reason: Cooling off period']);
+        $this->assertDatabaseHas('alerts', ['user_id' => $author->id, 'body' => 'You are muted for 30 days (you can read, but not post, comment, report or vote). Reason: Cooling off period']);
     }
 
     public function test_default_mute_is_still_seven_days(): void
     {
         $author = $this->student();
-        [, $report] = $this->reportedPost($author);
+        $post = Post::create(['author_id' => $author->id, 'category' => 'Vent', 'body' => 'REPORTED-BODY', 'is_anonymous' => true]);
+        $report = $this->createReportForPost($post, $this->student());
 
-        $this->actingAs($this->staff())->post("/staff/reports/{$report->id}/act", ['action' => 'mute', 'reason' => 'Cooling off period']);
+        $this->actingAs($this->staff())->post("/staff/reports/{$report->id}/act", ['action' => 'mute', 'reason' => 'Cooling off period'])->assertSessionHasNoErrors();
 
-        $this->assertEqualsWithDelta(now()->addDays(7)->timestamp, $author->fresh()->muted_until->timestamp, 5);
+        $this->assertEqualsWithDelta(now()->addDays(7)->timestamp, \Illuminate\Support\Carbon::parse($author->fresh()->muted_until)->timestamp, 5);
     }
 
     public function test_the_suggestion_escalates_with_each_offence_but_staff_still_decide(): void

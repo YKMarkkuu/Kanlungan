@@ -9,21 +9,21 @@ use Illuminate\Support\Facades\Validator;
 
 /**
  * Staff cannot register themselves. An admin creates each account here, then the person signs in at
- * /staff/login with an emailed code (no password is ever stored).
+ * /staff/login with an emailed code (no password is ever stored). DPO accounts get a separate reveal-only page.
  */
 class CreateStaffAccount extends Command
 {
-    protected $signature = 'staff:create {email : Their school email} {role : admin, guidance or moderator} {--name= : Name shown in the audit log}';
+    protected $signature = 'staff:create {email : Their school email} {role : admin, guidance, moderator or dpo} {--name= : Name shown in the audit log}';
 
-    protected $description = 'Create an admin, guidance or moderator account for the staff dashboard (/staff)';
+    protected $description = 'Create an admin, guidance, moderator or reveal-only DPO account';
 
     public function handle(): int
     {
         $email = strtolower(trim((string) $this->argument('email')));
         $role = (string) $this->argument('role');
 
-        if (! in_array($role, ModerationService::STAFF, true)) {
-            $this->error('Role must be one of: '.implode(', ', ModerationService::STAFF).'.');
+        if (! in_array($role, [...ModerationService::STAFF, 'dpo'], true)) {
+            $this->error('Role must be one of: '.implode(', ', [...ModerationService::STAFF, 'dpo']).'.');
 
             return self::FAILURE;
         }

@@ -62,7 +62,7 @@ class AuthController extends Controller
         $request->session()->regenerate();
         OtpService::invalidate($email);
 
-        return redirect()->route('staff.dashboard');
+        return redirect()->route($user->role === 'dpo' ? 'staff.dpo-reveal' : 'staff.dashboard');
     }
 
     /**
@@ -83,7 +83,7 @@ class AuthController extends Controller
         Auth::login($user, false);
         $request->session()->regenerate();
 
-        return redirect()->route('staff.dashboard');
+        return redirect()->route($user->role === 'dpo' ? 'staff.dpo-reveal' : 'staff.dashboard');
     }
 
     private function devLoginEnabled(): bool
@@ -107,6 +107,6 @@ class AuthController extends Controller
 
     private function staffAccount(string $email): ?User
     {
-        return User::where('email', $email)->whereIn('role', ModerationService::STAFF)->first();
+        return User::where('email', $email)->whereIn('role', [...ModerationService::STAFF, 'dpo'])->first();
     }
 }

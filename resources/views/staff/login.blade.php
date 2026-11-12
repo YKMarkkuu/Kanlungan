@@ -14,7 +14,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6l-7-3Z" /></svg>
             </div>
             <h1>Staff sign-in</h1>
-            <p class="text-muted">For Kanlungan admin and guidance accounts. Students sign in on the main page.</p>
+            <p class="text-muted">For Kanlungan staff and DPO accounts. Students sign in on the main page.</p>
         </header>
 
         @if (session('status'))

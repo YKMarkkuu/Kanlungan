@@ -217,8 +217,8 @@ class StaffDashboardService
             return [
                 'ref' => $this->accountRef($u->id),
                 'status' => $banned ? 'Banned' : 'Muted',
-                'since' => $banned ? $u->banned_at : null,
-                'until' => $banned ? null : $u->muted_until,
+                'since' => $banned ? Carbon::parse($u->banned_at) : null,
+                'until' => $banned || $u->muted_until === null ? null : Carbon::parse($u->muted_until),
                 'warnings' => (int) $u->warnings_count,
                 'last_action' => $action?->action,
                 'last_reason' => $action?->reason,

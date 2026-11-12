@@ -48,7 +48,7 @@ class CaseController extends Controller
         $data = $request->validate([
             'action' => ['required', Rule::in(['warn', 'remove', 'restore', 'mute', 'ban', 'unmute', 'unban', 'dismiss', 'refer', 'handled'])],
             'reason' => ['required', 'string', 'min:3', 'max:500'],
-            'mute_days' => ['nullable', 'integer'],
+            'mute_days' => ['nullable', 'integer', Rule::in(ModerationService::MUTE_CHOICES)],
             // The reporter may have picked the wrong reason; staff can correct it while deciding.
             'override_category' => ['nullable', Rule::in(Report::CATEGORIES)],
         ], ['action.required' => 'Choose what to do using one of the buttons.', 'reason.required' => 'Every action needs a reason.', 'reason.min' => 'Every action needs a reason (at least 3 characters).']);
@@ -60,6 +60,7 @@ class CaseController extends Controller
             $data['reason'],
             $data['override_category'] ?? null,
             isset($data['mute_days']) ? (int) $data['mute_days'] : null,
+            true,
         );
 
         return redirect()->route('staff.case', $report)->with('staff_status', 'Done. The action was saved to the audit log.');
@@ -67,9 +68,15 @@ class CaseController extends Controller
 
     public function reveal(Request $request, int $report): RedirectResponse
     {
-        $data = $request->validate(['reason' => ['required', 'string', 'max:500']], ['reason.required' => 'Say why you need to know who this is.']);
+        $data = $request->validate(
+            ['reason' => ['required', 'string', 'min:10', 'max:500']],
+            [
+                'reason.required' => 'Say why you need to know who this is.',
+                'reason.min' => 'Explain why you need to know who this is (at least 10 characters).',
+            ],
+        );
 
-        $this->moderation->reveal($request->user(), $report, $data['reason']);
+        $this->moderation->unmask($request->user(), $report, $data['reason']);
 
         return redirect()->route('staff.case', $report)->with('staff_status', 'Identity revealed below. This was saved to the audit log.');
     }

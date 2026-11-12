@@ -7,16 +7,16 @@ use Illuminate\Console\Command;
 
 class SetCommunityRole extends Command
 {
-    protected $signature = 'community:role {email} {role : student, moderator, guidance or admin}';
+    protected $signature = 'community:role {email} {role : student, moderator, guidance, admin or dpo}';
 
-    protected $description = 'Give a user a community role (moderator, guidance, admin) or set them back to student';
+    protected $description = 'Give a user a community or DPO role, or set them back to student';
 
     public function handle(): int
     {
         $role = $this->argument('role');
 
-        if (! in_array($role, ['student', 'moderator', 'guidance', 'admin'], true)) {
-            $this->error('Role must be: student, moderator, guidance or admin.');
+        if (! in_array($role, ['student', 'moderator', 'guidance', 'admin', 'dpo'], true)) {
+            $this->error('Role must be: student, moderator, guidance, admin or dpo.');
 
             return self::FAILURE;
         }

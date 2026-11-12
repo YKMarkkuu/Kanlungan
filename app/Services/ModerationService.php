@@ -19,6 +19,10 @@ use Illuminate\Validation\ValidationException;
  */
 class ModerationService
 {
+    public const REVEAL_ROLES = ['admin', 'dpo'];
+
+    public const MUTE_CHOICES = [1, 3, 7, 30];
+
     public const MUTE_DAYS = 7;
 
     public const STAFF = ['moderator', 'admin', 'guidance'];
@@ -92,7 +96,7 @@ class ModerationService
     }
 
     /** @return array<int, string> actions this role may run on this card */
-    public function actionsFor(string $role, Report $report): array
+    public function actionsFor(string $role, Report $report, bool $staffDashboard = false): array
     {
         $subjectUser = $report->mod_subject === 'reporter'
             ? $report->reporter
@@ -102,7 +106,7 @@ class ModerationService
             return $role === 'guidance' ? [] : ['dismiss'];
         }
 
-        if ($role === 'guidance') {
+        if ($role === 'guidance' && ! $staffDashboard) {
             return $report->referred_guidance_at !== null && $report->guidance_handled_at === null ? ['handled'] : [];
         }
 
@@ -141,7 +145,7 @@ class ModerationService
         return $actions;
     }
 
-    public function act(User $actor, int $reportId, string $action, string $reason, ?string $overrideCategory = null): void
+    public function act(User $actor, int $reportId, string $action, string $reason, ?string $overrideCategory = null, ?int $muteDays = null, bool $staffDashboard = false): void
     {
         $reason = trim($reason);
 
@@ -149,7 +153,11 @@ class ModerationService
             throw $this->error('Every action needs a reason (at least 3 characters).');
         }
 
-        DB::transaction(function () use ($actor, $reportId, $action, $reason, $overrideCategory) {
+        if ($action === 'mute' && $muteDays !== null && ! in_array($muteDays, self::MUTE_CHOICES, true)) {
+            throw $this->error('Choose a valid mute duration.');
+        }
+
+        DB::transaction(function () use ($actor, $reportId, $action, $reason, $overrideCategory, $muteDays, $staffDashboard) {
             $report = Report::lockForUpdate()->with('reportable')->findOrFail($reportId);
 
             if ($action === 'restore'
@@ -160,7 +168,7 @@ class ModerationService
                 throw $this->error('The author deleted this themselves, so it cannot be restored.');
             }
 
-            if (! in_array($action, $this->actionsFor((string) $actor->role, $report), true)) {
+            if (! in_array($action, $this->actionsFor((string) $actor->role, $report, $staffDashboard), true)) {
                 throw $this->error('That action is not available for this case.');
             }
 
@@ -234,8 +242,9 @@ class ModerationService
                     break;
 
                 case 'mute':
-                    User::whereKey($subjectUserId)->update(['muted_until' => now()->addDays(self::MUTE_DAYS)]);
-                    $this->alerts->notify($subjectUserId, 'notice', 'Notice from moderators', 'You are muted for '.self::MUTE_DAYS." days (you can read, but not post, comment, report or vote). Reason: {$reason}", snippet: $snippet);
+                    $duration = $muteDays ?? self::MUTE_DAYS;
+                    User::whereKey($subjectUserId)->update(['muted_until' => now()->addDays($duration)]);
+                    $this->alerts->notify($subjectUserId, 'notice', 'Notice from moderators', "You are muted for {$duration} days (you can read, but not post, comment, report or vote). Reason: {$reason}", snippet: $snippet);
                     $changes['mod_status'] = 'reviewed';
                     break;
 
@@ -301,6 +310,11 @@ class ModerationService
 
     public function unmask(User $actor, int $reportId, string $reason): string
     {
+        $reason = trim($reason);
+        if (mb_strlen($reason) < 10) {
+            throw $this->error('Every reveal needs a reason (at least 10 characters).');
+        }
+
         return DB::transaction(function () use ($actor, $reportId, $reason) {
             $report = Report::with(['reportable.author', 'reporter'])->findOrFail($reportId);
             $targetUser = $report->mod_subject === 'reporter'

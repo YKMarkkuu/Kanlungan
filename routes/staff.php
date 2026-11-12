@@ -3,9 +3,9 @@
 use App\Http\Controllers\Staff\AuthController;
 use App\Http\Controllers\Staff\CaseController;
 use App\Http\Controllers\Staff\DashboardController;
+use App\Http\Controllers\Staff\DpoRevealController;
 use App\Http\Middleware\RequireRole;
 use App\Services\ModerationService;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -35,14 +35,17 @@ Route::middleware(['auth', RequireRole::class.':'.implode(',', ModerationService
         Route::post('/reports/{report}/act', [CaseController::class, 'act'])->whereNumber('report')->middleware('throttle:60,1')->name('staff.act');
         Route::post('/reports/{report}/reveal', [CaseController::class, 'reveal'])
             ->whereNumber('report')
-            ->middleware([RequireRole::class.':'.implode(',', ModerationService::REVEAL_ROLES), 'throttle:30,1'])
+            ->middleware([RequireRole::class.':admin', 'throttle:30,1'])
             ->name('staff.reveal');
         Route::get('/sanctions', [DashboardController::class, 'sanctions'])->name('staff.sanctions');
         Route::get('/activity', [DashboardController::class, 'activity'])->name('staff.activity');
     });
 
-    // Old links (earlier alerts pointed here) keep working.
-    Route::get('/moderation', fn (Request $request) => redirect()->route('staff.reports', [
-        'view' => $request->query('tab') === 'guidance' ? 'referred' : 'review',
-    ]))->name('moderation');
+});
+
+Route::middleware(['auth', RequireRole::class.':dpo'])->prefix('staff')->group(function () {
+    Route::get('/dpo-reveal', [DpoRevealController::class, 'show'])->name('staff.dpo-reveal');
+    Route::post('/dpo-reveal', [DpoRevealController::class, 'reveal'])
+        ->middleware('throttle:30,1')
+        ->name('staff.dpo-reveal.submit');
 });

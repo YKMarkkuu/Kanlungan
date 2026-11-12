@@ -60,7 +60,7 @@ class ModerationController extends Controller
     public function unmask(Request $request, int $report): RedirectResponse
     {
         $data = $request->validate([
-            'reason' => ['required', 'string'],
+            'reason' => ['required', 'string', 'min:10', 'max:500'],
         ]);
 
         $email = $this->moderation->unmask($request->user(), $report, $data['reason']);
