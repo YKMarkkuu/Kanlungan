@@ -17,6 +17,7 @@ class StaffDemoSeeder extends Seeder
 {
     public const ACCOUNTS = [
         ['email' => 'mqdavid0738pam@admin.fatima.edu.ph', 'password' => 'admin123', 'role' => 'admin', 'name' => 'Demo Admin'],
+        ['email' => 'mplaureta0368pam@admin.fatima.edu.ph', 'password' => 'admin123', 'role' => 'admin', 'name' => 'Demo Admin'],
         ['email' => 'guidance0001pam@admin.fatima.edu.ph', 'password' => 'guidance123', 'role' => 'guidance', 'name' => 'Demo Guidance'],
     ];
 
