@@ -6,19 +6,22 @@
    deliberately one class more specific than the real rule it beats.
    ========================================================================== */
 
+/* Lock the document to the visual viewport on Android and desktop */
 html:has(body.onboarding-page),
 body.onboarding-page {
     height: 100dvh;
-    min-height: 0;
     max-height: 100dvh;
+    min-height: 0;
     overflow: hidden;
     overscroll-behavior: none;
+    position: fixed; /* Forces the body to stay put on Android PWA */
+    width: 100%;
 }
 
 .onboarding-page,
 .onboarding-page .page {
     width: 100%;
-    height: 100dvh;
+    height: 100%;
     min-height: 0;
     overflow: hidden;
 }
@@ -26,7 +29,7 @@ body.onboarding-page {
 .guest-page--onboarding {
     display: grid;
     grid-template-rows: 1fr;
-    height: 100dvh;
+    height: 100%;
     min-height: 0;
     overflow: hidden;
     padding: 0;
@@ -44,7 +47,7 @@ body.onboarding-page {
     display: flex;
     flex-direction: column;
     width: 100%;
-    height: 100dvh;
+    height: 100%;
     min-height: 0;
     overflow: hidden;
     box-sizing: border-box;
