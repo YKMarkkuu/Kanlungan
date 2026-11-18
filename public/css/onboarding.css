@@ -1,3 +1,11 @@
+/* ==========================================================================
+   Kanlungan — onboarding.css
+   Slide chrome + the sandbox that hosts the REAL app components (post-card, comment-card, ...).
+   Load order on the onboarding page is onboarding.css THEN community.css, so on equal specificity
+   community.css wins. Every sandbox override below therefore starts with ".ob-phone" and is
+   deliberately one class more specific than the real rule it beats.
+   ========================================================================== */
+
 .onboarding-page,
 .onboarding-page .page {
     width: 100%;
@@ -158,219 +166,31 @@
     line-height: 1.5;
 }
 
-.onboarding__copy--demo {
-    min-height: 0;
-}
+/* ---------- Demo slides: copy on top, phone below ----------
+   Auto margins on the first/last child centre the pair when there is room and collapse to 0 when
+   there is not ("safe centre"), so a short screen never clips the step label. */
 
-.cm-onboarding-demo {
-    width: min(100%, 360px);
-    max-width: 100%;
-    box-sizing: border-box;
-    touch-action: pan-y;
-    overscroll-behavior: contain;
-}
-
-.onboarding__demo-window,
-.onboarding__demo-comment,
-.onboarding__demo-post {
-    padding: 14px;
-    border: 1px solid var(--border-subtle);
-    border-radius: 16px;
-    background: var(--surface-card);
-    box-shadow: 0 8px 24px rgba(27, 45, 35, 0.06);
-    text-align: left;
-}
-
-.onboarding__demo-heading,
-.onboarding__demo-post-heading {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+.onboarding__slide[data-scene] {
+    justify-content: flex-start;
     gap: 12px;
-    color: var(--text-primary);
-    font-size: 13px;
+    padding-top: 0;
+    padding-bottom: 8px;
 }
 
-.onboarding__demo-heading > span {
-    padding: 3px 8px;
-    border-radius: 999px;
-    background: var(--accent-soft);
-    color: var(--accent);
-    font-size: 11px;
-    font-weight: 600;
-}
-
-.onboarding__demo-window textarea {
-    display: block;
-    width: 100%;
-    height: 45px;
-    margin: 8px 0;
-    padding: 8px 0;
-    resize: none;
-    border: 0;
-    border-top: 1px solid var(--border-subtle);
-    background: transparent;
-    color: var(--text-muted);
-    font: inherit;
-    font-size: 13px;
-}
-
-.onboarding__demo .cm-visually-hidden {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-}
-
-.onboarding__demo .cm-anon-badge {
-    display: inline-flex;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: inherit;
-    font: inherit;
-    cursor: pointer;
-}
-
-.onboarding__demo .cm-anon-badge__pill {
-    display: inline-flex;
-    align-items: center;
+.onboarding__slide[data-scene] .onboarding__copy {
+    flex: none;
     gap: 6px;
-    min-height: 36px;
-    padding: 0 12px;
-    border: 1px solid var(--border-subtle);
-    border-radius: 999px;
-    background: var(--surface-card);
-    color: var(--text-muted);
-    font-size: 13px;
-    font-weight: 600;
+    max-height: none;
+    margin-top: auto;
+    overflow: visible;
 }
 
-.onboarding__demo .cm-anon-badge__pill .icon {
-    width: 16px;
-    height: 16px;
+.onboarding__slide[data-scene] .onboarding__copy h2 { font-size: 22px; }
+
+.onboarding__slide[data-scene] .onboarding__copy > p:last-child {
+    font-size: 14px;
+    line-height: 1.45;
 }
-
-.onboarding__demo .cm-anon-badge[aria-pressed="true"] .cm-anon-badge__pill {
-    border-color: var(--accent);
-    background: var(--accent-soft);
-    color: var(--accent-dark);
-}
-
-.onboarding__demo .cm-anon-badge:focus-visible .cm-anon-badge__pill {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-}
-
-.onboarding__demo-caption {
-    display: block;
-    width: 100%;
-    box-sizing: border-box;
-    margin: 10px 0 0;
-    min-height: 2.8em;
-    color: var(--text-muted);
-    font-size: 13px;
-    line-height: 1.4;
-    text-align: center;
-}
-
-.onboarding__demo-comment > strong,
-.onboarding__demo-post-heading > strong {
-    color: var(--text-primary);
-    font-size: 13px;
-}
-
-.onboarding__demo-comment > p,
-.onboarding__demo-post > p {
-    margin: 8px 0 12px;
-    color: var(--text-muted);
-    font-size: 13px;
-    line-height: 1.4;
-    text-align: left;
-}
-
-.onboarding__helpful-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    min-height: 44px;
-    padding: 0 10px;
-    border: 1px solid var(--border-subtle);
-    border-radius: 999px;
-    background: var(--surface-card);
-    color: var(--text-muted);
-    font: inherit;
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-}
-
-.onboarding__helpful-btn .icon { width: 16px; height: 16px; }
-.onboarding__helpful-btn.is-popping { animation: onboarding-demo-pop 360ms var(--ease-spring); }
-.onboarding__helpful-btn.is-active { border-color: var(--warning); background: #fbf2df; color: var(--warning-dark); }
-
-@keyframes onboarding-demo-pop {
-    0% { transform: scale(1); }
-    42% { transform: scale(1.16); }
-    100% { transform: scale(1); }
-}
-
-.onboarding__demo-points {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 6px;
-    margin: 10px 0 0;
-    color: var(--text-muted);
-    font-size: 13px;
-    font-weight: 600;
-}
-
-.onboarding__demo-post-heading > button {
-    display: grid;
-    place-items: center;
-    width: 44px;
-    height: 44px;
-    border: 0;
-    border-radius: 50%;
-    background: transparent;
-    color: var(--text-muted);
-}
-
-.onboarding__demo-post-heading > button .icon { width: 20px; height: 20px; }
-
-.onboarding__report-menu {
-    display: grid;
-    gap: 6px;
-    padding: 8px;
-    border: 1px solid var(--border-subtle);
-    border-radius: 10px;
-    background: var(--surface-card);
-    box-shadow: 0 6px 18px rgba(27, 45, 35, 0.08);
-    text-align: left;
-}
-
-.onboarding__report-menu > button {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-height: 44px;
-    padding: 0 8px;
-    border: 0;
-    border-radius: 6px;
-    background: transparent;
-    color: var(--danger);
-    font: inherit;
-    font-size: 13px;
-    font-weight: 600;
-    text-align: left;
-}
-
-.onboarding__report-menu > button .icon { width: 16px; height: 16px; }
-.onboarding__report-menu > p { margin: 0; color: var(--text-muted); font-size: 12px; line-height: 1.4; }
 
 .onboarding__button {
     width: 100%;
@@ -409,6 +229,210 @@
     background: var(--accent);
 }
 
+/* ==========================================================================
+   Sandbox stage
+   .ob-stage  = coordinate space for the ghost hand (never transformed by us).
+   .ob-phone  = the "device": clips everything, becomes the containing block for any
+                fixed-position real component (composer, report sheet, compose bar).
+   .ob-view   = one screen inside the phone; the director cross-fades between them.
+   ========================================================================== */
+
+.ob-stage {
+    flex: none;
+    width: min(100%, 380px);
+    margin-bottom: auto;
+}
+
+.ob-phone {
+    /* Tokens the real mobile CSS reads from .cm-main, which does not exist here. */
+    --cm-gutter: 12px;
+    --cm-kb: 0px;
+    --cm-comment-kb: 0px;
+    --ob-h: clamp(230px, calc(100dvh - 410px), 380px);
+
+    position: relative;
+    height: var(--ob-h);
+    overflow: hidden;
+    isolation: isolate;
+    transform: translateZ(0);           /* containing block for any stray position:fixed */
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    background: var(--surface-bg);
+    box-shadow: 0 8px 24px rgba(27, 45, 35, 0.06);
+    text-align: left;
+}
+
+/* Scene 5 has a caption under the phone and a taller sheet. */
+.ob-phone--report { --ob-h: clamp(260px, calc(100dvh - 450px), 340px); }
+
+.ob-view {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    visibility: hidden;
+    transform: translate3d(0, 8px, 0) scale(0.985);
+    transition:
+        opacity 280ms var(--ease-ios),
+        transform 380ms var(--ease-ios),
+        visibility 0s linear 380ms;
+}
+
+.ob-view.is-active {
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+    transition-delay: 0s;
+}
+
+/* reset() swaps views with no animation. */
+.ob-stage.is-instant .ob-view { transition: none !important; }
+
+.ob-screen {
+    display: grid;
+    align-content: start;
+    gap: 10px;
+    padding: 10px 12px 12px;
+}
+
+.ob-screen--composer { padding-bottom: 96px; } /* room to scroll past the comment box */
+
+.ob-scroll {
+    height: 100%;
+    overflow: hidden; /* scrolled by the director, never by the user */
+}
+
+.ob-phone h1 { font-size: 17px; }
+
+.ob-phone .cm-header { min-height: 0; }
+.ob-phone .cm-post { margin-left: 0; margin-right: 0; }
+.ob-phone .cm-chips { scrollbar-width: none; overflow: hidden; }
+.ob-phone .cm-chips--compose { scroll-behavior: auto; }
+
+/* ---------- Press feedback (the hand adds .is-pressed) ---------- */
+
+.ob-phone .is-pressed {
+    transform: scale(0.94);
+    transition: transform 120ms var(--ease-spring);
+}
+
+.ob-phone .cm-post.is-pressed { transform: scale(0.985); }
+
+/* ---------- Real fixed components, pinned inside the phone ---------- */
+
+.ob-phone .cm-composer {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 5;
+    box-shadow: 0 -4px 12px rgba(30, 30, 30, 0.08);
+}
+
+.ob-phone .cm-composer__row .input { overflow: hidden; }
+
+.ob-phone .cm-compose-form {
+    position: relative;
+    height: 100%;
+    align-content: start;
+    padding: 10px 12px 64px;
+}
+
+.ob-phone .cm-compose-form > .cm-compose__bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 8px 12px;
+    background-color: var(--surface-bg);
+}
+
+.ob-phone .cm-compose--canvas .cm-compose__input {
+    min-height: 72px;
+    font-size: 16px;
+}
+
+.ob-phone .cm-sheet {
+    position: absolute;
+    inset: 0;
+    z-index: 7;
+}
+
+.ob-phone .cm-sheet__panel {
+    max-width: none;
+    max-height: 100%;
+    gap: 8px;
+    padding: 12px 12px 10px;
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.ob-phone .cm-sheet__title { font-size: 15px; }
+.ob-phone .cm-sheet__reasons { gap: 6px; }
+.ob-phone .cm-sheet__reason { min-height: 30px; padding: 2px 8px; font-size: 13px; }
+.ob-phone .cm-sheet .btn { min-height: 38px; }
+.ob-phone .cm-sheet__note { font-size: 11px; }
+
+/* Real toast markup in a sandbox slot (the real stack is position:fixed on <body>). */
+.ob-toast {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 60px;
+    z-index: 8;
+    display: grid;
+    justify-items: center;
+    padding: 0 12px;
+    pointer-events: none;
+}
+
+.ob-toast[hidden] { display: none; }
+
+/* Points readout (scene 2). Not part of the real app: it stands in for the Me screen. */
+.ob-points {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    z-index: 6;
+    margin: 0;
+    padding: 3px 10px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    background: var(--surface-card);
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+#onboarding-points-count {
+    display: inline-block;
+    min-width: 1ch;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Caption under the phone (scene 5). */
+.onboarding__demo-caption {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    margin: 10px 0 0;
+    min-height: 2.8em;
+    color: var(--text-muted);
+    font-size: 13px;
+    line-height: 1.4;
+    text-align: center;
+}
+
+/* Price badge pulse (scene 4). */
+@keyframes ob-pulse {
+    0% { transform: scale(1); box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent); }
+    50% { transform: scale(1.14); box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent) 0%, transparent); }
+    100% { transform: scale(1); box-shadow: 0 0 0 0 transparent; }
+}
+
+.ob-phone .cm-price.is-pulsing { animation: ob-pulse 700ms var(--ease-ios) 2; }
+
+/* ---------- Narrow / short screens ---------- */
+
 @media (max-width: 480px) {
     .guest-page--onboarding > .container {
         max-width: none;
@@ -419,7 +443,7 @@
         padding-left: 0;
     }
 
-    .onboarding__slide { padding-right: 28px; padding-left: 28px; }
+    .onboarding__slide { padding-right: 20px; padding-left: 20px; }
     .onboarding__illustration { flex-basis: 160px; width: 160px; height: 160px; }
     .onboarding__illustration .icon { width: 88px; height: 88px; }
     .onboarding__footer { padding-right: 24px; padding-left: 24px; gap: 16px; }
@@ -428,14 +452,18 @@
 @media (max-height: 640px) {
     .onboarding { padding-top: calc(12px + env(safe-area-inset-top)); padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
     .onboarding__slide { gap: 20px; }
+    .onboarding__slide[data-scene] { gap: 8px; }
     .onboarding__illustration { flex-basis: 132px; width: 132px; height: 132px; padding: 30px; }
     .onboarding__illustration .icon { width: 72px; height: 72px; }
     .onboarding__copy { min-height: 0; }
+    .onboarding__slide[data-scene] .onboarding__copy h2 { font-size: 19px; }
+    .onboarding__slide[data-scene] .onboarding__copy > p:last-child { font-size: 13px; line-height: 1.4; }
     .onboarding__footer { gap: 10px; padding-top: 8px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
     .onboarding__progress-dot { transition: none; }
     .onboarding__slides { scroll-behavior: auto; }
-    .onboarding__helpful-btn.is-popping { animation: none; }
+    .ob-view { transition: none; }
+    .ob-phone .cm-price.is-pulsing { animation: none; }
 }

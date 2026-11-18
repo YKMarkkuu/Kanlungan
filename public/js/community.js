@@ -564,13 +564,8 @@
         });
     }
 
-    /* ==========================================================================
-       Onboarding "movie": scripted, non-interactive demos.
-       The onboarding page uses the guest layout, so it is always a full page load
-       (never an htmx swap) and this block runs once. Unchanged.
-       Each demo slide (data-scene) gets a director with one ghost hand. The script
-       runs while its slide has .is-active, loops, and is cancelled the moment the
-       user swipes away (onboarding.js toggles .is-active).
+    /* Onboarding demo scenes.
+       This runs only on the standalone guest onboarding page.
        ========================================================================== */
     (function () {
         var root = document.querySelector('[data-onboarding]');
@@ -584,140 +579,30 @@
         }
 
         var CANCELLED = { cancelled: true };
-        var TIP_X = 16;
+        var TIP_X = 16;          // fingertip offset inside the 36px hand icon
         var TIP_Y = 5;
-        var GLIDE_MS = 950;
+        var VIEW_MS = 380;       // keep in sync with .ob-view transition in onboarding.css
+        var SHEET_MS = 260;      // keep in sync with cm-sheet-down (240ms) in community.css
+        var ALIAS = 'Anonymous Falcon #4821';
+        var OWL = 'Anonymous Owl #1093';
 
-        function byId(id) {
-            return document.getElementById(id);
+        function q(selector, context) {
+            return (context || document).querySelector(selector);
         }
 
-        function createDirector(slide) {
-            var stage = slide.querySelector('[data-demo-stage]');
-            var cursor = stage.querySelector('[data-demo-cursor]');
-            var token = 0;
-            var position = { x: 0, y: 0 };
-
-            function sleep(ms, t) {
-                return new Promise(function (resolve, reject) {
-                    window.setTimeout(function () {
-                        if (t === token) {
-                            resolve();
-                        } else {
-                            reject(CANCELLED);
-                        }
-                    }, ms);
-                });
-            }
-
-            function pointOf(el, fx, fy) {
-                var s = stage.getBoundingClientRect();
-                var r = el.getBoundingClientRect();
-
-                return {
-                    x: r.left - s.left + r.width * (fx === undefined ? 0.5 : fx),
-                    y: r.top - s.top + r.height * (fy === undefined ? 0.5 : fy)
-                };
-            }
-
-            function place(p) {
-                position = p;
-                cursor.style.transform = 'translate3d(' + (p.x - TIP_X) + 'px,' + (p.y - TIP_Y) + 'px,0)';
-            }
-
-            function restPoint() {
-                var s = stage.getBoundingClientRect();
-
-                return { x: s.width * 0.92, y: s.height * 1.04 };
-            }
-
-            function park() {
-                cursor.classList.add('is-instant');
-                cursor.classList.remove('is-visible', 'is-tapping');
-                place(restPoint());
-                void cursor.offsetWidth;
-                cursor.classList.remove('is-instant');
-            }
-
-            function glideTo(el, t, fx, fy) {
-                cursor.classList.add('is-visible');
-                place(pointOf(el, fx, fy));
-
-                return sleep(GLIDE_MS, t);
-            }
-
-            function ripple(p) {
-                var ring = document.createElement('span');
-
-                ring.className = 'cm-tap-ripple';
-                ring.style.left = p.x + 'px';
-                ring.style.top = p.y + 'px';
-                ring.addEventListener('animationend', function () {
-                    ring.remove();
-                });
-                stage.appendChild(ring);
-                window.setTimeout(function () {
-                    ring.remove();
-                }, 1200);
-            }
-
-            function tap(el, t, action) {
-                cursor.classList.add('is-tapping');
-
-                return sleep(130, t).then(function () {
-                    ripple(position);
-
-                    if (el) {
-                        el.classList.add('is-pressed');
-                    }
-
-                    if (action) {
-                        action();
-                    }
-
-                    return sleep(220, t);
-                }).then(function () {
-                    cursor.classList.remove('is-tapping');
-
-                    if (el) {
-                        el.classList.remove('is-pressed');
-                    }
-                });
-            }
-
-            function rest(t) {
-                cursor.classList.remove('is-visible');
-                place(restPoint());
-
-                return sleep(800, t);
-            }
-
-            function begin() {
-                token += 1;
-
-                return token;
-            }
-
-            function cancel() {
-                token += 1;
-                cursor.classList.remove('is-visible', 'is-tapping');
-                stage.querySelectorAll('.cm-tap-ripple').forEach(function (ring) {
-                    ring.remove();
-                });
-            }
-
-            return {
-                stage: stage,
-                sleep: sleep,
-                pointOf: pointOf,
-                park: park,
-                glideTo: glideTo,
-                tap: tap,
-                rest: rest,
-                begin: begin,
-                cancel: cancel
-            };
+        function qa(selector, context) {
+            return Array.prototype.slice.call((context || document).querySelectorAll(selector));
         }
+
+        function clamp(n, min, max) {
+            return Math.max(min, Math.min(max, n));
+        }
+
+        function easeOut(p) {
+            return 1 - Math.pow(1 - p, 3);
+        }
+
+        /* ---------- Small shared effects ---------- */
 
         function swapText(el, text) {
             if (el.textContent === text) {
@@ -738,45 +623,410 @@
             el.classList.remove('is-swapping');
         }
 
-        function anonScene(slide) {
-            var d = createDirector(slide);
-            var toggle = byId('onboarding-anon-toggle');
-            var text = slide.querySelector('[data-demo-text]');
-            var ANON = "You'll appear as Anonymous Falcon";
-            var NAMED = "You'll appear as Mark";
+        // Same open/close the real "..." menus use: the .hidden class plus aria-expanded on the toggle.
+        function setMenu(toggle, open) {
+            var menu = document.getElementById(toggle.getAttribute('aria-controls'));
 
-            function setAnon(on) {
-                toggle.setAttribute('aria-pressed', String(on));
-                swapText(text, on ? ANON : NAMED);
+            if (menu) {
+                menu.classList.toggle('hidden', !open);
+            }
+
+            toggle.setAttribute('aria-expanded', String(open));
+        }
+
+        /* ==========================================================================
+           Director: one hand, one stage, one cancel token.
+           ========================================================================== */
+
+        function createDirector(slide) {
+            var stage = q('[data-demo-stage]', slide);
+            var cursor = q('[data-demo-cursor]', stage);
+            var token = 0;
+            var position = { x: 0, y: 0 };
+
+            /* ---- timing primitives (all cancellable) ---- */
+
+            function sleep(ms, t) {
+                return new Promise(function (resolve, reject) {
+                    window.setTimeout(function () {
+                        if (t === token) {
+                            resolve();
+                        } else {
+                            reject(CANCELLED);
+                        }
+                    }, ms);
+                });
+            }
+
+            // rAF loop: step(progress 0..1). Rejects the moment the token changes, even mid-tween.
+            function frames(ms, t, step) {
+                return new Promise(function (resolve, reject) {
+                    var start = null;
+
+                    function tick(now) {
+                        if (t !== token) {
+                            reject(CANCELLED);
+                            return;
+                        }
+
+                        if (start === null) {
+                            start = now;
+                        }
+
+                        var p = Math.min(1, (now - start) / ms);
+
+                        step(p);
+
+                        if (p < 1) {
+                            window.requestAnimationFrame(tick);
+                        } else {
+                            resolve();
+                        }
+                    }
+
+                    window.requestAnimationFrame(tick);
+                });
+            }
+
+            // Lets layout settle (about two frames) after DOM changes, before anything is measured.
+            function settle(t) {
+                return frames(34, t, function () {});
+            }
+
+            /* ---- targets and coordinates ---- */
+
+            // ref: selector (scoped to the stage), element, or a function returning one. Resolved lazily.
+            function el(ref) {
+                var node = typeof ref === 'function'
+                    ? ref()
+                    : (typeof ref === 'string' ? q(ref, stage) : ref);
+
+                if (!node) {
+                    throw new Error('Onboarding target not found: ' + String(ref));
+                }
+
+                return node;
+            }
+
+            // Stage-relative, so it stays correct while the stage itself is mid-animation.
+            function pointOf(node, fx, fy) {
+                var s = stage.getBoundingClientRect();
+                var r = node.getBoundingClientRect();
+
+                if (r.width === 0 && r.height === 0) {
+                    throw new Error('Onboarding target is not rendered (display:none?): ' + (node.className || node.tagName));
+                }
+
+                return {
+                    x: r.left - s.left + r.width * (fx === undefined ? 0.5 : fx),
+                    y: r.top - s.top + r.height * (fy === undefined ? 0.5 : fy)
+                };
+            }
+
+            function place(p, ms) {
+                position = p;
+
+                if (ms !== undefined) {
+                    cursor.style.transitionDuration = ms + 'ms, 400ms'; // transform, opacity
+                }
+
+                cursor.style.transform = 'translate3d(' + (p.x - TIP_X) + 'px,' + (p.y - TIP_Y) + 'px,0)';
+            }
+
+            function restPoint() {
+                var s = stage.getBoundingClientRect();
+
+                return { x: s.width * 0.92, y: s.height * 1.04 };
+            }
+
+            function park() {
+                cursor.classList.add('is-instant');
+                cursor.classList.remove('is-visible', 'is-tapping');
+                place(restPoint());
+                void cursor.offsetWidth;
+                cursor.classList.remove('is-instant');
+            }
+
+            /* ---- hand motion ---- */
+
+            // Glide time scales with distance, so short hops feel quick and long ones stay smooth.
+            function glideTo(ref, t, fx, fy) {
+                return settle(t).then(function () {
+                    var node = el(ref);
+                    var from = position;
+                    var to = pointOf(node, fx, fy);
+                    var ms = clamp(360 + Math.hypot(to.x - from.x, to.y - from.y) * 1.1, 480, 1000);
+
+                    cursor.classList.add('is-visible');
+                    place(to, ms);
+
+                    return sleep(ms, t).then(function () {
+                        // Re-aim: the target may have moved (scroll, view transition) while the hand travelled.
+                        var again = pointOf(node, fx, fy);
+
+                        if (Math.hypot(again.x - to.x, again.y - to.y) > 2) {
+                            place(again, 140);
+
+                            return sleep(150, t);
+                        }
+                    });
+                });
+            }
+
+            function ripple(p) {
+                var ring = document.createElement('span');
+
+                ring.className = 'cm-tap-ripple';
+                ring.style.left = p.x + 'px';
+                ring.style.top = p.y + 'px';
+                ring.addEventListener('animationend', function () {
+                    ring.remove();
+                });
+                stage.appendChild(ring);
+                window.setTimeout(function () {
+                    ring.remove();
+                }, 1200);
+            }
+
+            // press, run the state change, release. action may return a promise (it must be cancellable).
+            function tap(node, t, action) {
+                cursor.classList.add('is-tapping');
+
+                return sleep(130, t).then(function () {
+                    ripple(position);
+                    node.classList.add('is-pressed');
+
+                    return Promise.resolve(action ? action() : undefined);
+                }).then(function () {
+                    return sleep(220, t);
+                }).then(function () {
+                    cursor.classList.remove('is-tapping');
+                    node.classList.remove('is-pressed');
+                });
+            }
+
+            function rest(t) {
+                cursor.classList.remove('is-visible');
+                place(restPoint(), 520);
+
+                return sleep(700, t);
+            }
+
+            /* ---- content primitives ---- */
+
+            function type(node, text, t, opts) {
+                var delay = (opts && opts.delay) || 38;
+                var i = 0;
+
+                function next() {
+                    if (i >= text.length) {
+                        return Promise.resolve();
+                    }
+
+                    node.value += text.charAt(i);
+                    i += 1;
+
+                    if (opts && opts.onChar) {
+                        opts.onChar(node.value);
+                    }
+
+                    return sleep(delay + (i % 3) * 6, t).then(next);
+                }
+
+                return next();
+            }
+
+            function scrollTo(node, top, t, ms) {
+                var from = node.scrollTop;
+                var to = Math.max(0, Math.round(top));
+
+                return frames(ms || 600, t, function (p) {
+                    node.scrollTop = from + (to - from) * easeOut(p);
+                });
+            }
+
+            // Cross-fades to another sandbox view and waits for the transition, so the next step measures
+            // the new layout and the hand re-glides to it (post -> thread -> composer).
+            function showView(name, t) {
+                qa('[data-ob-view]', stage).forEach(function (view) {
+                    view.classList.toggle('is-active', view.getAttribute('data-ob-view') === name);
+                });
+
+                return sleep(VIEW_MS, t);
+            }
+
+            function setView(name) {
+                stage.classList.add('is-instant'); // .ob-stage.is-instant kills the view transition
+                qa('[data-ob-view]', stage).forEach(function (view) {
+                    view.classList.toggle('is-active', view.getAttribute('data-ob-view') === name);
+                });
+                void stage.offsetWidth;
+                stage.classList.remove('is-instant');
+            }
+
+            /* ---- step runner ----
+               Step shapes:
+                 { wait: ms }
+                 { tap: ref, at: [fx, fy], do: function (node, t) {} }   glide + press + state change
+                 { glide: ref, at: [fx, fy] }                            move only
+                 { type: ref, text, delay, onChar }                      typewriter into a textarea
+                 { scroll: ref, to: number | function (node), ms }       scroll a container
+                 { view: 'name' }                                        swap sandbox view
+                 { do: function (node, t) {} }                           anything else (may return a promise)
+                 { rest: true }                                          hand leaves the stage */
+
+            function runStep(step, t) {
+                var node;
+
+                if (step.wait !== undefined) {
+                    return sleep(step.wait, t);
+                }
+
+                if (step.tap !== undefined) {
+                    return glideTo(step.tap, t, step.at && step.at[0], step.at && step.at[1]).then(function () {
+                        node = el(step.tap);
+
+                        return tap(node, t, step.do ? function () {
+                            return step.do(node, t);
+                        } : null);
+                    });
+                }
+
+                if (step.glide !== undefined) {
+                    return glideTo(step.glide, t, step.at && step.at[0], step.at && step.at[1]);
+                }
+
+                if (step.type !== undefined) {
+                    return type(el(step.type), step.text, t, step);
+                }
+
+                if (step.scroll !== undefined) {
+                    node = el(step.scroll);
+
+                    return scrollTo(node, typeof step.to === 'function' ? step.to(node) : step.to, t, step.ms);
+                }
+
+                if (step.view !== undefined) {
+                    return showView(step.view, t);
+                }
+
+                if (step.rest) {
+                    return rest(t);
+                }
+
+                if (step.do) {
+                    return Promise.resolve(step.do(null, t));
+                }
+
+                return Promise.resolve();
+            }
+
+            function run(steps, t) {
+                return steps.reduce(function (chain, step) {
+                    return chain.then(function () {
+                        return runStep(step, t);
+                    });
+                }, Promise.resolve());
+            }
+
+            /* ---- lifecycle ---- */
+
+            function begin() {
+                token += 1;
+
+                return token;
+            }
+
+            // Anything awaiting sleep()/frames() rejects with CANCELLED on its next tick.
+            function cancel() {
+                token += 1;
+                cursor.classList.remove('is-visible', 'is-tapping');
+                qa('.cm-tap-ripple', stage).forEach(function (ring) {
+                    ring.remove();
+                });
+                qa('.is-pressed', stage).forEach(function (node) {
+                    node.classList.remove('is-pressed');
+                });
+            }
+
+            return {
+                stage: stage,
+                sleep: sleep,
+                pointOf: pointOf,
+                park: park,
+                run: run,
+                setView: setView,
+                begin: begin,
+                cancel: cancel
+            };
+        }
+
+        /* ==========================================================================
+           Scenes. Each returns { director, reset(), steps[] }.
+           reset() must restore the fixture's exact starting state instantly (no animation).
+           ========================================================================== */
+
+        // Scene 1: Like, then open the thread from the comment icon.
+        function feedScene(slide) {
+            var d = createDirector(slide);
+            var stage = d.stage;
+
+            function likeButton() {
+                return q('[data-ob-view="feed"] [data-react="like"]', stage);
             }
 
             return {
                 director: d,
                 reset: function () {
-                    toggle.setAttribute('aria-pressed', 'true');
-                    toggle.classList.remove('is-pressed');
-                    setTextNow(text, ANON);
+                    d.setView('feed');
+                    applyReaction(likeButton(), { is_active: false, new_count: 12 });
                 },
-                play: async function (t) {
-                    await d.sleep(1500, t);
-                    await d.glideTo(toggle, t, 0.5, 0.5);
-                    await d.tap(toggle, t, function () { setAnon(false); });
-                    await d.sleep(2000, t);
-                    await d.tap(toggle, t, function () { setAnon(true); });
-                    await d.sleep(700, t);
-                    await d.rest(t);
-                }
+                steps: [
+                    { wait: 1400 },
+                    { tap: likeButton, do: function (button) {
+                        applyReaction(button, { is_active: true, new_count: 13 });
+                    } },
+                    { wait: 800 },
+                    { tap: '[data-ob-view="feed"] .cm-post__foot-actions .cm-stat' },
+                    { view: 'thread' },
+                    { wait: 2600 },
+                    { rest: true }
+                ]
             };
         }
 
-        function helpfulScene(slide) {
+        // Scene 2: Helpful (star fills, +3 floats up), then Reply (mention lands in the comment box).
+        function threadScene(slide) {
             var d = createDirector(slide);
-            var button = byId('onboarding-helpful-btn');
-            var count = byId('onboarding-points-count');
-            var toast = byId('onboarding-points-toast');
+            var stage = d.stage;
+            var scroller = q('[data-ob-scroll]', stage);
+            var commentBody = q('[data-ob-comment-body]', stage);
+            var replyNote = q('[data-ob-reply-note]', stage);
+            var replyText = q('[data-ob-reply-text]', stage);
+            var count = q('#onboarding-points-count', stage);
+            var toast = q('#onboarding-points-toast', stage);
             var raf = null;
 
-            function tweenCount(from, to, duration) {
+            function menuToggle() {
+                return q('.cm-comment__action-menu [data-menu-toggle]', stage);
+            }
+
+            function helpfulButton() {
+                return q('.cm-comment [data-react="helpful"]', stage);
+            }
+
+            function commentTop(container) {
+                var wrapper = q('.cm-comment-wrapper', stage);
+
+                return wrapper.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
+            }
+
+            function grow() {
+                commentBody.style.height = 'auto';
+                commentBody.style.height = commentBody.scrollHeight + 'px';
+            }
+
+            function tweenCount(from, to, ms) {
                 var start = null;
 
                 window.cancelAnimationFrame(raf);
@@ -786,10 +1036,9 @@
                         start = now;
                     }
 
-                    var p = Math.min(1, (now - start) / duration);
-                    var eased = 1 - Math.pow(1 - p, 3);
+                    var p = Math.min(1, (now - start) / ms);
 
-                    count.textContent = String(Math.round(from + (to - from) * eased));
+                    count.textContent = String(Math.round(from + (to - from) * easeOut(p)));
 
                     if (p < 1) {
                         raf = window.requestAnimationFrame(frame);
@@ -800,7 +1049,7 @@
             }
 
             function floatToast() {
-                var p = d.pointOf(button, 0.5, 0);
+                var p = d.pointOf(helpfulButton(), 0.5, 0);
 
                 toast.style.left = p.x + 'px';
                 toast.style.top = p.y + 'px';
@@ -809,105 +1058,311 @@
                 toast.classList.add('is-floating');
             }
 
-            function reset() {
-                window.cancelAnimationFrame(raf);
-                button.setAttribute('aria-pressed', 'false');
-                button.classList.remove('is-active', 'is-popping', 'is-pressed');
-                toast.classList.remove('is-floating');
-                count.textContent = '0';
-            }
-
             return {
                 director: d,
-                reset: reset,
-                play: async function (t) {
-                    await d.sleep(1500, t);
-                    await d.glideTo(button, t, 0.5, 0.5);
-                    await d.tap(button, t, function () {
-                        button.setAttribute('aria-pressed', 'true');
-                        button.classList.remove('is-popping');
-                        void button.offsetWidth;
-                        button.classList.add('is-active', 'is-popping');
+                reset: function () {
+                    window.cancelAnimationFrame(raf);
+                    scroller.scrollTop = 0;
+                    setMenu(menuToggle(), false);
+                    applyReaction(helpfulButton(), { is_active: false, new_count: 0 });
+                    toast.classList.remove('is-floating');
+                    count.textContent = '0';
+                    replyNote.hidden = true;
+                    commentBody.value = '';
+                    commentBody.style.height = '';
+                    commentBody.placeholder = 'Write a comment\u2026';
+                },
+                steps: [
+                    { wait: 1100 },
+                    // Bring the comment into view the way a real thread scrolls.
+                    { scroll: scroller, to: function (container) { return commentTop(container) - 56; }, ms: 700 },
+                    { wait: 350 },
+                    { tap: menuToggle, do: function (toggle) { setMenu(toggle, true); } },
+                    { wait: 500 },
+                    { tap: helpfulButton, do: function (button) {
+                        applyReaction(button, { is_active: true, new_count: 1 });
                         floatToast();
                         tweenCount(0, 3, 600);
-                    });
-                    await d.sleep(2500, t);
-                    reset();
-                    await d.sleep(300, t);
-                    await d.rest(t);
-                }
+                    } },
+                    { wait: 1500 },
+                    { do: function () { setMenu(menuToggle(), false); } },
+                    { wait: 450 },
+                    { tap: '.cm-comment [data-reply-to]', do: function () {
+                        replyNote.hidden = false;
+                        replyText.textContent = 'Replying to ' + OWL;
+                        commentBody.placeholder = 'Write a reply\u2026';
+                        commentBody.value = '@' + OWL + ' ';
+                        grow();
+                    } },
+                    { wait: 700 },
+                    { type: commentBody, text: 'Thank you!', delay: 55, onChar: grow },
+                    { wait: 1800 },
+                    { rest: true }
+                ]
             };
         }
 
-        function reportScene(slide) {
+        // Scene 3: category, text, Anonymous (avatar becomes the mask), Post.
+        function composeScene(slide) {
             var d = createDirector(slide);
-            var toggle = byId('onboarding-report-menu-toggle');
-            var menu = byId('onboarding-report-menu');
-            var option = byId('onboarding-report-option');
-            var note = byId('onboarding-report-note');
+            var stage = d.stage;
+            var row = q('[data-ob-avatar-row]', stage);
+            var body = q('[data-ob-body]', stage);
+            var hint = q('[data-ob-anon-hint]', stage);
+            var count = q('[data-ob-count]', stage);
+            var postButton = q('[data-ob-post]', stage);
+            var anon = q('[data-ob-anon] input', stage);
+            var toast = q('[data-ob-toast]', stage);
 
-            function setOpen(open) {
-                menu.classList.toggle('is-open', open);
-                toggle.setAttribute('aria-expanded', String(open));
+            // Mirrors syncCharCount / syncPostBtn / syncAnon in initComposer().
+            function syncText() {
+                count.textContent = body.value.length + ' / 2000';
+                postButton.disabled = body.value.trim().length < 3;
+            }
 
-                if (!open) {
-                    option.classList.remove('is-highlighted', 'is-pressed');
-                    note.classList.remove('is-visible');
-                }
+            function setAnonymous(on) {
+                anon.checked = on;
+                row.classList.toggle('is-anonymous', on);
+                hint.textContent = on ? 'Posting anonymously as ' + ALIAS : 'Posting as Mark';
+            }
+
+            function pick(name) {
+                q('[data-ob-chips] input[value="' + name + '"]', stage).checked = true;
             }
 
             return {
                 director: d,
                 reset: function () {
-                    toggle.classList.remove('is-pressed');
-                    setOpen(false);
+                    pick('Share');
+                    body.value = '';
+                    syncText();
+                    setAnonymous(false);
+                    postButton.textContent = 'Post';
+                    toast.hidden = true;
                 },
-                play: async function (t) {
-                    await d.sleep(1500, t);
-                    await d.glideTo(toggle, t, 0.5, 0.5);
-                    await d.tap(toggle, t, function () { setOpen(true); });
-                    await d.sleep(800, t);
-                    await d.glideTo(option, t, 0.35, 0.5);
-                    await d.tap(option, t, function () {
-                        option.classList.add('is-highlighted');
-                        note.classList.add('is-visible');
-                    });
-                    await d.sleep(2000, t);
-                    setOpen(false);
-                    await d.sleep(400, t);
-                    await d.rest(t);
-                }
+                steps: [
+                    { wait: 1200 },
+                    { tap: '[data-ob-chip="Ask"]', do: function () { pick('Ask'); } },
+                    { wait: 500 },
+                    { type: body, text: 'Where can I get a copy of my enrollment form?', delay: 34, onChar: syncText },
+                    { wait: 600 },
+                    { tap: '[data-ob-anon]', do: function () { setAnonymous(true); } },
+                    { wait: 1400 },
+                    { tap: postButton, do: function () {
+                        postButton.textContent = 'Posting\u2026';
+                        postButton.disabled = true;
+                    } },
+                    { wait: 650 },
+                    { do: function () {
+                        toast.hidden = false;
+                        postButton.textContent = 'Post';
+                    } },
+                    { wait: 2000 },
+                    { rest: true }
+                ]
             };
         }
 
-        var factories = { anon: anonScene, helpful: helpfulScene, report: reportScene };
+        // Scene 4: price badge, tap the listing for the itemized list, save it.
+        function marketScene(slide) {
+            var d = createDirector(slide);
+            var stage = d.stage;
+
+            function priceBadge() {
+                return q('[data-ob-view="feed"] .cm-price', stage);
+            }
+
+            function saveButton() {
+                return q('[data-ob-view="detail"] [data-bookmark]', stage);
+            }
+
+            function detailId() {
+                return saveButton().getAttribute('data-post-id');
+            }
+
+            return {
+                director: d,
+                reset: function () {
+                    d.setView('feed');
+                    applyBookmark(detailId(), false);
+                    priceBadge().classList.remove('is-pulsing');
+                },
+                steps: [
+                    { wait: 1200 },
+                    { do: function () {
+                        var badge = priceBadge();
+
+                        badge.classList.remove('is-pulsing');
+                        void badge.offsetWidth;
+                        badge.classList.add('is-pulsing');
+                    } },
+                    { wait: 1500 },
+                    { tap: '[data-ob-view="feed"] .cm-post', at: [0.5, 0.45] },
+                    { view: 'detail' },
+                    { wait: 1400 },
+                    { tap: saveButton, do: function () { applyBookmark(detailId(), true); } },
+                    { wait: 2000 },
+                    { rest: true }
+                ]
+            };
+        }
+
+        // Scene 5: Self-harm bypasses the vote (to moderators), then Spam goes to a community vote.
+        function reportScene(slide) {
+            var d = createDirector(slide);
+            var stage = d.stage;
+            var sheet = q('[data-ob-sheet]', stage);
+            var caption = q('[data-demo-text]', slide);
+            var REPORT_ITEM = '[data-ob-view="post"] [data-report-open]';
+            var VOTE_ROW = '[data-ob-view="vote"] .cm-report-banner__votes';
+            var CAPTION_START = 'Tap the flag on any post or comment.';
+            var CAPTION_CRITICAL = 'Self-harm and Threats skip the vote. They go straight to moderators.';
+            var CAPTION_VOTE = 'Everything else goes to a community vote: 5 votes or 24 hours.';
+
+            function menuToggle() {
+                return q('[data-ob-view="post"] [data-menu-toggle]', stage);
+            }
+
+            function reason(name) {
+                return q('[data-ob-reason="' + name + '"]', stage);
+            }
+
+            function resetSheet() {
+                sheet.hidden = true;
+                sheet.classList.remove('is-closing');
+                qa('input[name="ob-reason"]', sheet).forEach(function (input) {
+                    input.checked = false;
+                });
+            }
+
+            function openSheet() {
+                sheet.classList.remove('is-closing');
+                sheet.hidden = false; // display none -> block replays the slide-up animation
+            }
+
+            function closeSheet(t) {
+                sheet.classList.add('is-closing');
+
+                return d.sleep(SHEET_MS, t).then(resetSheet);
+            }
+
+            function removeFeedback() {
+                var feedback = q('[data-ob-feedback]', stage);
+
+                if (feedback) {
+                    feedback.remove();
+                }
+
+                var form = q(VOTE_ROW, stage);
+
+                if (form) {
+                    form.hidden = false;
+                }
+            }
+
+            // Menu -> Report -> pick a reason -> Send. Shared by both passes.
+            function pass(category) {
+                return [
+                    { tap: menuToggle, do: function (toggle) { setMenu(toggle, true); } },
+                    { wait: 450 },
+                    { tap: REPORT_ITEM, do: function () {
+                        setMenu(menuToggle(), false);
+                        openSheet();
+                    } },
+                    { wait: 600 },
+                    { tap: function () { return reason(category); }, do: function () {
+                        reason(category).querySelector('input').checked = true;
+                    } },
+                    { wait: 450 },
+                    { tap: '[data-ob-send]', do: function (button, t) { return closeSheet(t); } }
+                ];
+            }
+
+            var criticalPass = pass('Self-harm').concat([
+                { view: 'alert' },
+                { do: function () { swapText(caption, CAPTION_CRITICAL); } },
+                { wait: 2800 },
+                { view: 'post' },
+                { wait: 400 }
+            ]);
+
+            var votePass = pass('Spam').concat([
+                { view: 'vote' },
+                { do: function () { swapText(caption, CAPTION_VOTE); } },
+                { wait: 900 },
+                { tap: VOTE_ROW + ' [value="agree"]', do: function () {
+                    var form = q(VOTE_ROW, stage);
+                    var feedback = document.createElement('p');
+
+                    feedback.className = 'text-small text-muted';
+                    feedback.setAttribute('data-ob-feedback', '');
+                    feedback.textContent = 'You voted. Results show when the vote closes.';
+                    form.hidden = true;
+                    form.parentNode.insertBefore(feedback, form.nextSibling);
+                } },
+                { wait: 2200 },
+                { rest: true }
+            ]);
+
+            return {
+                director: d,
+                reset: function () {
+                    d.setView('post');
+                    resetSheet();
+                    setMenu(menuToggle(), false);
+                    removeFeedback();
+                    setTextNow(caption, CAPTION_START);
+                },
+                steps: [{ wait: 1100 }].concat(criticalPass, votePass)
+            };
+        }
+
+        /* ---------- Wiring: start a scene while its slide is active, cancel the moment it is not ---------- */
+
+        var factories = {
+            feed: feedScene,
+            thread: threadScene,
+            compose: composeScene,
+            market: marketScene,
+            report: reportScene
+        };
         var scenes = [];
 
-        root.querySelectorAll('[data-onboarding-slide][data-scene]').forEach(function (slide) {
+        qa('[data-onboarding-slide][data-scene]', root).forEach(function (slide) {
             var factory = factories[slide.getAttribute('data-scene')];
 
             if (!factory) {
                 return;
             }
 
-            var scene = factory(slide);
+            try {
+                var scene = factory(slide);
 
-            scene.slide = slide;
-            scene.running = false;
-            scene.reset();
-            scenes.push(scene);
+                scene.slide = slide;
+                scene.running = false;
+                scene.reset();
+                scenes.push(scene);
+            } catch (error) {
+                console.error('Onboarding scene "' + slide.getAttribute('data-scene') + '" could not start.', error);
+            }
         });
 
         function start(scene) {
-            var t = scene.director.begin();
+            var d = scene.director;
+            var t = d.begin();
 
             scene.running = true;
             scene.reset();
-            scene.director.park();
+            d.park();
 
             (function loop() {
-                scene.play(t).then(function () {
-                    return scene.director.sleep(1200, t);
+                d.run(scene.steps, t).then(function () {
+                    return d.sleep(500, t);
+                }).then(function () {
+                    scene.reset();   // instant, hand is already off stage
+                    d.park();
+
+                    return d.sleep(300, t);
                 }).then(loop).catch(function (error) {
                     if (error !== CANCELLED) {
                         console.error(error);
@@ -945,7 +1400,6 @@
         document.addEventListener('visibilitychange', sync);
         sync();
     })();
-
     /* ---------- Notification dropdown and unread-count polling ----------
        The bell lives in the header, which is INSIDE <main>, so it is replaced on every page swap.
        Document-level listeners and the polling timer are therefore registered once and look the

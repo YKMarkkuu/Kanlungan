@@ -27,22 +27,26 @@ class OnboardingFlowTest extends TestCase
 
         $this->assertFalse($user->fresh()->has_completed_onboarding);
         $this->get('/home')->assertRedirect(route('onboarding'));
-        $this->get('/onboarding')
+        $response = $this->get('/onboarding')
             ->assertOk()
             ->assertSee('Welcome to Kanlungan.')
             ->assertSee('A safe, verified space for OLFU Pampanga.')
             ->assertSee('Posts can be anonymous, protected by a per-thread alias. The system keeps you accountable, but other students never see who you are.')
             ->assertSee('Earn points by marking comments as Helpful on Ask, Help, and Academic posts. Build your reputation.')
+            ->assertSee('Buy and sell on campus.')
             ->assertSee('Safety reports go straight to moderators.')
-            ->assertSee('onboarding-anon-toggle', false)
-            ->assertSee('<button type="button" class="cm-anon-badge" id="onboarding-anon-toggle" aria-pressed="true">', false)
-            ->assertDontSee('<input class="cm-visually-hidden" type="checkbox" id="onboarding-anon-toggle"', false)
+            ->assertSee('data-scene="feed"', false)
+            ->assertSee('data-scene="thread"', false)
+            ->assertSee('data-scene="compose"', false)
+            ->assertSee('data-scene="market"', false)
+            ->assertSee('data-scene="report"', false)
+            ->assertSee('data-ob-anon', false)
+            ->assertSee('data-ob-sheet', false)
             ->assertSee('cm-ghost-cursor', false)
             ->assertSee('M9 11V5a2 2 0 0 1 4 0v5-2a2 2 0 0 1 4 0v2-1a2 2 0 0 1 4 0v6a6 6 0 0 1-6 6h-2a6 6 0 0 1-4.5-2L4 14a2 2 0 0 1 3-2.7L9 13', false)
-            ->assertSee('onboarding-helpful-btn', false)
-            ->assertSee('onboarding-report-menu-toggle', false)
             ->assertSee('Skip')
             ->assertSee("Let's go!", false);
+        $this->assertSame(6, substr_count($response->getContent(), 'data-onboarding-dot'));
 
         $this->post('/onboarding/complete')
             ->assertRedirect(route('feed'));

@@ -4,9 +4,27 @@
 @section('guest-class', 'guest-page--onboarding')
 @section('body-class', 'onboarding-page')
 
+@php
+    // One entry per demo slide. "key" selects the sandbox in onboarding/_stage.blade.php and the
+    // scene factory in community.js (data-scene). Adding a slide = one entry here + one scene there.
+    $scenes = [
+        ['key' => 'feed', 'label' => 'Feed', 'title' => 'Your campus feed.',
+            'copy' => 'Like a post, or open its thread to join the conversation.'],
+        ['key' => 'thread', 'label' => 'Helpfulness', 'title' => 'Helpfulness is rewarded.',
+            'copy' => 'Earn points by marking comments as Helpful on Ask, Help, and Academic posts. Build your reputation.'],
+        ['key' => 'compose', 'label' => 'Anonymity', 'title' => 'Anonymity when you need it.',
+            'copy' => 'Posts can be anonymous, protected by a per-thread alias. The system keeps you accountable, but other students never see who you are.'],
+        ['key' => 'market', 'label' => 'Marketplace', 'title' => 'Buy and sell on campus.',
+            'copy' => 'Listings show a price badge and an itemized list. Sellers always appear under their display name.'],
+        ['key' => 'report', 'label' => 'Safety', 'title' => 'Safety first.',
+            'copy' => 'If you see something concerning, report it. Safety reports go straight to moderators.'],
+    ];
+    $totalSlides = count($scenes) + 1;
+@endphp
+
 @section('head')
     <link rel="stylesheet" href="{{ asset('css/onboarding.css') }}">
-    {{-- Ghost hand, ripple and demo transitions live in community.css (after onboarding.css so they win). --}}
+    {{-- Ghost hand, ripple and toast transitions live in community.css (after onboarding.css so they win). --}}
     <link rel="stylesheet" href="{{ asset('css/community.css') }}">
 @endsection
 
@@ -32,89 +50,31 @@
                 </div>
             </article>
 
-            <article class="onboarding__slide" data-onboarding-slide data-scene="anon" aria-hidden="true" inert>
-                <div class="onboarding__copy onboarding__copy--demo">
-                    <p class="onboarding__step">02 <span>Anonymity</span></p>
-                    <h2>Anonymity when you need it.</h2>
-                    <p>Posts can be anonymous, protected by a per-thread alias. The system keeps you accountable, but other students never see who you are.</p>
-                </div>
-                <div class="onboarding__demo cm-onboarding-demo onboarding__demo--composer" data-demo-stage aria-hidden="true" inert>
-                    <div class="onboarding__demo-window">
-                        <div class="onboarding__demo-heading">
-                            <strong>Create Post</strong>
-                            <span>Ask</span>
-                        </div>
-                        <textarea aria-label="Example post composer" tabindex="-1" readonly>What's on your mind?</textarea>
-                        <button type="button" class="cm-anon-badge" id="onboarding-anon-toggle" aria-pressed="true">
-                            <span class="cm-anon-badge__pill">
-                                @include('components.icon', ['name' => 'mask'])
-                                <span>Anonymous</span>
-                            </span>
-                        </button>
+            @foreach ($scenes as $index => $scene)
+                <article class="onboarding__slide" data-onboarding-slide data-scene="{{ $scene['key'] }}" aria-hidden="true" inert>
+                    <div class="onboarding__copy onboarding__copy--demo">
+                        <p class="onboarding__step">{{ str_pad($index + 2, 2, '0', STR_PAD_LEFT) }} <span>{{ $scene['label'] }}</span></p>
+                        <h2>{{ $scene['title'] }}</h2>
+                        <p>{{ $scene['copy'] }}</p>
                     </div>
-                    <p class="onboarding__demo-caption" id="onboarding-anon-caption" aria-live="polite">
-                        <span data-demo-text>You'll appear as Anonymous Falcon</span>
-                    </p>
-                    <div class="cm-ghost-cursor" data-demo-cursor aria-hidden="true"><span class="cm-ghost-cursor__hand">@include('components.icon', ['name' => 'pointer'])</span></div>
-                </div>
-            </article>
 
-            <article class="onboarding__slide" data-onboarding-slide data-scene="helpful" aria-hidden="true" inert>
-                <div class="onboarding__copy onboarding__copy--demo">
-                    <p class="onboarding__step">03 <span>Helpfulness</span></p>
-                    <h2>Helpfulness is rewarded.</h2>
-                    <p>Earn points by marking comments as Helpful on Ask, Help, and Academic posts. Build your reputation.</p>
-                </div>
-                <div class="onboarding__demo cm-onboarding-demo onboarding__demo--helpful" data-demo-stage aria-hidden="true" inert>
-                    <div class="onboarding__demo-comment">
-                        <strong>Campus question</strong>
-                        <p>Check with your department office for the latest schedule.</p>
-                        <button type="button" class="onboarding__helpful-btn" id="onboarding-helpful-btn" aria-pressed="false" tabindex="-1">
-                            @include('components.icon', ['name' => 'star'])
-                            <span>Helpful</span>
-                        </button>
+                    {{-- [data-demo-stage] is the coordinate space for the ghost hand: the real UI lives in the
+                         sandbox, the hand and its ripples are siblings of it (never inside a transformed node). --}}
+                    <div class="onboarding__demo cm-onboarding-demo ob-stage" data-demo-stage aria-hidden="true" inert>
+                        @include('onboarding._stage', ['scene' => $scene['key']])
+                        <div class="cm-ghost-cursor" data-demo-cursor aria-hidden="true"><span class="cm-ghost-cursor__hand">@include('components.icon', ['name' => 'pointer'])</span></div>
                     </div>
-                    <p class="onboarding__demo-points" aria-live="polite">
-                        <span id="onboarding-points-count">0</span> points
-                    </p>
-                    <span class="onboarding__points-toast" id="onboarding-points-toast" aria-hidden="true">+3 points</span>
-                    <div class="cm-ghost-cursor" data-demo-cursor aria-hidden="true"><span class="cm-ghost-cursor__hand">@include('components.icon', ['name' => 'pointer'])</span></div>
-                </div>
-            </article>
-
-            <article class="onboarding__slide" data-onboarding-slide data-scene="report" aria-hidden="true" inert>
-                <div class="onboarding__copy onboarding__copy--demo">
-                    <p class="onboarding__step">04 <span>Safety</span></p>
-                    <h2>Safety first.</h2>
-                    <p>If you see something concerning, report it. Safety reports go straight to moderators.</p>
-                </div>
-                <div class="onboarding__demo cm-onboarding-demo onboarding__demo--safety" data-demo-stage aria-hidden="true" inert>
-                    <div class="onboarding__demo-post">
-                        <div class="onboarding__demo-post-heading">
-                            <strong>Campus community</strong>
-                            <button type="button" id="onboarding-report-menu-toggle" aria-label="More post actions" aria-expanded="false" aria-controls="onboarding-report-menu" tabindex="-1">
-                                @include('components.icon', ['name' => 'more'])
-                            </button>
-                        </div>
-                        <p>Everyone deserves to feel safe here.</p>
-                        <div class="onboarding__report-menu" id="onboarding-report-menu">
-                            <button type="button" id="onboarding-report-option" tabindex="-1">@include('components.icon', ['name' => 'flag']) Report</button>
-                            <p id="onboarding-report-note">Critical reports go straight to moderators.</p>
-                        </div>
-                    </div>
-                    <div class="cm-ghost-cursor" data-demo-cursor aria-hidden="true"><span class="cm-ghost-cursor__hand">@include('components.icon', ['name' => 'pointer'])</span></div>
-                </div>
-            </article>
+                </article>
+            @endforeach
         </div>
 
         <footer class="onboarding__footer">
             <div class="onboarding__progress" aria-label="Onboarding progress">
-                <span class="onboarding__progress-dot is-active" data-onboarding-dot aria-hidden="true"></span>
-                <span class="onboarding__progress-dot" data-onboarding-dot aria-hidden="true"></span>
-                <span class="onboarding__progress-dot" data-onboarding-dot aria-hidden="true"></span>
-                <span class="onboarding__progress-dot" data-onboarding-dot aria-hidden="true"></span>
+                @for ($i = 0; $i < $totalSlides; $i++)
+                    <span class="onboarding__progress-dot {{ $i === 0 ? 'is-active' : '' }}" data-onboarding-dot aria-hidden="true"></span>
+                @endfor
             </div>
-            <span class="visually-hidden" data-onboarding-status aria-live="polite">Step 1 of 4</span>
+            <span class="visually-hidden" data-onboarding-status aria-live="polite">Step 1 of {{ $totalSlides }}</span>
             <button type="button" class="btn btn--primary onboarding__button" data-onboarding-next>Next</button>
             <button type="submit" class="btn btn--primary onboarding__button" data-onboarding-complete form="onboarding-completion" hidden>Let's go!</button>
         </footer>

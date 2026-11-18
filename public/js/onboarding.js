@@ -16,8 +16,8 @@
     var activeIndex = 0;
 
     if (!slidesContainer || !status || !nextButton || !completeButton ||
-        slides.length !== 4 || dots.length !== slides.length) {
-        throw new Error('Onboarding requires four slides and matching progress indicators.');
+        slides.length < 2 || dots.length !== slides.length) {
+        throw new Error('Onboarding requires at least two slides and one progress dot per slide.');
     }
 
     function showSlide(index) {
