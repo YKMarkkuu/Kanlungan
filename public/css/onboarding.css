@@ -6,6 +6,15 @@
    deliberately one class more specific than the real rule it beats.
    ========================================================================== */
 
+html:has(body.onboarding-page),
+body.onboarding-page {
+    height: 100dvh;
+    min-height: 0;
+    max-height: 100dvh;
+    overflow: hidden;
+    overscroll-behavior: none;
+}
+
 .onboarding-page,
 .onboarding-page .page {
     width: 100%;

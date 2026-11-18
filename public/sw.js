@@ -3,7 +3,7 @@
    HTML pages, JSON responses, or /uploads/: those contain private,
    session-bound, or deletable content (anonymous posts, avatars, removed photos). */
 
-var CACHE = 'kanlungan-shell-v2';
+var CACHE = 'kanlungan-shell-v3';
 
 var SHELL = [
     '/css/base.css',
