@@ -71,11 +71,9 @@
             <header class="cm-header">
                 <div class="cm-header__brand">
                     @if ($back !== '')
-                        {{-- hx-boost="false": this link uses history.back(), which must not also trigger an htmx fetch. --}}
                         <a href="{{ $back === 'history' ? route('feed') : $back }}"
                            class="cm-mobile-back"
-                           aria-label="Go back"
-                           @if ($back === 'history') hx-boost="false" onclick="if (window.history.length > 1) { window.history.back(); return false; }" @endif>
+                           aria-label="Go back">
                             @include('components.icon', ['name' => 'back'])
                         </a>
                     @endif
